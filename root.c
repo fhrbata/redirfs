@@ -392,32 +392,17 @@ void redirfs_set_dir_ops(struct redirfs_root_t *root, struct inode *inode)
 	memcpy(root->new_ops.dir_fops, inode->i_fop, sizeof(struct file_operations));
 }
 
-static int redirfs_test_root(struct redirfs_root_t *root, void *data)
+static int redirfs_test_root(struct redirfs_root_t *root, void *dentry)
 {
-	struct redirfs_cb_data_t *cb_data = (struct redirfs_cb_data_t *)data;
-
-	if (cb_data->dentry == root->dentry) {
-		cb_data->i_val = 1;
+	if ((struct dentry*)dentry == root->dentry)
 		return 1;
-	}
 
 	return 0;
 }
 
 static int redirfs_is_root(struct dentry *dentry)
 {
-	struct redirfs_cb_data_t cb_data;
-
-	
-	cb_data.dentry = dentry;
-	cb_data.i_val = 0;
-	
-	redirfs_walk_roots(NULL, redirfs_test_root, &cb_data);
-
-	if (cb_data.i_val)
-		return 1;
-
-	return 0;
+	return redirfs_walk_roots(NULL, redirfs_test_root, dentry);
 }
 
 void redirfs_replace_files_ops(const char *path, struct dentry *root_dentry, struct
