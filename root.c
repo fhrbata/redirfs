@@ -138,12 +138,12 @@ static struct redirfs_root_t *redirfs_find_root(const char *path)
 		loop = list_entry(act, struct redirfs_root_t, sibroots);
 		loop_len = strlen(loop->path);
 
-		if (loop_len != path_len) {
+		if (loop_len > path_len) {
 			act = act->next;
 			continue;
 		}
 
-		if (!strncmp(loop->path, path, path_len)) {
+		if (!strncmp(loop->path, path, loop_len)) {
 			if (path_len == loop_len)
 				found = loop;
 
@@ -599,7 +599,7 @@ static struct list_head *redirfs_find_flt_pos(struct redirfs_root_t *root, struc
 {
 	struct redirfs_flt_t *flt;
 	struct redirfs_ptr_t *loop;
-	struct list_head *found = &root->attached_flts;
+	struct list_head *found = root->attached_flts.prev;
 
 
 	list_for_each_entry(loop, &root->attached_flts, ptr_list) {
