@@ -24,11 +24,6 @@ struct redirfs_operations_t {
 	void **reg_fops_arr[REDIRFS_FOP_END];
 	void **dir_fops_arr[REDIRFS_FOP_END];
 	void **dops_arr[REDIRFS_DOP_END];
-	void ***reg_iops_arrp;
-	void ***dir_iops_arrp;
-	void ***reg_fops_arrp;
-	void ***dir_fops_arrp;
-	void ***dops_arrp;
 	int ops_arr_sizes[REDIRFS_END];
 };
 

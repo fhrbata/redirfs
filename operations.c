@@ -10,19 +10,19 @@ void ***redirfs_gettype(int type, struct redirfs_operations_t *ops)
 
 	switch (type) {
 		case REDIRFS_I_REG:
-			rv = ops->reg_iops_arrp;
+			rv = ops->reg_iops_arr;
 			break;
 		case REDIRFS_I_DIR:
-			rv = ops->dir_iops_arrp;
+			rv = ops->dir_iops_arr;
 			break;
 		case REDIRFS_F_REG:
-			rv = ops->reg_fops_arrp;
+			rv = ops->reg_fops_arr;
 			break;
 		case REDIRFS_F_DIR:
-			rv = ops->dir_fops_arrp;
+			rv = ops->dir_fops_arr;
 			break;
 		case REDIRFS_DENTRY:
-			rv = ops->dops_arrp;
+			rv = ops->dops_arr;
 			break;
 		default:
 			BUG();
@@ -135,11 +135,6 @@ void redirfs_init_ops(struct redirfs_operations_t *ops, struct redirfs_vfs_opera
 	redirfs_init_fops_arr(ops->reg_fops_arr, ops->reg_fops); 
 	redirfs_init_fops_arr(ops->dir_fops_arr, ops->dir_fops); 
 	redirfs_init_dops_arr(ops->dops_arr, ops->dops); 
-	ops->reg_iops_arrp = ops->reg_iops_arr;
-	ops->dir_iops_arrp = ops->dir_iops_arr;
-	ops->reg_fops_arrp = ops->reg_fops_arr;
-	ops->dir_fops_arrp = ops->dir_fops_arr;
-	ops->dops_arrp = ops->dops_arr;
 	ops->ops_arr_sizes[REDIRFS_I_REG] = REDIRFS_IOP_END;
 	ops->ops_arr_sizes[REDIRFS_I_DIR] = REDIRFS_IOP_END;
 	ops->ops_arr_sizes[REDIRFS_F_REG] = REDIRFS_FOP_END;
@@ -159,11 +154,6 @@ void redirfs_init_orig_ops(struct redirfs_operations_t *ops)
 	ops->reg_fops = NULL;
 	ops->dir_fops = NULL;
 	ops->dops = NULL;
-	ops->reg_iops_arrp = NULL;
-	ops->dir_iops_arrp = NULL;
-	ops->reg_fops_arrp = NULL;
-	ops->dir_fops_arrp = NULL;
-	ops->dops_arrp = NULL;
 	ops->ops_arr_sizes[REDIRFS_I_REG] = REDIRFS_IOP_END;
 	ops->ops_arr_sizes[REDIRFS_I_DIR] = REDIRFS_IOP_END;
 	ops->ops_arr_sizes[REDIRFS_F_REG] = REDIRFS_FOP_END;

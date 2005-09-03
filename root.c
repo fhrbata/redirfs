@@ -70,8 +70,6 @@ static struct redirfs_root_t *redirfs_alloc_root(const char *path)
 
 		root->new_ops.dops->d_iput = root->fw_ops->dops->d_iput;
 		redirfs_init_dops_arr(root->orig_ops.dops_arr, root->orig_ops.dops);
-		root->orig_ops.dops_arrp = root->orig_ops.dops_arr;
-
 	} else
 		root->new_ops.dops->d_iput = root->fw_ops->dops->d_iput;
 
@@ -304,15 +302,11 @@ static int redirfs_inherit_root(struct redirfs_root_t *par, struct redirfs_root_
 	if (child->orig_ops.reg_iops) {
 		redirfs_init_iops_arr(child->orig_ops.reg_iops_arr, child->orig_ops.reg_iops); 
 		redirfs_init_fops_arr(child->orig_ops.reg_fops_arr, child->orig_ops.reg_fops); 
-		child->orig_ops.reg_iops_arrp = child->orig_ops.reg_iops_arr; 
-		child->orig_ops.reg_fops_arrp = child->orig_ops.reg_fops_arr; 
 	}
 
 	if (child->orig_ops.dir_iops) {
 		redirfs_init_iops_arr(child->orig_ops.dir_iops_arr, child->orig_ops.dir_iops); 
 		redirfs_init_fops_arr(child->orig_ops.dir_fops_arr, child->orig_ops.dir_fops); 
-		child->orig_ops.dir_iops_arrp = child->orig_ops.dir_iops_arr; 
-		child->orig_ops.dir_fops_arrp = child->orig_ops.dir_fops_arr; 
 	}
 
 	list_for_each_entry(ptr_par, &par->attached_flts, ptr_list) {
@@ -381,8 +375,6 @@ void redirfs_set_reg_ops(struct redirfs_root_t *root, struct inode *inode)
 
 	redirfs_init_iops_arr(root->orig_ops.reg_iops_arr, root->orig_ops.reg_iops); 
 	redirfs_init_fops_arr(root->orig_ops.reg_fops_arr, root->orig_ops.reg_fops); 
-	root->orig_ops.reg_iops_arrp = root->orig_ops.reg_iops_arr; 
-	root->orig_ops.reg_fops_arrp = root->orig_ops.reg_fops_arr; 
 
 	memcpy(root->new_ops.reg_iops, inode->i_op, sizeof(struct inode_operations));
 	memcpy(root->new_ops.reg_fops, inode->i_fop, sizeof(struct file_operations));
@@ -395,8 +387,6 @@ void redirfs_set_dir_ops(struct redirfs_root_t *root, struct inode *inode)
 
 	redirfs_init_iops_arr(root->orig_ops.dir_iops_arr, root->orig_ops.dir_iops); 
 	redirfs_init_fops_arr(root->orig_ops.dir_fops_arr, root->orig_ops.dir_fops); 
-	root->orig_ops.dir_iops_arrp = root->orig_ops.dir_iops_arr; 
-	root->orig_ops.dir_fops_arrp = root->orig_ops.dir_fops_arr; 
 
 	memcpy(root->new_ops.dir_iops, inode->i_op, sizeof(struct inode_operations));
 	memcpy(root->new_ops.dir_fops, inode->i_fop, sizeof(struct file_operations));
