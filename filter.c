@@ -28,7 +28,7 @@ static struct redirfs_flt_t *redirfs_alloc_flt(const char *name, int turn, unsig
 	}
 	
 	atomic_set(&flt->active, 0);
-	strncpy(flt_name, name, flt_name_len);
+	strncpy(flt_name, name, flt_name_len + 1);
 	flt->name = flt_name;
 	flt->turn = turn;
 	flt->flags = flags;
