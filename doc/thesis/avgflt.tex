@@ -1,13 +1,13 @@
 \chapter{AVG Anti-Virus Filter}
-AVG Anti-Virus Filter or avgflt uses Redirfs Framework for on-access scanning. It is
-based on dummyflt which has been introduced in chapter \ref{lab:dummy}. Whole
+The AVG Anti-Virus Filter or avgflt uses the RedirFS Framework for on-access scanning. It is
+based on dummyflt which has been introduced in chapter \ref{lab:dummy}. The whole
 on-access scanning consists of three parts -- avgflt kernel module registered to the
-Redirfs Framework, user space script Avghelper which ask AVG Anti--Virus daemon to
-check accessed file and AVG Anti--Virus daemon.
+Redirfs Framework, user space script Avghelper which ask the AVG Anti--Virus daemon to
+check the accessed file and the AVG Anti--Virus daemon.
 
 \section{Avgflt}
 Avgflt registers in the Redirfs Framework pre permission callback function. This function is
-called before a process opens or executes file in specified directory subtree. Avgflt
+called before a process opens or executes a file in specified directory subtree. Avgflt
 interact with Avghelper through \texttt{call\_usermodehelper()} function, defined in
 \texttt{kernel/kmod.c}. This function allows to call userspace program within Linux
 kernel. It takes four arguments. Path for the application, null-terminated argument
@@ -25,10 +25,10 @@ case it is the Avghelper script.
 
 \section{Userspace script -- Avghelper}
 Avghelper receives from Avgflt full path to the file which should be scanned. It
-contacts AVG daemon and waits for the scanning result. If the scanned file is not infected
+contacts the AVG daemon and waits for the scanning result. If the scanned file is not infected
 it returns back to the Avgflt positive value, otherwise zero or negative value is
 returned.
 
 \section{AVG Anti--Virus Daemon}
-AVG Anti--Virus Daemon by default listens at localhost on port 55555. It provides
+The AVG Anti--Virus Daemon by default listens at localhost on port 55555. It provides
 TCP/IP socket interface to the AVG scanning kernel.

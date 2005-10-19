@@ -1,10 +1,10 @@
 \chapter{Dummy Filter}
 \label{lab:dummy}
-Here is an example of Dummy Filter. It registers only one pre callback function for
-regular file permission function. This function is called by VFS every time when user
-space process wants to open or execute regular file. Directory subtrees over which
+Here is an example of a Dummy Filter. It registers only one pre callback function for
+regular file permission function. This function is called by the VFS every time when user
+space process wants to open or execute a regular file. Directory subtrees over which
 will be this Filter's callback function called are \texttt{/bin} and
-\texttt{/usr/bin}. Dummy Filter only prints the dentry name of an accessed file every
+\texttt{/usr/bin}. The Dummy Filter only prints the dentry name of an accessed file every
 time the file is opened or executed.
 
 \section{Sample Code}

@@ -1,21 +1,22 @@
 \chapter{The Virtual Filesystem Switch}
-The Virtual Filesystem Switch, or VFS was first introduced by Sun Microsystem's
-in the year 1986 and implemented in the SunOS. Since then all other Unix based
-operating systems adopt the VFS concept. The VFS provides an abstract software layer
+The Virtual Filesystem Switch, or VFS was first introduced by Sun Microsystems
+in 1986 and implemented in the SunOS. Since then all other Unix based
+operating systems have adopted the VFS concept. The VFS provides an abstract software layer
 that allows the operating system kernel to call functions of different filesystems
 without having to know anything about the specific filesystem type. The following
-text will describe the VFS implementation in the Linux kernel, with a view to the last
-Linux kernel version 2.6.11.3 available at the moment of writing this thesis. 
+text will describe VFS implementation in the Linux kernel, with a view to the last
+Linux kernel version 2.6.11.3 available at the time of writing this thesis. 
 
 In the beginning the Linux kernel only supported the Minix filesystem. However its design
 restrictions were too limiting, so it was necessary to implement a new filesystem,
 which was then called Extended File System (ExtFS). The new ExtFS had to coexist with
 Minix and that was why the first VFS implementation was included in the Linux kernel.
-Initially implementation of the Linux VFS was written by Chris Provenzano, later
+Initially, implementation of the Linux VFS was written by Chris Provenzano. It
+was later
 rewritten by Linus Torvalds and included along with the ExtFS into the Linux kernel
 0.96c in April 1992. Thanks to the VFS a lot of other filesystems were written or
-ported and included in the Linux kernel and now , in comparison with
-other Unix type systems, most filesystems. Filesystems supported by the Linux kernel can
+ported and included in the Linux kernel, which now, in comparison with
+other Unix type systems, supports most filesystems. Filesystems supported by the Linux kernel can
 be divided into three groups.
 
 \subsubsection*{Disk-based Filesystems}
@@ -38,7 +39,7 @@ These are the base filesystems, which manage data stored on hard drives.
 
 \subsubsection*{Network Filesystems}
 These filesystems allows access to other filesystems located on other computer's hard
-drives via network. The most known are NFS, Coda, Andrew Filesystem (AFS), Server
+drives via the network. The most known are NFS, Coda, Andrew Filesystem (AFS), Server
 Message Block (SMB) and Novell's NetWare Core Protocol (NCP).
 
 \subsubsection*{Special Filesystems}
@@ -58,7 +59,7 @@ examples are /proc filesystem or /sys filesystem.
 The VFS provides a universal method for accessing different filesystems. It consist of
 several objects, which will be described in detail later in this chapter. The file
 system driver has to be able to convert physical representation of the filesystem
-stored on disk to the VFS objects and vice versa. This concept warrants a uniform
+stored on disk into VFS objects and vice versa. This concept warrants a uniform
 interface for all filesystems as is shown in figure \ref{fig:vfs_role}.
 
 All system calls relating to the filesystems are directed to the VFS. All processes
@@ -92,7 +93,7 @@ The previous section has shown the VFS role. This section will describe in detai
 objects forming the Linux VFS and their main data fields with focus on the interaction
 between the VFS objects.
 
-The VFS design is object oriented, even if it is written in pure C code. Main objects
+The VFS design is object oriented, even if it is written in pure C code. The main objects
 are super block, inode, dentry and file. All these objects are represented by
 structure, which aside from data fields contains a pointer to the structure with
 pointers to the functions. This structure of pointers is filled by the filesystem
@@ -104,12 +105,12 @@ All file paths mentioned in the following text are relative to the root director
 of the Linux source tree. 
 
 \subsection{Linux Kernel Linked Lists}
-For the following text, which will describe the VFS data structures, is important to
+For the following text, which will describe the VFS data structures, it is important to
 understand how Linux kernel linked lists work.
 
 The Linux kernel uses a lot of linked lists (hundreds), so it would be a big waste to
 create new structures for each list and implement new operations (add, delete,
-initialization and other). Linux kernel defines two generic linked lists to prevent
+initialization etc.). Linux kernel defines two generic linked lists to prevent
 this waste. Both lists are double linked and defined in 
 \texttt{include/linux/list.h}. The first is defined by the structure \texttt{list\_head}
 and the second by the structures \texttt{hlist\_head} and \texttt{hlist\_node}.
@@ -138,14 +139,14 @@ The best way will be to describe the \texttt{list\_entry(ptr, type, member)} mac
 does this. The \texttt{ptr} argument is a pointer to the \texttt{list\_head}
 structure inside the \texttt{aux} structure, which in our example is a pointer to the
 \texttt{list\_item} variable, \texttt{type} is the name of the structure, which in our example
-is \texttt{struct aux} and \texttt{member} is a name of the \texttt{list\_head}
+is \texttt{struct aux}, and \texttt{member} is a name of the \texttt{list\_head}
 structure, which in our example is \texttt{list\_item}. Macro \texttt{list\_entry}
-counts a address of the \texttt{aux} structure and returns its pointer. 
+counts the address of the \texttt{aux} structure and returns its pointer. 
 
 The base command (expression) in \texttt{list\_entry} is \texttt{\&((type*)0)->member}
 defined in \\ \texttt{include/linux/stddef.h}, which returns the offset from
 \texttt{member} address to the requested structure start address. Now, when the offset
-is known, it is very easy to count a address of \texttt{aux} structure.
+is known, it is very easy to count the address of \texttt{aux} structure.
 
  
 \subsection{Superblock Object}
@@ -153,18 +154,19 @@ The superblock structure \texttt{struct super\_blok} is defined in
 \texttt{include/linux/fs.h} and is created for every mounted filesystem. It presents
 an entry point to the filesystem. All superblock objects are linked through
 \texttt{struct list\_head s\_list} field. List header \texttt{struct list\_head
-super\_blocks} is defined in \texttt{fs/super.c}. Superblock contains some metadata
+super\_blocks} is defined in \texttt{fs/super.c}. The superblock contains some metadata
 information like block size, maximum size of file, mount flags and others. It is
-partially filled by VFS and rest of the fields have to be filled by a specific file
-system driver. Superblock contains \texttt{struct dentry *s\_root} field, which
-represents the root dentry object for the filesystem. Dentry object is described in section
-\ref{lab:dentry}. Field \texttt{struct file\_system\_type *s\_type} is a pointer
+partially filled by VFS and the rest of the fields have to be filled by a specific file
+system driver. The superblock contains the \texttt{struct dentry *s\_root} field, which
+represents the root dentry object for the filesystem. The dentry object is described in section
+\ref{lab:dentry}. The field \texttt{struct file\_system\_type *s\_type} is a pointer
 to the object, which contains information about the filesystem (for example filesystem
 name, which is used as a argument to the mount command). The filesystem type object is
-described in section \ref{lab:file_system_type}. Field \texttt{struct list\_head
+described in section \ref{lab:file_system_type}. The field \texttt{struct list\_head
 s\_dirty} is the list header of modified inodes. It is used when a filesystem is
-unmounted and all dirty inodes have to be flushed to the disk. Field \texttt{struct
-list\_head s\_files} is the list header of all file objects opened on the filesystem. File
+unmounted and all dirty inodes have to be flushed to the disk. The field \texttt{struct
+list\_head s\_files} is the list header of all file objects opened on the
+filesystem. The file
 object is described in section \ref{lab:file}. The pointer to superblock operations is
 stored in \texttt{struct super\_operations *s\_op} field and has to be filled by the file
 system driver. Operations mostly convert VFS's inode to the disk inode and
@@ -174,49 +176,50 @@ vice versa (\texttt{read\_inode, write\_inode}).
 \label{lab:inode}
 All information needed by the VFS about a file are stored in a data structure called
 \texttt{struct inode}, defined in \texttt{include/linux/fs.h}. The VFS's inode is
-different than the inode stored on disk. Inode in VFS is created by VFS and duplicates
-some information from inode stored on disk to reduce slow access to the hard disk. In
+different to the inode stored on disk. The inode in VFS is created by VFS and duplicates
+some information from the inode stored on disk to reduce slow access to the hard disk. In
 some operating systems (*BSD) the VFS's inodes are called vnodes (virtual inode) to
 avoid confusion with inodes stored on disk. In the following text all inode
-information are related to the inode in VFS.
+information relates to the inode in the VFS.
 
-The inode structure can represent  regular file, directory, character device,
-block device, fifo, symlink, or unix sockets. Field \texttt{umode\_t i\_mode} is
-used to distinguish the file type and also contains access rights to inode. Every
-inode is identified by a inode number stored in a field \texttt{unsigned long i\_ino}
-which is unique within the scope of one filesystem. Inode structure doesn't contain
-the file name. That is because it can have several file names (hardlinks). File name is
-stored in the dentry object, which will be described in section \ref{lab:dentry}. Inode
+The inode structure can represent a regular file, directory, character device,
+block device, fifo, symlink, or unix sockets. The field \texttt{umode\_t i\_mode} is
+used to distinguish the file type and also contains access rights to the inode. Every
+inode is identified by an inode number stored in the field \texttt{unsigned long i\_ino}
+which is unique within the scope of one filesystem. The inode structure doesn't contain
+the file name. That is because it can have several file names (hardlinks). The file name is
+stored in the dentry object, which will be described in section
+\ref{lab:dentry}. The inode
 contains a list of all file names (dentries) assigned to it and the head of the list is
 stored in \texttt{struct list\_head i\_dentry}. The number of hardlinks pointing to an
-inode is in the field \texttt{unsigned int i\_nlink}. Inode can be in several states.
+inode is in the field \texttt{unsigned int i\_nlink}. The inode can be in several states.
 The state is stored in the \texttt{unsigned long i\_state} field and can contain the following
 inode state bits. \texttt{I\_DIRTY\_SYNC, I\_DIRTY\_DATASYNC, I\_DIRTY\_PAGES} or
 \texttt{I\_DIRTY}, which defines all three previous and indicates that the inode
 is dirty and the corresponding disk inode has to be updated. \texttt{I\_FREE} indicates
-that the inode is being freed, \texttt{I\_CLEAR} means that inode content is no longer
+that the inode is being freed, \texttt{I\_CLEAR} means that the inode content is no longer
 meaningful, \texttt{I\_NEW} means that inode is newly created and its data has to be
 filled by the specific filesystem and finally \texttt{I\_LOCK} means that the inode is
 involved in I/O transfer. Every inode has a usage counter \texttt{atomic\_t i\_count},
-which indicates that inode is used by some process.
+which indicates that the inode is used by some process.
 Each inode always appears in one of the following lists. List \texttt{struct
 list\_head inode\_unused} of valid unused inodes with \texttt{i\_count} set to zero,
 defined in \texttt{fs/inode.c}. List \texttt{struct list\_head inode\_in\_use} of
 valid in-use inodes with positive \texttt{i\_count} and \texttt{i\_nlink} fields,
 defined in \texttt{fs/inode.c} and list of dirty inodes with positive
 \texttt{i\_count} and \texttt{i\_nlink} fields, but also with dirty flag set in
-\texttt{i\_state} field. Field \texttt{struct list\_head i\_list} is used to link
-inode in one of the mentioned lists. Inodes are placed in a inode cache, which reduces
-access to the disk. VFS uses a hash table to speed up inode searching. Field
+\texttt{i\_state} field. The field \texttt{struct list\_head i\_list} is used to link
+inode in one of the mentioned lists. Inodes are placed in an inode cache, which reduces
+access to the disk. VFS uses a hash table to speed up inode searching. The field
 \texttt{struct list\_head i\_hash} is used to link inodes with the same hash value. More
-about inode cache in section \ref{lab:inode_cache}.
+about the inode cache can be found in section \ref{lab:inode_cache}.
 
 The inode contains inode and file operations. The pointer to inode operations is stored in
-the \texttt{struct inode\_operations *i\_op} field and pointer to file operations
+the \texttt{struct inode\_operations *i\_op} field and the pointer to file operations
 is stored in the \texttt{struct file\_operations *i\_fop}. Both operations are defined
-in \texttt{include/linux/fs.h}. Note that Linux has seven types of files and every type
-has its own operations. It means, that inode operations for regular file will be
-different than inode operations for the directory. Also not all operations have to be set.
+in \texttt{include/linux/fs.h}. Note that Linux has seven types of file and every type
+has its own operations. It means, that inode operations for regular files will be
+different to inode operations for the directory. Also not all operations have to be set.
 For example, only a few file operations will be set for the directory. The rest will be set
 to NULL, which means that these operations are not supported. VFS implements some
 generic operations. For example if the filesystem doesn't have permission operation, VFS
@@ -229,8 +232,8 @@ The following text will describe the main inode and file functions.
 \subsubsection{\texttt{int create(struct inode *dir, struct dentry *dentry, int mode,
 \\ struct nameidata *nd)}}
 
-Creates the new disk inode for a regular file. Argument \texttt{dir} is a pointer to the
-parent inode, which is an inode representing the directory, \texttt{dentry} is new dentry
+Creates a new disk inode for a regular file. Argument \texttt{dir} is a pointer to the
+parent inode, which is an inode representing the directory, \texttt{dentry} is a new dentry
 object to which the new inode will be attached, \texttt{mode} contains the inode type
 and its access rights (S\_IFREG, S\_IRWXU, etc.), \texttt{nd} is the result from path lookup.
 
@@ -238,9 +241,9 @@ and its access rights (S\_IFREG, S\_IRWXU, etc.), \texttt{nd} is the result from
 *dentry,\\ struct nameidata *nd)}}
 
 This function is called when the searched dentry (name) object was not found in the dentry
-cache. Argument \texttt{dir} is inode object of parent, \texttt{dentry} is newly created
+cache. Argument \texttt{dir} is the inode object of parent, \texttt{dentry} is a newly created
 dentry object, that has to be filled by a specific filesystem and \texttt{nd} contains
-dentry object which was last found in the dentry cache.
+the dentry object which was last found in the dentry cache.
 
 \subsubsection{\texttt{int link(struct dentry *old,struct inode *dir, struct dentry
 *new)}}
@@ -250,30 +253,30 @@ The name of the new link is in the \texttt{new} dentry and \texttt{dir} is the
 directory inode. The hard
 link can refer only to the regular file. Hard link and its regular file have to be on the
 same filesystem. This is because a new dentry object is only created for the hard
-link. Inode object is same for both, only has incremented the \texttt{i\_nlink} counter.
+link. The inode object is the same for both, only is incremented the \texttt{i\_nlink} counter.
 
 \subsubsection{\texttt{int unlink(struct inode *inode, struct dentry *dentry)}}
 
-Removes the hard link of the file specified by \texttt{dentry}. Argument
+Removes the hard link of the file specified by \texttt{dentry}. The argument
 \texttt{inode} is the parent inode.
 
 \subsubsection{\texttt{int symlink(struct inode *dir, struct dentry *dentry, const char
 *path)}}
 
-Creates new a symbolic link. Argument \texttt{dir} is the parent inode,
+Creates a new symbolic link. The argument \texttt{dir} is the parent inode,
 \texttt{dentry} is the newly
 created dentry object for the symlink and \texttt{path} is the path where the symlink will
 point to. Symlink can be created for every type of file and can point across file
 systems. Filesystem driver creates a new disk inode for symlink and saves the path
-into it. When Linux the kernel does a path lookup and finds that a actual inode is the symlink, it
+into it. When the Linux kernel does a path lookup and finds that an actual inode is the symlink, it
 reads the path stored in the disk inode and redirects the following path lookup to the new path.
 
 \subsubsection{\texttt{int mkdir(struct inode *dir, struct dentry *dentry, int mode)}}
 
-Creates a new directory inode. Argument \texttt{dir} is the inode of the parent,
+Creates a new directory inode. The argument \texttt{dir} is the inode of the parent,
 \texttt{dentry} is a newly created dentry object with the name for the new directory. Specific
 filesystem will create a new directory disk inode and bind it to the dentry object.
-Argument \texttt{mode} contains access rights to the new directory.
+The argument \texttt{mode} contains access rights to the new directory.
 
 \subsubsection{\texttt{int rmdir(struct inode *,struct dentry *)}}
 
@@ -283,8 +286,8 @@ the parent inode.
 \subsubsection{\texttt{int mknod(struct inode *dir, struct dentry *dentry, int mode,
 dev\_t rdev)}}
 
-Creates a new disk inode for a special file. Argument \texttt{dir} is the parent inode,
-\texttt{dentry} is a newly created dentry object to which the new inode for
+Creates a new disk inode for a special file. The argument \texttt{dir} is the parent inode,
+\texttt{dentry} is a newly created dentry object to which the new inode for the
 special file will be bound, \texttt{mode} contains access rights and file type for the new
 inode and \texttt{rdev} is a device's major number.
 
@@ -298,7 +301,7 @@ by \texttt{old\_dentry} will be removed, \texttt{new\_dir} is the new directory 
 \subsubsection{\texttt{int readlink(struct dentry *dentry, char \_\_user *buffer,
 int buflen)}}
 
-Copies into a memory area specified by \texttt{buffer} the file pathname corresponding
+Copies into the memory area specified by \texttt{buffer} the file pathname corresponding
 to the symbolic link specified by the \texttt{dentry}.
 
 \subsubsection{\texttt{int follow\_link(struct dentry *dentry, struct nameidata *nd)}}
@@ -322,7 +325,7 @@ inode. The \texttt{mask} argument contains access type (MAY\_EXEC, MAY\_WRITE, e
 \subsubsection{\texttt{loff\_t llseek(struct file *file, loff\_t offset, int origin)}}
 
 Updates the file position. The \texttt{file} argument is the object that represents the opened
-file. File object is described in section \ref{lab:file}. Argument \texttt{offset} is
+file. The file object is described in section \ref{lab:file}. The argument \texttt{offset} is
 the new file position in the file and \texttt{origin} designates from which part of the file
 the \texttt{offset} will be set (0 -- the new position is set to the \texttt{offset} value
 from file start position, 1 -- the new file position is set to its current location
@@ -343,7 +346,7 @@ Writes \texttt{count} bytes from the \texttt{buffer} to the \texttt{file} on the
 
 \subsubsection{\texttt{int readdir(struct file *dir, void *dirent, filldir\_t filldir)}}
 
-Returns the next directory entry of the \texttt{dir} in \texttt{dirent}. Argument
+Returns the next directory entry of the \texttt{dir} in \texttt{dirent}. The argument
 \texttt{filldir} contains the address of an auxiliary function that extracts the
 fields in a directory entry.
 
@@ -351,7 +354,7 @@ fields in a directory entry.
 *table)}}
 
 Checks whether there is activity on the \texttt{file} and goes to sleep until
-something happens to it. Argument \texttt{table} contains the type of activity that
+something happens to it. The argument \texttt{table} contains the type of activity that
 happened to the \texttt{file}.
 
 \subsubsection{\texttt{int ioctl(struct inode *inode, struct file *file, unsigned int
@@ -392,9 +395,10 @@ has set the I\_DIRTY\_DATASYNC flag.
 \label{lab:dentry}
 The dentry object is represented by the \texttt{struct dentry} structure, which is defined
 in\\ \texttt{include/linux/dcache.h}. Dentries are used for file path
-look up and are common for all specific filesystems. It means that VFS creates
+lookup and are common for all specific filesystems. It means that VFS creates
 a common layer over all filesystems for file path lookup. Dentries
 are only part of the VFS and specific filesystems have no corresponding image of
+the
 dentry on disk. The dentry object is created for every component of a path name that a
 process looks up. For example, we will consider \texttt{/mnt/hda8/file} file path.
 The dentry object is created for \texttt{/}, \texttt{mnt}, \texttt{hda8} and \texttt{file}
@@ -410,15 +414,15 @@ other subdirectories and files. Entries of directory dentry are linked through
 can be a little confusing, because dentries are linked through \texttt{d\_child} on
 the same level. Perhaps sibling would be a better name. Field \texttt{struct dentry*
 d\_parent} contains pointer to the dentry parent object. The dentry name is stored in the
-\texttt{struct qstr d\_name} field. Structure \texttt{qstr} contains, in addition the dentry
+\texttt{struct qstr d\_name} field. The structure \texttt{qstr} contains, in addition the dentry
 name, also the name length and hash value of the dentry name. The hash value is used
 to speed up comparison of dentry names. Dentry also contains a pointer \texttt{struct
 inode *d\_inode} to the inode object. As was written in section \ref{lab:inode} the inode
-doesn't contains the file name because it can have several file names. The name is stored
+doesn't contains the file name because it can have several filenames. The name is stored
 in a dentry object and several dentry objects can point to the same inode object.
-Dentry objects pointing to the same inode are linked through \texttt{struct
+Dentry objects pointing to the same inode are linked through the \texttt{struct
 list\_head alias} field and list header is stored in the corresponding inode object.
-Dentry objects are stored in the dentry cache. Field \texttt{struct hlist\_node
+Dentry objects are stored in the dentry cache. The field \texttt{struct hlist\_node
 d\_hash} links the dentry object with the same hash value (dentry cache as well as
 inode cache is not collision free). Dentry cache is described in section
 \ref{lab:dentry_cache}. Field \texttt{d\_count} is the dentry usage counter.
@@ -451,8 +455,8 @@ The dentry object may be in one of four states.
 		disk inode has been deleted or a non-existing path has been resolved.
 \end{description}
 
-All unused dentry objects are linked in LRU (Last Recently Used) list and can be freed
-in order to reclaim memory. Header of the LRU list \texttt{struct list\_head
+All unused dentry objects are linked in the LRU (Last Recently Used) list and can be freed
+in order to reclaim memory. The header of the LRU list \texttt{struct list\_head
 dentry\_unused} is in \texttt{fs/dcache.c}. The \texttt{int d\_mounted} flag
 signalizing that the dentry object is mount point of other filesystem. It is used by
 the path look up routine to switch path look up to the other filesystem. The dentry object
@@ -477,7 +481,7 @@ is used by filesystems that implement their own hash function for the dentry cac
 \subsubsection{\texttt{int d\_compare(struct dentry *dentry, struct qstr *name1,\\struct qstr
 *name2)}}
 
-Compares \texttt{name1} and \texttt{name2}. The \texttt{dentry} argument is parent
+Compares \texttt{name1} and \texttt{name2}. The \texttt{dentry} argument is the parent
 dentry. Each filesystem can use its own comparison function. For example Window's file
 systems don't distinguish capital from lowercase letters.
 
@@ -494,8 +498,8 @@ Called when the \texttt{dentry} object is going to be freed.
 
 Called before the \texttt{dentry} object is freed. This function is used to notify
 the filesystem that the \texttt{inode} object associated with this \texttt{dentry}
-object should be freed. If filesystem doesn't implement this function then the VFS's
-\texttt{iput} function is called. It decrease the inode \texttt{i\_count} counter and
+object should be freed. If the filesystem doesn't implement this function then the VFS's
+\texttt{iput} function is called. It decrements the inode \texttt{i\_count} counter and
 if the \texttt{i\_nlink} and \texttt{i\_count} field is zero then the \texttt{inode} is
 freed.
 
@@ -505,7 +509,7 @@ A file object describes how a process interacts with a file it has opened. The f
 object is created when the file is opened and consists of a \texttt{struct file}
 structure defined in \texttt{include/linux/fs.h}. All opened files within one file
 system are linked through \texttt{struct list\_head f\_list} field. The header of this
-list is stored in the corresponding super block object. File object contains a pointer
+list is stored in the corresponding super block object. The file object contains a pointer
 \texttt{struct dentry *f\_dentry} to the dentry object and a pointer \texttt{struct
 vfsmount *f\_vfsmount} to the vfsmount object, which is described in section
 \ref{lab:vfsmount}. The main information stored in the file object is the position in the
@@ -534,7 +538,7 @@ architecture. For example, for i386 architecture its value is 32. If the file pr
 opens more than \texttt{NR\_OPEN\_DEFAULT} files, the kernel allocates a new, larger
 array of file pointers and stores its address in the \texttt{fd} field and updates the
 \texttt{maxfds} field to the new array size. So when the user process opens a file the
-VFS creates all needed objects and stores a pointer to the file object in the \texttt{fd}
+VFS creates all required objects and stores a pointer to the file object in the \texttt{fd}
 array. As a result the user process receives an index (file descriptor) to the \texttt{fd}
 field, where the pointer to the corresponding file is stored. Usually, the first
 element (index 0) of the array is associated with the standard input of the process,
@@ -552,7 +556,7 @@ to the standard output.\\
 	\begin{center}
 		\input{pic_vfs_file.pstex_t}
 	\end{center}
-	\caption{Interaction between processes and VFS object through file object}
+	\caption{Interaction between processes and VFS objects via the file object}
 	\label{fig:vfs_file}
 \end{figure}
 
@@ -580,41 +584,43 @@ We will assume, that we have written a new filesystem. Now we have to somehow te
 it. This is done through the \texttt{register\_filesystem()} function defined in
 \texttt{fs/filesystems.c}. Firstly a new filesystem type object has to be created and
 properly filled. Then the \texttt{register\_filesystem} function is called with the newly
-created filesystem type object. Kernel adds our new filesystem to the
-\texttt{file\_systems} list. Now when the new filesystem is mounted, kernel searches
+created filesystem type object. The kernel adds our new filesystem to the
+\texttt{file\_systems} list. Now when the new filesystem is mounted, the kernel searches
 for the filesystem type object corresponding to our new filesystem in the
-\texttt{file\_systems} list. Search is based on the filesystem name, which is
+\texttt{file\_systems} list. The search is based on the filesystem name, which is
 forwarded to the kernel as a \texttt{-t} mount option (for example ext2). 
 
 \subsection{Fs\_struct Object}
 In Linux, each process has its own current working directory and its own root
 directory. This information is stored in a fs\_struct object represented by the
 \texttt{struct fs\_struct} structure defined in \texttt{include/linux/fs\_struct.h}.
-As have been told in section \ref{lab:file} each process in Linux kernel is
-represented by the \texttt{struct task\_struct} structure. This structure contains
+As mentioned in section \ref{lab:file} each process in the Linux kernel is
+represented by the \texttt{struct task\_struct} structure. This structure
+contains a
 \texttt{fs} pointer to the fs\_struct object for the current task. So the kernel knows
-root and current working directory of each process. In fs\_struct object are among
+the root and current working directory of each process. In fs\_struct object are among
 others stored pointers to the root dentry (\texttt{struct dentry *root}),
-current working directory dentry (\texttt{struct dentry *pwd}), pointer to the
-vfsmount structure for root directory (\texttt{struct vfsmount *rootmnt}) and pointer
+the current working directory dentry (\texttt{struct dentry *pwd}), a pointer to the
+vfsmount structure for the root directory (\texttt{struct vfsmount *rootmnt})
+and a pointer
 to the vfsmount structure for the current working directory (\texttt{struct vfsmount
 *pwdmnt}). The vfsmount object is described in section \ref{lab:vfsmount}.
 
 \subsection{Vfsmount Object}
 \label{lab:vfsmount}
-In Linux kernel is possible to mount filesystem over other filesystem's directory
+In the Linux kernel it is possible to mount a filesystem over another filesystem's directory
 tree. One filesystem can be mounted several times and can be even mounted on its own
 directory tree. It is also possible to stack multiple mounts on a single mount point.
 In this case only the last mounted filesystem is visible and hides the filesystem,
 which was mounted before it. After the top most filesystem is unmounted, then the file
 system below it is visible again. The vfsmount object is used to keep information
 about mounted filesystem and its relationship with other mounted filesystems. It is
-defined by structure \texttt{struct vfsmount} defined in
-\texttt{include/linux/mount.h}. The vfsmount object contains \texttt{struct
-vfsmount *parent} pointer to the parent vfsmount object on which is mounted on and
-list of vfsmount objects (children) mounted on its directory tree. Head of this list
-is stored in \texttt{struct list\_head mnt\_mounts} field and vfsmount objects in this
-list are linked through \texttt{struct list\_head mnt\_child} field. \\
+defined by the structure \texttt{struct vfsmount} defined in
+\texttt{include/linux/mount.h}. The vfsmount object contains the \texttt{struct
+vfsmount *parent} pointer to the parent vfsmount object on which it is mounted and
+a list of vfsmount objects (children) mounted on its directory tree. The head of this list
+is stored in the \texttt{struct list\_head mnt\_mounts} field and vfsmount objects in this
+list are linked through the \texttt{struct list\_head mnt\_child} field. \\
 
 \begin{figure}[h]
 	\begin{center}
@@ -624,46 +630,51 @@ list are linked through \texttt{struct list\_head mnt\_child} field. \\
 	\label{fig:vfs_struct}
 \end{figure}
 
-In figure \ref{fig:vfs_struct} is shown the base connection between VFS objects, which
+Figure \ref{fig:vfs_struct} shows the base connection between VFS objects, which
 were described in the text above.
 
 \section{VFS Caches}
 \label{lab:cache}
-VFS uses dentry and inode cache to eliminate accesses to the hard disk. Because dentry and
-inode object are allocated and deallocated very often, VFS uses for these objects slab
-allocator. Slab allocator is based on Linux buddy system for allocating continuous
-pages of dynamic memory. The idea behind slab allocator is to preallocate several
+VFS uses the dentry and inode cache to eliminate accesses to the hard disk. Because dentry and
+inode object are allocated and deallocated very often, VFS uses for these
+objects the slab
+allocator. The slab allocator is based on the Linux buddy system for allocating continuous
+pages of dynamic memory. The idea behind the slab allocator is to preallocate several
 objects of given type and keep them in slabs. A slab is a series of contiguous
-physical pages in which objects are kept. Slab allocator then provides these
-preallocated object. Objects are not deallocated but are returned back to the slab
+physical pages in which objects are kept. The slab allocator then provides these
+preallocated objects. Objects are not deallocated but are returned back to the slab
 allocator. So there is no overhead for allocating and deallocating objects of given
-type because they are already allocated. Slab allocator is used for small ojects which
+type because they are already allocated. Slab allocator is used for small objects which
 are used very often.
 
 \subsection{Dentry Cache}
 \label{lab:dentry_cache}
-Dentry cache consists of n-ary dentry tree and dentry hash table. Both are protected
+The dentry cache consists of n-ary dentry tree and dentry hash table. Both are protected
 against concurent acceess by one \texttt{dcache\_lock} spinlock which is defined in
 \texttt{fs/dcache.c}. Dentry hash table \texttt{dentry\_unused} is used for lookup
-operation which converts filename path to the corresponding dentry object. Address of
-parent dentry object and hash value of dentry name are used as a key to the hash table.
-Filesystems can invalidate dentry object in dentry hash table. Which means that
-further lookup operation fails and real lookup operation of specific filesystem is
-called. Note that dentry is removed only from hash table, but it still exist in dentry
-tree and has set \texttt{DCACHE\_UNHASHED} flag. In Linux one process may delete file,
-but there can be other procceses using it. So proper dentry object has to exist until
+operation which converts filename path to the corresponding dentry object. The address of
+the parent dentry object and the hash value of the dentry name are used as a key to the hash table.
+Filesystems can invalidate dentry objects in the dentry hash table. Which means that
+further lookup operations fail and real lookup operation of specific filesystem is
+called. Note that dentry is removed only from the hash table, but it still
+exists in the dentry
+tree and has the \texttt{DCACHE\_UNHASHED} flag set. In Linux one process may delete file,
+but there can be other procceses using it. So a proper dentry object has to exist until
 the last reference to the dentry object is removed, but no other process can open it again. 
 
 \subsection{Inode Cache}
 \label{lab:inode_cache}
-Inode hash table \texttt{inode\_hashtable} is defined in \texttt{fs/inode.c}. Address
+The inode hash table \texttt{inode\_hashtable} is defined in
+\texttt{fs/inode.c}. The address
 of the supper block and inode number are used as a key to the hash table. Concurent
-access to the hash table is protected by \texttt{inode\_lock} spinlock.
+access to the hash table is protected by the \texttt{inode\_lock} spinlock.
 
 \section{Buffer Cache}
-Buffer cache is other cache which purpose is to reduce slow disk operations. It is
-common for all native filesystems. When buffer is readed from disk its data are stored
-in the \texttt{buffer\_head} structure. This structure contains aside from buffer data
-some meta information about buffer. For example if the buffer is dirty and others.
-When native filesystem tries to read or write  data from or to the disk, Linux
-kernel first look for corresponding buffer in buffer cache. 
+The buffer cache is another cache whose purpose is to reduce slow disk operations. It is
+common for all native filesystems. When the buffer is read from disk its data is stored
+in the \texttt{buffer\_head} structure. This structure contains, aside from the
+buffer data,
+some meta information about the buffer. For example if the buffer is dirty and
+etc.
+When the native filesystem tries to read or write  data from or to the disk, the Linux
+kernel first looks for the corresponding buffer in the buffer cache. 

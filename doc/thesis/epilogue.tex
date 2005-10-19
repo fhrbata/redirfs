@@ -2,10 +2,10 @@
 This thesis describes the problems and limitations of the existing solutions for
 filesystem control access. The only solution supported directly by the Linux kernel is
 the LSM framework. It was integrated into the Linux kernel 2.6 and it provides a set
-of callback functions which can be registered by the security modules. LSM is intended
+of callback functions which can be registered by the security modules. The LSM is intended
 as a general framework which provides a way to control access to all Linux kernel
 structures. It does not enhance Linux kernel security by itself. It just provides an
-interface for security modules. LSM has a big problem with the stacking of security
+interface for security modules. The LSM has a big problem with the stacking of security
 modules. Only one security module can be registered directly to the LSM framework.
 Other modules are always registered to the security module which was registered before
 it. If the security module is not able to register other modules then no other module
@@ -36,7 +36,7 @@ This is generally not a good idea (rootkit detectors) and syscall function are t
 high (NFS kernel daemon). For Linux kernel 2.6 Dazuko uses the LSM framework whose
 problems were mentioned above. Moreover, the LSM framework does not provide any way to
 catch on close event which is very important for anti--virus applications. As a
-solution, Dazuko uses RSBAC framework. At this moment Dazuko maintainer Jogh Ogness
+solution, Dazuko uses RSBAC framework. At this moment Dazuko maintainer John Ogness
 tries to solve all these problems with the overlay filesystem.
 
 I have proposed a completely new framework called Redirfs to overcome all the problems
@@ -50,7 +50,7 @@ Filters are called in a specific order defined by their priorities. Redirfs modi
 only those VFS object operations for which there are registered Filter callback
 functions. This means that all other operations go directly to the native filesystem
 with absolutely no overhead. Redirfs also modifies only the VFS objects which have to
-by modified. It returns VFS objects operations back to the native filesystem
+be modified. It returns VFS objects operations back to the native filesystem
 operations as soon as possible (no filter needs them).
 
 Base parts of the Redirfs framework were implemented. The current implementation has
