@@ -1,0 +1,26 @@
+\chapter{Overlay Filesystems}
+\label{lab:overlay}
+Overlay filesystem creates new layer over existing native filesystem. The idea is to
+create whole filesystem which will be linked with native filesystem. VFS doesn't
+provide any special support for overlay filesystems. Overlay filesystem is mounted
+over native filesystem and it works with VFS objects which are created by native
+filesystem. Overlay filesystems can be stacked on each other. So for example there can
+be native filesystem on which can be linked several overlay filesystems. Problem is
+that overlay filesystem duplicates all VFS objects (inode, file, dentry) of filesystem
+under it (it can be native filesystem or other overlay filesystem). So if three
+overlay filesystems are used over one native filesystem, every VFS object (file,
+dentry and inode) has four copies in VFS layer. One copy for native filesystem and
+three copies for overlay filesystems. Other problem is that some applications need to
+be notified about only a few VFS events. For example anti-virus on-access scanner just
+need to know when the file is opened, executed or closed. Write whole filesystem only
+to get these events is really a lot of work. There is no way how affect order in
+which will be overlay filesystem called and of course overlay filesystem can not be
+safely unmounted because it can be used by other overlay filesystem.
+
+\section{FiST}
+FiST is a project which tries to make creating of overlay filesystems easier. Actually
+it is an overlay filesystem generator. If you want to create new overlay filesystem you
+only need to implement functions in which you are interested. FiST will generate whole
+filesystem for you. Advantage is that FiST describes overlay filesystem in its special
+language an provides generators for Linux, FreeBSD and Solaris. It means that the
+overlay filesystem define only once and will work all three operating systems.

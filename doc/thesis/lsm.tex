@@ -1,0 +1,58 @@
+\chapter{Linux Security Module -- LSM}
+\label{lab:lsm}
+Linux kernel provides only some base access control mechanisms. For example access
+rights to files are divided only for user, group and others. Some filesystems allow to
+use Access Control Lists which provide more flexible file access control. Other
+problem are root rights because root user can do anything in the system.
+Some programs need to run with root rights. This can be dangerous if such program
+has a bug which allows to non privileged process obtain root rights. In this cases it
+is desirable to reduce root rights or introduce control access based on processes.
+Some projects like RSBAC, Medusa, SELinux, LIDS or VXE provide way how to improve
+access control mechanisms. Each project provides its own set of patches for Linux
+kernel to improve kernel security. Problem is that these patches have to maintained for
+several Linux kernel versions and they cannot be used in the same time. Linux
+Security Module or LSM tries to solve these problems and provides framework which
+allows third-party modules to register several security callback functions for
+different events in kernel. It is intended as a common way for all security modules
+how to obtain specific events from kernel. Big advantage of LSM framework is that it
+is integrated into the Linux kernel from version 2.5.
+
+\section{LSM Structure}
+LSM provides \texttt{struct security\_operations} structure. It contains pointers
+for all operations which can be registered by security module. Security module fills
+this structure with its callback functions and registers itself by
+\texttt{register\_security} function. This function takes as a argument pointer to the
+structure with callback operations. Security module can unregister itself with
+\texttt{unregister\_security} function. 
+
+\section{LSM Integration in Linux Kernel}
+LSM adds to the Linux kernel structures (task\_struct, inode, file etc.) new data
+field. It is a void pointer which can be used by security module to attach its private
+data to the kernel object. LSM also adds calling of registered callback functions to
+the specific functions in kernel.
+
+\section{LSM and Modules Stacking}
+LSM provides very primitive stacking of security modules. LSM allows only one security
+module to be directly registered in the LSM framework. This module is called master.
+LSM framework contains pointer \texttt{security\_operations *security\_ops} which is
+defined in \texttt{security/security.c}. This pointer always points to the master's
+\texttt{security\_operations} structure. LSM contains \texttt{dummy\_security\_ops}
+which are used when there is no security module (master) registered in framework. When
+the first security module (master) is registered LSM change \texttt{security\_ops} pointer to
+the new security module operations. All security functions in kernel are called through
+\texttt{security\_ops} pointer. This is why only one security module can be directly registered
+in LSM framework. Structure \texttt{security\_ops} contains pointers for registration
+and unregistration function. Master module has to implement these operations to allow other
+security module to use LSM. When second security module registers itself to the LSM
+then registration function of the master module is called. When third security module
+registers itself then registration function of master module is called and this
+function has to call registration function of second module. And so on. This is how
+security modules are stacked in LSM framework. It is obvious that each security module
+is responsible for calling security module which was registered after it. This
+approach is very bad. There is no way how to affect order in which will be security
+modules called. Security modules can not be safely removed. Only master module can
+attach private data to the kernel objects. Moreover LSM doesn't provide enough
+callback functions for all security modules.
+
+At this moment only few security modules are using LSM framework. 
+
