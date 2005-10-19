@@ -137,10 +137,10 @@ The list is linked through the \texttt{list\_head} structure placed in the \text
 structure. Now it is time to explain how the pointer to the aux structure is acquired.
 The best way will be to describe the \texttt{list\_entry(ptr, type, member)} macro, which
 does this. The \texttt{ptr} argument is a pointer to the \texttt{list\_head}
-structure inside the \texttt{aux} structure, which in our example is a pointer to the
-\texttt{list\_item} variable, \texttt{type} is the name of the structure, which in our example
-is \texttt{struct aux}, and \texttt{member} is a name of the \texttt{list\_head}
-structure, which in our example is \texttt{list\_item}. Macro \texttt{list\_entry}
+structure inside the \texttt{aux} structure, (which in our example is a pointer to the
+\texttt{list\_item} variable), \texttt{type} is the name of the structure, (which in our example
+is \texttt{struct aux}), and \texttt{member} is a name of the \texttt{list\_head}
+structure, (which in our example is \texttt{list\_item}). Macro \texttt{list\_entry}
 counts the address of the \texttt{aux} structure and returns its pointer. 
 
 The base command (expression) in \texttt{list\_entry} is \texttt{\&((type*)0)->member}
