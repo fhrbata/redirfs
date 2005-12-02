@@ -3,6 +3,7 @@
 #include <linux/init.h>
 #include <linux/smp_lock.h>
 #include <linux/stat.h>
+#include <linux/version.h>
 #include "redirfs.h"
 #include "operations.h"
 #include "root.h"
@@ -274,8 +275,13 @@ static int redirfs_reg_permission(struct inode *inode, int mode, struct nameidat
 	struct redirfs_args_t args;
 	int rv;
 	
+#	if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,9)
+	if (!nd)
+		return vfs_permission(inode, mode);
+#	else
 	if (!nd)
 		return generic_permission(inode, mode, NULL);
+#	endif	
 
 	spin_lock(&redirfs_ihash_lock);
 
@@ -303,7 +309,11 @@ static int redirfs_reg_permission(struct inode *inode, int mode, struct nameidat
 
 	spin_unlock(&redirfs_ihash_lock);
 
+#	if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,9)
+	return vfs_permission(inode, mode);
+#	else
 	return generic_permission(inode, mode, NULL);
+#	endif	
 }
 
 static int __init redirfs_init(void)
