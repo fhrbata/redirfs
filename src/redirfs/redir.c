@@ -7,41 +7,64 @@
 #include "operations.h"
 #include "root.h"
 #include "inode.h"
+#include "file.h"
+#include "debug.h"
 
 extern spinlock_t redirfs_ihash_lock;
 extern spinlock_t inode_lock;
 extern spinlock_t redirfs_flt_list_lock;
+extern int redirfs_proc_init(void);
+extern void redirfs_proc_destroy(void);
 struct redirfs_operations_t redirfs_fw_ops;
 struct redirfs_vfs_operations_t redirfs_vfs_ops;
 
-static int redirfs_pre_call_filters(struct redirfs_root_t *root, 
+static int redirfs_pre_call_filters(struct redirfs_root_t *root,
 		int type,
 		int op,
 		struct redirfs_context_t *context, 
 		struct redirfs_args_t *args)
 {
-	struct redirfs_ptr_t *ptr;
 	struct redirfs_flt_t *flt;
 	int rv = REDIRFS_RETV_CONTINUE;
-	enum redirfs_retv (*operation)(redirfs_context *, struct redirfs_args_t *);
 	void ***pre_ops;
+	struct redirfs_flt_arr_t flt_arr;
+	int i = 0;
+	enum redirfs_retv (*operation)(redirfs_context *,
+			struct redirfs_args_t *) = NULL;
 
 
-	spin_lock(&redirfs_flt_list_lock);
+	
+	redirfs_debug("started");
 
-	list_for_each_entry(ptr, &root->attached_flts, ptr_list) {
-		flt = ptr->ptr_val;
+	redirfs_flt_arr_init(&flt_arr);
+	if (redirfs_flt_arr_copy(&root->attached_flts, &flt_arr))
+		BUG();
+
+	for(i = 0; i < flt_arr.cnt; i ++) {
+		flt = flt_arr.arr[i];
+		
+		if (!atomic_read(&flt->active))
+			continue;
+
+		spin_lock(&flt->lock);
+
 		pre_ops = redirfs_gettype(type, &flt->pre_ops);
+		if (*pre_ops[op]) 
+			operation = (enum redirfs_retv (*)(redirfs_context *,
+				struct redirfs_args_t *)) (*pre_ops[op]);
 
-		if (*pre_ops[op]) {
-			operation = (enum redirfs_retv (*)(redirfs_context *, struct redirfs_args_t *))(*pre_ops[op]);
+		spin_unlock(&flt->lock);
+
+		if (operation) {
 			rv = operation((void *)context, args);
 			if (rv == REDIRFS_RETV_STOP)
 				break;
 		}
 	}
 
-	spin_unlock(&redirfs_flt_list_lock);
+	redirfs_flt_arr_destroy(&flt_arr);
+
+	redirfs_debug("ended");
 
 	return rv;
 }
@@ -50,21 +73,18 @@ static void redirfs_d_iput(struct dentry *dentry, struct inode *inode)
 {
 	struct redirfs_inode_t *rinode;
 	struct redirfs_root_t *root;
+	void (*d_iput)(struct dentry *, struct inode *) = NULL; 
 	
-	
-	spin_lock(&redirfs_ihash_lock);
 
-	rinode = redirfs_iget(inode->i_sb, inode->i_ino);
-	if (!rinode) {
-		spin_unlock(&redirfs_ihash_lock);
-		return;
-	}
+	redirfs_debug("started");
 
-	root = rinode->root;
+	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
+	BUG_ON(!rinode);
+
+	root = redirfs_rget(rinode->root);
 	BUG_ON(!rinode->root);
 
 	spin_lock(&root->lock);
-
 	dentry->d_op = root->orig_ops.dops;
 
 	if (S_ISREG(inode->i_mode)) {
@@ -77,193 +97,255 @@ static void redirfs_d_iput(struct dentry *dentry, struct inode *inode)
 	}
 
 	if (root->orig_ops.dops && root->orig_ops.dops->d_iput)
-		root->orig_ops.dops->d_iput(dentry, inode);
+		d_iput = root->orig_ops.dops->d_iput;
+
+	spin_unlock(&root->lock);
+
+	if (d_iput)
+		d_iput(dentry, inode);
 	else
 		iput(inode);
 
-	list_del(&rinode->inode_root);
-	redirfs_free_inode(rinode);
+	spin_lock(&rinode->lock);
+	rinode->nlink--;
+	if (!rinode->nlink) {
+		redirfs_ihash_table_remove(rinode);
+		INIT_HLIST_NODE(&rinode->inode_hash);
+	}
+	spin_unlock(&rinode->lock);
 
-	spin_unlock(&root->lock);
-	spin_unlock(&redirfs_ihash_lock);
+	redirfs_iput(rinode);
+	redirfs_rput(root);
+
+	redirfs_debug("ended");
 }
 
 static int redirfs_dir_create(struct inode *inode, struct dentry *dentry, int mode, struct nameidata *nd)
 {
 	struct redirfs_inode_t *rinode;
 	struct redirfs_root_t *root;
-	struct inode *i_new;
-	int rv = 0;
+	int aux = 0;
+	int rv;
 
 
-	spin_lock(&redirfs_ihash_lock);
+	redirfs_debug("started");
 
-	rinode = redirfs_iget(inode->i_sb, inode->i_ino);
+	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
 	BUG_ON(!rinode);
 
-	root = rinode->root;
+	root = redirfs_rget(rinode->root);
 	BUG_ON(!rinode->root);
 
 	rv = root->orig_ops.dir_iops->create(inode, dentry, mode, nd);
 
-	if (rv) 
-		goto ret;
+	if (rv) {
+		redirfs_iput(rinode);
+		redirfs_rput(root);
+		return rv;
+	}
 
-	i_new = dentry->d_inode;
+	BUG_ON(!dentry->d_inode);
 
-	if (S_ISREG(i_new->i_mode)) {
+	if (S_ISREG(dentry->d_inode->i_mode)) {
+		spin_lock(&rinode->lock);
+		redirfs_rput(root);
+		root = redirfs_rget(rinode->root);
+
 		spin_lock(&root->lock);
+		if (!root->orig_ops.reg_iops) 
+			aux = 1;
+		spin_unlock(&root->lock);
 
-		if (!root->orig_ops.reg_iops) {
+		if (aux) {
 			redirfs_set_reg_ops(root, dentry->d_inode);
 			redirfs_set_root_ops(root, REDIRFS_I_REG);
 			redirfs_set_root_ops(root, REDIRFS_F_REG);
 
-			spin_lock(&dcache_lock);
-			spin_lock(&inode_lock);
-
-			redirfs_replace_files_ops(root->path, root->dentry, root->new_ops.reg_fops, S_IFREG);
-
-			spin_unlock(&dcache_lock);
-			spin_unlock(&inode_lock);
+			spin_lock(&root->lock);
+			root->new_ops.reg_fops->open =
+				root->fw_ops->reg_fops->open;
+			root->new_ops.reg_fops->release =
+				root->fw_ops->reg_fops->release;
+			spin_unlock(&root->lock);
 		}
 
-		redirfs_add_inode(root, dentry);
+		redirfs_add_inode(root, dentry->d_inode);
+
+		spin_lock(&root->lock);
 
 		dentry->d_inode->i_op = root->new_ops.reg_iops;
 		dentry->d_inode->i_fop = root->new_ops.reg_fops;
 		dentry->d_op = root->new_ops.dops;
 		
 		spin_unlock(&root->lock);
+		spin_unlock(&rinode->lock);
 	}
 
+	redirfs_iput(rinode);
+	redirfs_rput(root);
 
-ret:
-	spin_unlock(&redirfs_ihash_lock);
+	redirfs_debug("ended");
+
 	return rv;
 }
 
-static struct dentry *redirfs_dir_lookup(struct inode *parent, struct dentry *dentry, struct nameidata *nd)
+static struct dentry *redirfs_dir_lookup(struct inode *parent,
+		struct dentry *dentry, struct nameidata *nd)
 {
-	struct dentry *res = NULL;
-	struct inode *inode = NULL;
+	struct dentry *rv = NULL;
 	struct redirfs_inode_t *rinode;
 	struct redirfs_root_t *root;
+	int aux = 0;
 
 
-	spin_lock(&redirfs_ihash_lock);
+	redirfs_debug("started");
 
-	rinode = redirfs_iget(parent->i_sb, parent->i_ino);
+	rinode = redirfs_ifind(parent->i_sb, parent->i_ino);
 	BUG_ON(!rinode);
 
-	root = rinode->root;
+	root = redirfs_rget(rinode->root);
 	BUG_ON(!rinode->root);
 
-	res = root->orig_ops.dir_iops->lookup(parent, dentry, nd);
-	if (res) 
-		goto ret;
+	rv = root->orig_ops.dir_iops->lookup(parent, dentry, nd);
+	if (rv) {
+		redirfs_iput(rinode);
+		redirfs_rput(root);
+		return rv;
+	}
 
-	inode = dentry->d_inode;
+	if (!dentry->d_inode) {
+		redirfs_iput(rinode);
+		redirfs_rput(root);
+		return rv;
+	}
 
-	if (!inode || !inode->i_op)
-		goto ret;
+	if (S_ISREG(dentry->d_inode->i_mode)) {
+		spin_lock(&rinode->lock);
+		redirfs_rput(root);
+		root = redirfs_rget(rinode->root);
 
-	if (S_ISREG(inode->i_mode)) {
 		spin_lock(&root->lock);
+		if (!root->orig_ops.reg_iops) 
+			aux = 1;
+		spin_unlock(&root->lock);
 
-		if (!root->orig_ops.reg_iops) {
+		if (aux) {
 			redirfs_set_reg_ops(root, dentry->d_inode);
 			redirfs_set_root_ops(root, REDIRFS_I_REG);
 			redirfs_set_root_ops(root, REDIRFS_F_REG);
 
-			spin_lock(&dcache_lock);
-			spin_lock(&inode_lock);
-
-			redirfs_replace_files_ops(root->path, root->dentry, root->new_ops.reg_fops, S_IFREG);
-
-			spin_unlock(&dcache_lock);
-			spin_unlock(&inode_lock);
+			spin_lock(&root->lock);
+			root->new_ops.reg_fops->open =
+				root->fw_ops->reg_fops->open;
+			root->new_ops.reg_fops->release =
+				root->fw_ops->reg_fops->release;
+			spin_unlock(&root->lock);
 		}
 
-		redirfs_add_inode(root, dentry);
+		redirfs_add_inode(root, dentry->d_inode);
+
+		spin_lock(&root->lock);
 
 		dentry->d_inode->i_op = root->new_ops.reg_iops;
 		dentry->d_inode->i_fop = root->new_ops.reg_fops;
 		dentry->d_op = root->new_ops.dops;
 
 		spin_unlock(&root->lock);
+		spin_unlock(&rinode->lock);
 
-	} else if (S_ISDIR(inode->i_mode) && !dentry->d_mounted) {
+	} else if (S_ISDIR(dentry->d_inode->i_mode) && !dentry->d_mounted) {
+		spin_lock(&rinode->lock);
+		redirfs_rput(root);
+		root = redirfs_rget(rinode->root);
+
 		spin_lock(&root->lock);
-		
-		if (!root->orig_ops.dir_iops) {
+		if (!root->orig_ops.dir_iops)
+			aux = 1;
+		spin_unlock(&root->lock);
+
+		if (aux) {
 			redirfs_set_dir_ops(root, dentry->d_inode);
 			redirfs_set_root_ops(root, REDIRFS_I_DIR);
 			redirfs_set_root_ops(root, REDIRFS_F_DIR);
 
-			root->new_ops.dir_iops->lookup = root->fw_ops->dir_iops->lookup;
-			root->new_ops.dir_iops->mkdir = root->fw_ops->dir_iops->mkdir;
-			root->new_ops.dir_iops->create = root->fw_ops->dir_iops->create;
-
-			spin_lock(&dcache_lock);
-			spin_lock(&inode_lock);
-
-			redirfs_replace_files_ops(root->path, root->dentry, root->new_ops.dir_fops, S_IFDIR);
-
-			spin_unlock(&dcache_lock);
-			spin_unlock(&inode_lock);
+			spin_lock(&root->lock);
+			root->new_ops.dir_iops->lookup =
+				root->fw_ops->dir_iops->lookup;
+			root->new_ops.dir_iops->mkdir =
+				root->fw_ops->dir_iops->mkdir;
+			root->new_ops.dir_iops->create =
+				root->fw_ops->dir_iops->create;
+			root->new_ops.dir_fops->open =
+				root->fw_ops->dir_fops->open;
+			root->new_ops.dir_fops->release =
+				root->fw_ops->dir_fops->release;
+			spin_unlock(&root->lock);
 		}
 
-		redirfs_add_inode(root, dentry);
+		redirfs_add_inode(root, dentry->d_inode);
+
+		spin_lock(&root->lock);
 
 		dentry->d_inode->i_op = root->new_ops.dir_iops;
 		dentry->d_inode->i_fop = root->new_ops.dir_fops;
 		dentry->d_op = root->new_ops.dops;
 
 		spin_unlock(&root->lock);
+		spin_unlock(&rinode->lock);
 	}
 
-ret:
-	spin_lock(&redirfs_ihash_lock);
-	return res;
+	redirfs_iput(rinode);
+	redirfs_rput(root);
+
+	redirfs_debug("ended");
+
+	return rv;
 }
 
 static int redirfs_dir_mkdir(struct inode *parent, struct dentry *dentry, int mode)
 {
-	struct inode *inode;
 	struct redirfs_inode_t *rinode;
 	struct redirfs_root_t *root;
 	int rv;
 
 
-	spin_lock(&redirfs_ihash_lock);
+	redirfs_debug("started");
 
-	rinode = redirfs_iget(parent->i_sb, parent->i_ino);
+	rinode = redirfs_ifind(parent->i_sb, parent->i_ino);
 	BUG_ON(!rinode);
 
-	root = rinode->root;
+	root = redirfs_rget(rinode->root);
 	BUG_ON(!rinode->root);
 
 	rv = root->orig_ops.dir_iops->mkdir(parent, dentry, mode);
 
-	if (rv)
-		goto ret;
+	if (rv) {
+		redirfs_iput(rinode);
+		redirfs_rput(root);
+		return rv;
+	}
 
-	inode = dentry->d_inode;
+	BUG_ON(!dentry->d_inode);
 
-	if (!inode)
-		goto ret;
+	spin_lock(&rinode->lock);
+	redirfs_rput(root);
+	root = redirfs_rget(rinode->root);
 
-	redirfs_add_inode(root, dentry);
+	redirfs_add_inode(root, dentry->d_inode);
 
 	spin_lock(&root->lock);
-	inode->i_op = root->new_ops.dir_iops;
-	inode->i_fop = root->new_ops.dir_fops;
+	dentry->d_inode->i_op = root->new_ops.dir_iops;
+	dentry->d_inode->i_fop = root->new_ops.dir_fops;
 	dentry->d_op = root->new_ops.dops;
 	spin_unlock(&root->lock);
 
-ret:
-	spin_lock(&redirfs_ihash_lock);
+	spin_unlock(&rinode->lock);
+
+	redirfs_iput(rinode);
+	redirfs_rput(root);
+
+	redirfs_debug("ended");
+
 	return rv;
 }
 
@@ -272,65 +354,316 @@ static int redirfs_reg_permission(struct inode *inode, int mode, struct nameidat
 	struct redirfs_inode_t *rinode;
 	struct redirfs_root_t *root;
 	struct redirfs_args_t args;
+	int (*permission) (struct inode *, int, struct nameidata *) = NULL;
 	int rv;
 	
+
+	redirfs_debug("started");
+
 	if (!nd)
 		return generic_permission(inode, mode, NULL);
 
-	spin_lock(&redirfs_ihash_lock);
-
-	rinode = redirfs_iget(inode->i_sb, inode->i_ino);
+	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
 	BUG_ON(!rinode);
 
-	root = rinode->root;
-	BUG_ON(!rinode->root);
-
-	spin_lock(&root->lock);
+	root = redirfs_rget(rinode->root);
+	BUG_ON(!root);
 
 	args.args.i_permission.inode = inode;
 	args.args.i_permission.mode = mode;
 	args.args.i_permission.nd = nd;
 
-	rv = redirfs_pre_call_filters(root, REDIRFS_I_REG, REDIRFS_IOP_PERMISSION, NULL, &args);
+	rv = redirfs_pre_call_filters(root, REDIRFS_I_REG,
+			REDIRFS_IOP_PERMISSION, NULL, &args);
 
-	if (rv == REDIRFS_RETV_STOP)
+	if (rv == REDIRFS_RETV_STOP) {
+		redirfs_iput(rinode);
+		redirfs_rput(root);
 		return args.retv.rv_int;
+	}
 
+	spin_lock(&root->lock);
 	if (root->orig_ops.reg_iops->permission)
-		return root->orig_ops.reg_iops->permission(inode, mode, nd);
-
+		permission = root->orig_ops.reg_iops->permission;
 	spin_unlock(&root->lock);
 
-	spin_unlock(&redirfs_ihash_lock);
+	redirfs_iput(rinode);
+	redirfs_rput(root);
 
-	return generic_permission(inode, mode, NULL);
+	if (permission)
+		rv = permission(inode, mode, nd);
+	else
+		rv = generic_permission(inode, mode, NULL);
+
+	redirfs_debug("ended");
+
+	return rv;
 }
+
+static int redirfs_reg_open(struct inode *inode, struct file *file)
+{
+	struct redirfs_inode_t *rinode;
+	struct redirfs_root_t *root;
+	struct redirfs_args_t args;
+	int remove_root = 0;
+	int rv;
+	int (*open) (struct inode *inode, struct file *file) = NULL;
+
+
+	redirfs_debug("started");
+
+	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
+	BUG_ON(!rinode);
+
+	root = redirfs_rget(rinode->root);
+	BUG_ON(!root);
+
+	args.args.f_open.inode = inode;
+	args.args.f_open.file = file;
+
+	rv = redirfs_pre_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_OPEN,
+			NULL, &args);
+
+	if (rv == REDIRFS_RETV_STOP) {
+		redirfs_iput(rinode);
+		redirfs_rput(root);
+		return args.retv.rv_int;
+	}
+
+	spin_lock(&root->lock);
+	if (root->orig_ops.reg_fops->open)
+		open = root->orig_ops.reg_fops->open;
+	spin_unlock(&root->lock);
+
+	rv = 0;
+
+	if (open)
+		rv = open(inode, file);
+	
+	spin_lock(&root->lock);
+	if (root->flags & REDIRFS_ROOT_REMOVE)
+		remove_root = 1;
+	spin_unlock(&root->lock);
+
+	if (!remove_root)
+		redirfs_add_file(root, file);
+
+	redirfs_iput(rinode);
+	redirfs_rput(root);
+
+	redirfs_debug("ended");
+
+	return rv;
+
+}
+
+static int redirfs_reg_release(struct inode *inode, struct file *file)
+{
+	struct redirfs_inode_t *rinode;
+	struct redirfs_root_t *root;
+	struct redirfs_args_t args;
+	int (*release) (struct inode *, struct file *) = NULL;
+	int rv;
+
+
+	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
+	BUG_ON(!rinode);
+
+	root = redirfs_rget(rinode->root);
+	BUG_ON(!root);
+
+	args.args.f_release.inode = inode;
+	args.args.f_release.file = file;
+
+	rv = redirfs_pre_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_RELEASE,
+			NULL, &args);
+	
+	redirfs_remove_file(root, file);
+
+	if (rv == REDIRFS_RETV_STOP) {
+		redirfs_iput(rinode);
+		redirfs_rput(root);
+		return args.retv.rv_int;
+	}
+
+	spin_lock(&root->lock);
+	if (root->orig_ops.reg_fops->release)
+		release = root->orig_ops.reg_fops->release;
+	spin_unlock(&root->lock);
+
+	rv = 0;
+
+	if (release)
+		rv = release(inode, file);
+
+	redirfs_iput(rinode);
+	redirfs_rput(root);
+
+	return rv;
+}
+
+static int redirfs_dir_open(struct inode *inode, struct file *file)
+{
+	struct redirfs_inode_t *rinode;
+	struct redirfs_root_t *root;
+	struct redirfs_args_t args;
+	int remove_root = 0;
+	int rv;
+	int (*open) (struct inode *inode, struct file *file) = NULL;
+
+
+	redirfs_debug("started");
+
+	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
+	BUG_ON(!rinode);
+
+	root = redirfs_rget(rinode->root);
+	BUG_ON(!root);
+
+	args.args.f_open.inode = inode;
+	args.args.f_open.file = file;
+
+	rv = redirfs_pre_call_filters(root, REDIRFS_F_DIR, REDIRFS_FOP_OPEN,
+			NULL, &args);
+
+	if (rv == REDIRFS_RETV_STOP) {
+		redirfs_iput(rinode);
+		redirfs_rput(root);
+		return args.retv.rv_int;
+	}
+
+	spin_lock(&root->lock);
+	if (root->orig_ops.dir_fops->open)
+		open = root->orig_ops.dir_fops->open;
+	spin_unlock(&root->lock);
+
+	rv = 0;
+
+	if (open)
+		rv = open(inode, file);
+	
+	spin_lock(&root->lock);
+	if (root->flags & REDIRFS_ROOT_REMOVE)
+		remove_root = 1;
+	spin_unlock(&root->lock);
+
+	if (!remove_root)
+		redirfs_add_file(root, file);
+
+	redirfs_iput(rinode);
+	redirfs_rput(root);
+
+	redirfs_debug("ended");
+
+	return rv;
+
+}
+
+static int redirfs_dir_release(struct inode *inode, struct file *file)
+{
+	struct redirfs_inode_t *rinode;
+	struct redirfs_root_t *root;
+	struct redirfs_args_t args;
+	int (*release) (struct inode *, struct file *) = NULL;
+	int rv;
+
+
+	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
+	BUG_ON(!rinode);
+
+	root = redirfs_rget(rinode->root);
+	BUG_ON(!root);
+
+	args.args.f_release.inode = inode;
+	args.args.f_release.file = file;
+
+	rv = redirfs_pre_call_filters(root, REDIRFS_F_DIR, REDIRFS_FOP_RELEASE,
+			NULL, &args);
+	
+	redirfs_remove_file(root, file);
+
+	if (rv == REDIRFS_RETV_STOP) {
+		redirfs_iput(rinode);
+		redirfs_rput(root);
+		return args.retv.rv_int;
+	}
+
+	spin_lock(&root->lock);
+	if (root->orig_ops.dir_fops->release)
+		release = root->orig_ops.dir_fops->release;
+	spin_unlock(&root->lock);
+
+	rv = 0;
+
+	if (release)
+		rv = release(inode, file);
+
+	redirfs_iput(rinode);
+	redirfs_rput(root);
+
+	return rv;
+}
+
 
 static int __init redirfs_init(void)
 {
 	int rv = 0;
 
 
+	redirfs_debug("started");
+
 	redirfs_init_ops(&redirfs_fw_ops, &redirfs_vfs_ops);
+
 	redirfs_fw_ops.dops->d_iput = redirfs_d_iput;
 	redirfs_fw_ops.dir_iops->create = redirfs_dir_create;
 	redirfs_fw_ops.dir_iops->lookup = redirfs_dir_lookup;
 	redirfs_fw_ops.dir_iops->mkdir = redirfs_dir_mkdir;
 	redirfs_fw_ops.reg_iops->permission = redirfs_reg_permission;
-	rv = redirfs_init_ihash(2<<14);
+	redirfs_fw_ops.reg_fops->open = redirfs_reg_open;
+	redirfs_fw_ops.reg_fops->release = redirfs_reg_release;
+	redirfs_fw_ops.dir_fops->open = redirfs_dir_open;
+	redirfs_fw_ops.dir_fops->release = redirfs_dir_release;
 
-	if (rv)
-		return rv;
+	rv = redirfs_init_ihash_table(1<<14);
+	if (rv) goto out;
+
+	rv = redirfs_init_fhash_table(1<<14);
+	if (rv) goto no_fhash_table;
 
 	redirfs_init_icache();
+	redirfs_init_fcache();
 
+#ifdef CONFIG_PROC_FS
+	rv = redirfs_proc_init();
+	if (rv) goto no_proc_init;
+#endif
+	goto out;
+
+no_proc_init:
+	redirfs_destroy_fcache();
+	redirfs_destroy_icache();
+	redirfs_destroy_fhash_table();
+no_fhash_table:
+	redirfs_destroy_ihash_table();
+out:
+	redirfs_debug("ended");
 	return rv;
 }
 
 static void __exit redirfs_exit(void)
 {
+	redirfs_debug("started");
+
 	redirfs_destroy_icache();
-	redirfs_destroy_ihash();
+	redirfs_destroy_fcache();
+	redirfs_destroy_ihash_table();
+	redirfs_destroy_fhash_table();
+
+#ifdef CONFIG_PROC_FS
+	redirfs_proc_destroy();
+#endif
+
+	redirfs_debug("ended");
 }
 
 module_init(redirfs_init);

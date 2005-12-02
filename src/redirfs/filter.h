@@ -10,33 +10,45 @@
 #define redirfs_cover_flt(flt) ((redirfs_filter)flt)
 #define redirfs_uncover_flt(filter) ((struct redirfs_flt_t*)filter)
 
-struct redirfs_ptr_t {
-	struct list_head ptr_list;
-	void *ptr_val;
-};
 
 struct redirfs_flt_t {
 	struct list_head flt_list;
 	spinlock_t lock;
 	char *name;
-	int turn;
+	int priority;
 	unsigned int flags;
 	atomic_t active;
+	atomic_t ref_cnt;
 	struct redirfs_vfs_operations_t vfs_pre_ops;
 	struct redirfs_vfs_operations_t vfs_post_ops;
 	struct redirfs_operations_t pre_ops;
 	struct redirfs_operations_t post_ops;
 };
 
-struct redirfs_cb_data_t {
-	struct dentry *dentry;
-	struct redirfs_flt_t *flt;
-	int i_val;
-	int type;
-	int op;
+
+struct redirfs_flt_arr_t {
+	spinlock_t lock;
+	struct redirfs_flt_t **arr;
+	int cnt;
+	int size;
 };
 
-struct redirfs_ptr_t *redirfs_alloc_ptr(void *ptr_val);
-void redirfs_free_ptr(struct redirfs_ptr_t *ptr);
+void redirfs_flt_arr_init(struct redirfs_flt_arr_t *flt_arr);
+int redirfs_flt_arr_create(struct redirfs_flt_arr_t *flt_arr, int size);
+void redirfs_flt_arr_destroy(struct redirfs_flt_arr_t *flt_arr);
+int redirfs_flt_arr_add_flt(struct redirfs_flt_arr_t *flt_arr,
+		struct redirfs_flt_t *flt);
+void redirfs_flt_arr_remove_flt(struct redirfs_flt_arr_t *flt_arr,
+		struct redirfs_flt_t *flt);
+int redirfs_flt_arr_get(struct redirfs_flt_arr_t *flt_arr,
+		struct redirfs_flt_t *flt);
+int redirfs_flt_arr_copy(struct redirfs_flt_arr_t *src,
+		struct redirfs_flt_arr_t *dst);
+int redirfs_flt_arr_cnt(struct redirfs_flt_arr_t *flt_arr);
+int redirfs_flt_arr_cmp(struct redirfs_flt_arr_t *flt_arr1,
+		struct redirfs_flt_arr_t *flt_arr2);
+struct redirfs_flt_t *redirfs_fltget(struct redirfs_flt_t *flt);
+void redirfs_fltput(struct redirfs_flt_t *flt);
+int redirfs_filters_info(char *buf, int size);
 
 #endif
