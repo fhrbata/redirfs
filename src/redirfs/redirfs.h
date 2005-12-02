@@ -265,7 +265,7 @@ union redirfs_op_args_t {
 	} f_mmap;
 
 	struct {
-		struct inode			*dir;
+		struct inode			*inode;
 		struct file			*file;
 	} f_open;
 
@@ -274,7 +274,7 @@ union redirfs_op_args_t {
 	} f_flush;
 
 	struct {
-		struct inode			*dir;
+		struct inode			*inode;
 		struct file			*file;
 	} f_release;
 
