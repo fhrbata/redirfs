@@ -89,14 +89,14 @@ typedef void* redirfs_context;
 
 union redirfs_op_args_t {
 	struct {
-		struct inode			*dir;
+		struct inode			*parent;
 		struct dentry			*dentry;
 		int				mode;
 		struct nameidata		*nd;
 	} i_create;
 	
 	struct {
-		struct inode			*dir;
+		struct inode			*parent;
 		struct dentry			*dentry;
 		struct nameidata		*nd;
 	} i_lookup;
@@ -119,7 +119,7 @@ union redirfs_op_args_t {
 	} i_symlink;
 
 	struct {
-		struct inode			*dir;
+		struct inode			*parent;
 		struct dentry			*dentry;
 		int 				mode;
 	} i_mkdir;
