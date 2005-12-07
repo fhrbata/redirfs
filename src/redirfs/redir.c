@@ -33,6 +33,8 @@ static int redirfs_pre_call_filters(struct redirfs_root_t *root,
 			struct redirfs_args_t *) = NULL;
 
 
+	args->info.type = type;
+	args->info.op = op;
 	
 	redirfs_flt_arr_init(&flt_arr);
 	if (redirfs_flt_arr_copy(&root->attached_flts, &flt_arr))
@@ -140,6 +142,7 @@ static void redirfs_d_iput(struct dentry *dentry, struct inode *inode)
 
 	args.args.d_iput.dentry = dentry;
 	args.args.d_iput.inode = inode;
+	args.info.call = REDIRFS_PRECALL;
 
 	if (root->orig_ops.dops && root->orig_ops.dops->d_iput)
 		d_iput = root->orig_ops.dops->d_iput;
@@ -153,6 +156,7 @@ static void redirfs_d_iput(struct dentry *dentry, struct inode *inode)
 	else
 		iput(inode);
 
+	args.info.call = REDIRFS_POSTCALL;
 	redirfs_post_call_filters(root, REDIRFS_DENTRY, REDIRFS_DOP_IPUT,
 			NULL, &args);
 
@@ -187,6 +191,7 @@ static int redirfs_dir_create(struct inode *inode, struct dentry *dentry, int mo
 	args.args.i_create.dentry = dentry;
 	args.args.i_create.mode = mode;
 	args.args.i_create.nd = nd;
+	args.info.call = REDIRFS_POSTCALL;
 
 	rv = redirfs_pre_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_CREATE,
 			NULL, &args);
@@ -239,7 +244,7 @@ static int redirfs_dir_create(struct inode *inode, struct dentry *dentry, int mo
 	}
 
 	args.retv.rv_int = rv;
-
+	args.info.call = REDIRFS_POSTCALL;
 	rv = redirfs_post_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_CREATE,
 			NULL, &args);
 
@@ -271,6 +276,7 @@ static struct dentry *redirfs_dir_lookup(struct inode *parent,
 	args.args.i_lookup.parent = parent;
 	args.args.i_lookup.dentry = dentry;
 	args.args.i_lookup.nd = nd;
+	args.info.call = REDIRFS_PRECALL;
 
 	redirfs_rv = redirfs_pre_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_LOOKUP,
 			NULL, &args);
@@ -361,6 +367,7 @@ static struct dentry *redirfs_dir_lookup(struct inode *parent,
 	}
 
 	args.retv.rv_dentry = rv;
+	args.info.call = REDIRFS_POSTCALL;
 
 	redirfs_rv = redirfs_post_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_LOOKUP,
 			NULL, &args);
@@ -389,6 +396,7 @@ static int redirfs_dir_mkdir(struct inode *parent, struct dentry *dentry, int mo
 	args.args.i_mkdir.parent = parent;
 	args.args.i_mkdir.dentry = dentry;
 	args.args.i_mkdir.mode = mode;
+	args.info.call = REDIRFS_PRECALL;
 
 	rv = redirfs_pre_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_MKDIR,
 			NULL, &args);
@@ -420,6 +428,7 @@ static int redirfs_dir_mkdir(struct inode *parent, struct dentry *dentry, int mo
 	spin_unlock(&rinode->lock);
 
 	args.retv.rv_int = rv;
+	args.info.call = REDIRFS_POSTCALL;
 
 	rv = redirfs_post_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_MKDIR,
 			NULL, &args);
@@ -450,6 +459,7 @@ static int redirfs_reg_permission(struct inode *inode, int mode, struct nameidat
 	args.args.i_permission.inode = inode;
 	args.args.i_permission.mode = mode;
 	args.args.i_permission.nd = nd;
+	args.info.call = REDIRFS_PRECALL;
 
 	rv = redirfs_pre_call_filters(root, REDIRFS_I_REG,
 			REDIRFS_IOP_PERMISSION, NULL, &args);
@@ -475,6 +485,7 @@ static int redirfs_reg_permission(struct inode *inode, int mode, struct nameidat
 				NULL);
 
 	args.retv.rv_int = rv;
+	args.info.call = REDIRFS_POSTCALL;
 
 	rv = redirfs_post_call_filters(root, REDIRFS_I_REG,
 			REDIRFS_IOP_PERMISSION, NULL, &args);
@@ -505,6 +516,7 @@ static int redirfs_reg_open(struct inode *inode, struct file *file)
 
 	args.args.f_open.inode = inode;
 	args.args.f_open.file = file;
+	args.info.call = REDIRFS_PRECALL;
 
 	rv = redirfs_pre_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_OPEN,
 			NULL, &args);
@@ -525,6 +537,7 @@ static int redirfs_reg_open(struct inode *inode, struct file *file)
 		rv = 0;
 	
 	args.retv.rv_int = rv;
+	args.info.call = REDIRFS_POSTCALL;
 
 	rv = redirfs_post_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_OPEN,
 			NULL, &args);
@@ -564,6 +577,7 @@ static int redirfs_reg_release(struct inode *inode, struct file *file)
 
 	args.args.f_release.inode = inode;
 	args.args.f_release.file = file;
+	args.info.call = REDIRFS_PRECALL;
 
 	rv = redirfs_pre_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_RELEASE,
 			NULL, &args);
@@ -585,6 +599,7 @@ static int redirfs_reg_release(struct inode *inode, struct file *file)
 		rv = 0;
 
 	args.retv.rv_int = rv;
+	args.info.call = REDIRFS_POSTCALL;
 
 	rv = redirfs_post_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_RELEASE,
 			NULL, &args);
@@ -615,6 +630,7 @@ static int redirfs_dir_open(struct inode *inode, struct file *file)
 
 	args.args.f_open.inode = inode;
 	args.args.f_open.file = file;
+	args.info.call = REDIRFS_PRECALL;
 
 	rv = redirfs_pre_call_filters(root, REDIRFS_F_DIR, REDIRFS_FOP_OPEN,
 			NULL, &args);
@@ -635,6 +651,7 @@ static int redirfs_dir_open(struct inode *inode, struct file *file)
 		rv = 0;
 	
 	args.retv.rv_int = rv;
+	args.info.call = REDIRFS_POSTCALL;
 
 	rv = redirfs_post_call_filters(root, REDIRFS_F_DIR, REDIRFS_FOP_OPEN,
 			NULL, &args);
@@ -674,6 +691,7 @@ static int redirfs_dir_release(struct inode *inode, struct file *file)
 
 	args.args.f_release.inode = inode;
 	args.args.f_release.file = file;
+	args.info.call = REDIRFS_PRECALL;
 
 	rv = redirfs_pre_call_filters(root, REDIRFS_F_DIR, REDIRFS_FOP_RELEASE,
 			NULL, &args);
@@ -695,6 +713,7 @@ static int redirfs_dir_release(struct inode *inode, struct file *file)
 		rv = 0;
 
 	args.retv.rv_int = rv;
+	args.info.call = REDIRFS_POSTCALL;
 
 	rv = redirfs_post_call_filters(root, REDIRFS_F_DIR, REDIRFS_FOP_RELEASE,
 			NULL, &args);

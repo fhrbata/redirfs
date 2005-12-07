@@ -84,6 +84,11 @@ enum redirfs_retv {
 	REDIRFS_RETV_CONTINUE
 };
 
+enum {
+	REDIRFS_PRECALL,
+	REDIRFS_POSTCALL
+};
+
 typedef void* redirfs_filter;
 typedef void* redirfs_context;
 
@@ -400,10 +405,17 @@ struct redirfs_op_exts_t{
 	const char* full_path;
 };
 
+struct redirfs_op_info_t {
+	int type;
+	int op;
+	int call;
+};
+
 struct redirfs_args_t {
 	union redirfs_op_args_t		args;
 	struct redirfs_op_exts_t	exts;
 	union redirfs_op_retv_t		retv;
+	struct redirfs_op_info_t	info;
 };
 
 struct redirfs_op_t {
