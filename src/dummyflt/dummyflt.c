@@ -12,12 +12,14 @@ static enum redirfs_retv dymmyflt_pre_permission(redirfs_context context,
 {
 	mode_t mode;
 	struct dentry *dentry;
-	const unsigned char *name;
+	const unsigned char *name = "unknown";
 
 	
 	mode = args->args.i_permission.mode;
-	dentry = args->args.i_permission.nd->dentry;
-	name = dentry->d_name.name;
+	if (args->args.i_permission.nd) {
+		dentry = args->args.i_permission.nd->dentry;
+		name = dentry->d_name.name;
+	}
 
 	switch (mode) {
 		case MAY_EXEC:
