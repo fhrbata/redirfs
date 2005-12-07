@@ -128,7 +128,7 @@ int redirfs_unregister_filter(redirfs_filter filter)
 
 	flt = redirfs_uncover_flt(filter);
 
-	redirfs_walk_roots(NULL, redirfs_detach_flt, (void *)flt);
+	redirfs_walk_roots(NULL, redirfs_remove_flt, (void *)flt);
 	redirfs_remove_roots();
 
 	spin_lock(&redirfs_flt_list_lock);
@@ -191,10 +191,12 @@ void redirfs_flt_arr_destroy(struct redirfs_flt_arr_t *flt_arr)
 
 
 	spin_lock(&flt_arr->lock);
-	for (i = 0; i < flt_arr->cnt; i++)
-		redirfs_fltput(flt_arr->arr[i]);
+	if (flt_arr->arr) {
+		for (i = 0; i < flt_arr->cnt; i++)
+			redirfs_fltput(flt_arr->arr[i]);
 
-	kfree(flt_arr->arr);
+		kfree(flt_arr->arr);
+	}
 	flt_arr->arr = NULL;
 	flt_arr->cnt = 0;
 	flt_arr->size = 0;
@@ -405,13 +407,17 @@ int redirfs_filters_info(char *buf, int size)
 	char active;
 
 
+	if ((len + 36) > size)
+		goto out;
+	len += sprintf(buf + len, "%-10s\t%-10s\t%-10s\n", "name", "priority", "active");
+
 	spin_lock(&redirfs_flt_list_lock);
 
 	list_for_each_entry(flt, &redirfs_flt_list, flt_list) {
-		if ((len + strlen(flt->name) + 16) > size)
+		if ((len + strlen(flt->name) + 36) > size)
 			goto out;
-		active = atomic_read(&flt->active) ? '+' : '-';
-		len += sprintf(buf + len, "%c %s[%3d]\n", active, flt->name, flt->priority);
+		active = atomic_read(&flt->active) ? 'y' : 'n';
+		len += sprintf(buf + len, "%-10s\t%-10d\t%-10c\n", flt->name, flt->priority, active);
 	}
 out:
 	spin_unlock(&redirfs_flt_list_lock);

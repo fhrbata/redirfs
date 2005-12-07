@@ -49,12 +49,17 @@ static struct redirfs_root_t *redirfs_alloc_root(const char *path)
 	}
 
 	redirfs_flt_arr_init(&root->attached_flts);
+	redirfs_flt_arr_init(&root->detached_flts);
+
 	err = redirfs_flt_arr_create(&root->attached_flts,
 				REDIRFS_DEFAULT_ROOT_FLT_NUM); 
-	if (err) {
-		redirfs_flt_arr_destroy(&root->attached_flts);
+	if (err) 
 		return ERR_PTR(err);
-	}
+
+	err = redirfs_flt_arr_create(&root->detached_flts,
+				REDIRFS_DEFAULT_ROOT_FLT_NUM); 
+	if (err) 
+		return ERR_PTR(err);
 
 	strncpy(root_path, path, root_path_len + 1);
 
@@ -143,6 +148,7 @@ void redirfs_rput(struct redirfs_root_t *root)
 	dput(root->dentry);
 	kfree(root->path);
 	redirfs_flt_arr_destroy(&root->attached_flts);
+	redirfs_flt_arr_destroy(&root->detached_flts);
 	kfree(root);
 	
 	redirfs_debug("ended");
@@ -261,7 +267,8 @@ static struct redirfs_root_t *redirfs_find_root(const char *path)
 
 static int redirfs_inherit_root(struct redirfs_root_t *par, struct redirfs_root_t *child)
 {
-	redirfs_debug("started");
+	int rv = 0;
+
 
 	spin_lock(&par->lock);
 	spin_lock(&child->lock);
@@ -273,6 +280,10 @@ static int redirfs_inherit_root(struct redirfs_root_t *par, struct redirfs_root_
 	child->orig_ops.reg_fops = par->orig_ops.reg_fops;
 	child->orig_ops.dir_iops = par->orig_ops.dir_iops;
 	child->orig_ops.dir_fops = par->orig_ops.dir_fops;
+	child->orig_ops.dops = par->orig_ops.dops;
+
+	if (child->orig_ops.dops)
+		redirfs_init_dops_arr(child->orig_ops.dops_arr, child->orig_ops.dops);
 
 	if (child->orig_ops.reg_iops) {
 		redirfs_init_iops_arr(child->orig_ops.reg_iops_arr, child->orig_ops.reg_iops); 
@@ -284,18 +295,14 @@ static int redirfs_inherit_root(struct redirfs_root_t *par, struct redirfs_root_
 		redirfs_init_fops_arr(child->orig_ops.dir_fops_arr, child->orig_ops.dir_fops); 
 	}
 
-	if (redirfs_flt_arr_copy(&par->attached_flts, &child->attached_flts)) {
-		spin_unlock(&child->lock);
-		spin_unlock(&par->lock);
-		return -ENOMEM;
-	}
+	if (redirfs_flt_arr_copy(&par->attached_flts, &child->attached_flts) ||
+	    redirfs_flt_arr_copy(&par->attached_flts, &child->attached_flts)) 
+		rv = -ENOMEM;
 
 	spin_unlock(&child->lock);
 	spin_unlock(&par->lock);
 
-	redirfs_debug("ended");
-
-	return 0;
+	return rv;
 }
 
 static struct redirfs_root_t *redirfs_add_root(struct redirfs_root_t *root)
@@ -617,6 +624,9 @@ static void redirfs_disinherit_files(struct redirfs_root_t *parent,
 {
 	struct redirfs_file_t *rfile;
 	struct dentry *dentry;
+	struct list_head *act;
+	struct list_head *tmp;
+	struct list_head *end;
 	mode_t mode;
 
 	if (!parent || !child)
@@ -625,7 +635,11 @@ static void redirfs_disinherit_files(struct redirfs_root_t *parent,
 	spin_lock(&parent->lock);
 	spin_lock(&child->lock);
 
-	list_for_each_entry(rfile, &parent->files, root) {
+	end = &child->files;
+	act = end->next;
+
+	list_for_each_safe(act, tmp, end) {
+		rfile = list_entry(act, struct redirfs_file_t, root);
 		dentry = rfile->file->f_dentry;
 		mode =  dentry->d_inode->i_mode;
 		if (S_ISREG(mode))
@@ -644,6 +658,9 @@ static void redirfs_inherit_files(struct redirfs_root_t *parent,
 		struct redirfs_root_t *child)
 {
 	struct redirfs_file_t *rfile;
+	struct list_head *act;
+	struct list_head *tmp;
+	struct list_head *end;
 	struct dentry *dentry;
 	char *dentry_path;
 	char kbuf[PAGE_SIZE];
@@ -656,7 +673,11 @@ static void redirfs_inherit_files(struct redirfs_root_t *parent,
 	spin_lock(&parent->lock);
 	spin_lock(&child->lock);
 
-	list_for_each_entry(rfile, &parent->files, root) {
+	end = &parent->files;
+	act = end->next;
+
+	list_for_each_safe(act, tmp, end) {
+		rfile = list_entry(act, struct redirfs_file_t, root);
 		dentry = rfile->file->f_dentry;
 		mode =  dentry->d_inode->i_mode;
 		dentry_path = d_path(dentry, rfile->file->f_vfsmnt, kbuf,
@@ -693,8 +714,7 @@ static void redirfs_set_new_ops(struct dentry *dentry, void *data)
 
 		if (S_ISREG(mode)) {
 			spin_lock(&root->lock);
-			if (!root->orig_ops.reg_iops) 
-				aux = 1;
+			aux = !root->orig_ops.reg_iops;
 			spin_unlock(&root->lock);
 
 			if (aux) {
@@ -720,11 +740,10 @@ static void redirfs_set_new_ops(struct dentry *dentry, void *data)
 
 		} else if (S_ISDIR(mode)) {
 			spin_lock(&root->lock);
-			if (!root->orig_ops.reg_iops) 
-				aux = 1;
+			aux = !root->orig_ops.reg_iops;
 			spin_unlock(&root->lock);
 
-			if (!root->orig_ops.dir_iops) {
+			if (aux) {
 				redirfs_set_dir_ops(root, dentry->d_inode);
 				redirfs_set_root_ops(root, REDIRFS_I_DIR);
 				redirfs_set_root_ops(root, REDIRFS_F_DIR);
@@ -849,27 +868,49 @@ skip_subtree:
 	redirfs_debug("ended");
 }
 
-static int redirfs_attach_flt(struct redirfs_root_t *root, void *data)
+static void redirfs_root_rejection(struct redirfs_root_t *root)
 {
-	struct redirfs_flt_t *flt;
+	struct redirfs_root_t *parent;
+
+
+	parent = redirfs_rget(root->parent);
+
+	if (parent) {
+		if (redirfs_flt_arr_cmp(&root->attached_flts, &parent->attached_flts) || 
+		    redirfs_flt_arr_cmp(&root->detached_flts, &parent->detached_flts)) {
+			redirfs_rput(parent);
+			return;
+		}
+
+	} else {
+		if (redirfs_flt_arr_cnt(&root->attached_flts) ||
+		    redirfs_flt_arr_cnt(&root->detached_flts))
+			return;
+	}
+
+
+	spin_lock(&root->lock);
+	root->flags |= REDIRFS_ROOT_REMOVE;
+	spin_unlock(&root->lock);
+	spin_lock(&redirfs_remove_roots_list_lock);
+	list_add(&root->remove, &redirfs_remove_roots_list);
+	spin_unlock(&redirfs_remove_roots_list_lock);
+	redirfs_rget(root);
+	redirfs_rput(parent);
+}
+
+static void redirfs_attach_flt_ops_to_root(struct redirfs_root_t *root,
+		struct redirfs_flt_t *flt)
+{
 	int type = 0;
 	int op = 0;
 	int inc_op = 0;
-	int rv = 0;
 	void ***root_orig_ops;
 	void ***root_new_ops;
 	void ***root_fw_ops;
 	void ***flt_pre_ops;
 	void ***flt_post_ops;
 	unsigned int *root_cnts;
-
-
-	redirfs_debug("started");
-
-	flt = (struct redirfs_flt_t *)data;
-	
-	if (redirfs_flt_arr_get(&root->attached_flts, flt) >= 0)
-		return 0;
 
 
 	spin_lock(&root->lock);
@@ -908,32 +949,35 @@ static int redirfs_attach_flt(struct redirfs_root_t *root, void *data)
 	}
 
 	spin_unlock(&flt->lock);
-
-	rv = redirfs_flt_arr_add_flt(&root->attached_flts, flt);
-	if (rv) {
-		spin_unlock(&root->lock);
-		return rv;
-	}
-
-	if (root->parent && !redirfs_flt_arr_cmp(&root->parent->attached_flts, &root->attached_flts)) {
-		root->flags |= REDIRFS_ROOT_REMOVE;
-		spin_lock(&redirfs_remove_roots_list_lock);
-		list_add(&root->remove, &redirfs_remove_roots_list);
-		spin_unlock(&redirfs_remove_roots_list_lock);
-		__redirfs_rget(root);
-
-	}
-
 	spin_unlock(&root->lock);
+}
 
-	redirfs_debug("ended");
+static int redirfs_attach_flt(struct redirfs_root_t *root, void *data)
+{
+	struct redirfs_flt_t *flt;
+	int rv = 0;
+
+
+	flt = (struct redirfs_flt_t *)data;
+	
+	if (redirfs_flt_arr_get(&root->attached_flts, flt) >= 0)
+		return 0;
+
+	redirfs_attach_flt_ops_to_root(root, flt);
+
+	redirfs_flt_arr_remove_flt(&root->detached_flts, flt);
+	rv = redirfs_flt_arr_add_flt(&root->attached_flts, flt);
+	if (rv) 
+		return rv;
+
+	redirfs_root_rejection(root);
 
 	return 0;
 }
 
-int redirfs_detach_flt(struct redirfs_root_t *root, void *data)
+static void redirfs_detach_flt_ops_from_root(struct redirfs_root_t *root,
+		struct redirfs_flt_t *flt)
 {
-	struct redirfs_flt_t *flt;
 	int type = 0;
 	int op = 0;
 	int dec_op = 0;
@@ -943,13 +987,6 @@ int redirfs_detach_flt(struct redirfs_root_t *root, void *data)
 	void ***flt_post_ops;
 	unsigned int *root_cnts;
 
-
-	redirfs_debug("started");
-
-	flt = (struct redirfs_flt_t *)data;
-
-	if (redirfs_flt_arr_get(&root->attached_flts, flt) == -1)
-		return 0;
 
 	spin_lock(&root->lock);
 	spin_lock(&flt->lock);
@@ -985,21 +1022,46 @@ int redirfs_detach_flt(struct redirfs_root_t *root, void *data)
 	}
 
 	spin_unlock(&flt->lock);
+	spin_unlock(&root->lock);
+}
+
+int static redirfs_detach_flt(struct redirfs_root_t *root, void *data)
+{
+	struct redirfs_flt_t *flt;
+	int rv = 0;
+
+
+	flt = (struct redirfs_flt_t *)data;
+
+	if (redirfs_flt_arr_get(&root->attached_flts, flt) == -1)
+		return 0;
+
+	redirfs_detach_flt_ops_from_root(root, flt);
 
 	redirfs_flt_arr_remove_flt(&root->attached_flts, flt);
+	rv = redirfs_flt_arr_add_flt(&root->detached_flts, flt);
+	if (rv)
+		return rv;
 
-	if ((!redirfs_flt_arr_cnt(&root->attached_flts)) ||
-	    (root->parent && !redirfs_flt_arr_cmp(&root->attached_flts, &root->parent->attached_flts))) {
-		root->flags |= REDIRFS_ROOT_REMOVE;
-		spin_lock(&redirfs_remove_roots_list_lock);
-		list_add(&root->remove, &redirfs_remove_roots_list);
-		spin_unlock(&redirfs_remove_roots_list_lock);
-		__redirfs_rget(root);
-	}
+	redirfs_root_rejection(root);
 
-	spin_unlock(&root->lock);
+	return 0;
+}
 
-	redirfs_debug("ended");
+int redirfs_remove_flt(struct redirfs_root_t *root, void *data)
+{
+	struct redirfs_flt_t *flt;
+
+
+	flt = (struct redirfs_flt_t *)data;
+
+	if (redirfs_flt_arr_get(&root->attached_flts, flt) >= 0) {
+		redirfs_detach_flt_ops_from_root(root, flt);
+		redirfs_flt_arr_remove_flt(&root->attached_flts, flt);
+	} else
+		redirfs_flt_arr_remove_flt(&root->detached_flts, flt);
+
+	redirfs_root_rejection(root);
 
 	return 0;
 }
@@ -1019,17 +1081,14 @@ void redirfs_remove_roots(void)
 	list_for_each_safe(act, tmp, &redirfs_remove_roots_list) {
 		root = list_entry(act, struct redirfs_root_t, remove);
 
-		spin_lock(&root->lock);
-		if (root->parent)
-			parent = redirfs_rget(root->parent);
-		spin_unlock(&root->lock);
+		parent = redirfs_rget(root->parent);
 
-		if (!redirfs_flt_arr_cnt(&root->attached_flts)) {
-			redirfs_walk_dcache(root->dentry, redirfs_set_orig_ops, root, NULL, NULL);
-			redirfs_set_files_orig_ops(root);
-		} else if (root->parent) {
+		if (parent) {
 			redirfs_walk_dcache(root->dentry, redirfs_set_new_ops, parent, NULL, NULL);
 			redirfs_disinherit_files(parent, root);
+		} else {
+			redirfs_walk_dcache(root->dentry, redirfs_set_orig_ops, root, NULL, NULL);
+			redirfs_set_files_orig_ops(root);
 		}
 
 		redirfs_remove_root(root);
@@ -1187,9 +1246,16 @@ static int redirfs_root_info(struct redirfs_root_t *root, void *data)
 
 	for(i = 0; i < root->attached_flts.cnt; i++) {
 		flt = root->attached_flts.arr[i];
-		active = atomic_read(&flt->active) ? '+' : '-';
+		active = atomic_read(&flt->active) ? '1' : '0';
 		if ((info->len + strlen(flt->name) + 16) > info->size) goto err;
-		info->len += sprintf(info->buf + info->len, " -> (%c)%s[%3d]", active, flt->name, flt->priority);
+		info->len += sprintf(info->buf + info->len, " -> %s(+,%c,%d)", flt->name, active, flt->priority);
+	}
+
+	for(i = 0; i < root->detached_flts.cnt; i++) {
+		flt = root->detached_flts.arr[i];
+		active = atomic_read(&flt->active) ? '1' : '0';
+		if ((info->len + strlen(flt->name) + 16) > info->size) goto err;
+		info->len += sprintf(info->buf + info->len, " -> %s(-,%c,%d)", flt->name, active, flt->priority);
 	}
 
 	spin_unlock(&root->attached_flts.lock);

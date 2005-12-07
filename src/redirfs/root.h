@@ -23,6 +23,7 @@ struct redirfs_root_t {
 	unsigned long ref_cnt;
 	unsigned int flags;
 	struct redirfs_flt_arr_t attached_flts;
+	struct redirfs_flt_arr_t detached_flts;
 	struct redirfs_operations_t *fw_ops;
 	struct redirfs_operations_t new_ops;
 	struct redirfs_operations_t orig_ops;
@@ -36,7 +37,7 @@ int redirfs_walk_roots(struct redirfs_root_t *root,
 void redirfs_set_reg_ops(struct redirfs_root_t *root, struct inode *inode);
 void redirfs_set_root_ops(struct redirfs_root_t *root, int type);
 void redirfs_set_dir_ops(struct redirfs_root_t *root, struct inode *inode);
-int redirfs_detach_flt(struct redirfs_root_t *root, void *data);
+int redirfs_remove_flt(struct redirfs_root_t *root, void *data);
 struct redirfs_root_t *redirfs_rget(struct redirfs_root_t *root);
 void redirfs_rput(struct redirfs_root_t *root);
 void redirfs_remove_roots(void);
