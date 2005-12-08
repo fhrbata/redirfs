@@ -386,7 +386,6 @@ static void redirfs_remove_root(struct redirfs_root_t *root)
 {
 	struct redirfs_root_t *parent;
 	struct redirfs_root_t *loop;
-	struct list_head *end;
 	struct list_head *act;
 	struct list_head *dst;
 	struct list_head *tmp;
@@ -395,10 +394,6 @@ static void redirfs_remove_root(struct redirfs_root_t *root)
 	redirfs_debug("started");
 
 	spin_lock(&redirfs_root_list_lock);
-
-	end = &root->subroots;
-	act = end->next;
-
 	spin_lock(&root->lock);
 	parent = root->parent;
 	spin_unlock(&root->lock);
@@ -408,7 +403,7 @@ static void redirfs_remove_root(struct redirfs_root_t *root)
 	else
 		dst = &redirfs_root_list;
 
-	list_for_each_safe(act, tmp, end) {
+	list_for_each_safe(act, tmp, &root->subroots) {
 		loop = list_entry(act, struct redirfs_root_t, sibroots);
 		list_move(&loop->sibroots, dst);
 		redirfs_rput(loop->parent);
@@ -599,12 +594,15 @@ static int redirfs_is_root(struct dentry *dentry)
 static void redirfs_set_files_orig_ops(struct redirfs_root_t *root)
 {
 	struct redirfs_file_t *rfile;
+	struct list_head *act;
+	struct list_head *tmp;
 	mode_t mode;
 
 
 	spin_lock(&root->lock);
 
-	list_for_each_entry(rfile, &root->files, root) {
+	list_for_each_safe(act, tmp, &root->files) {
+		rfile = list_entry(act, struct redirfs_file_t, root);
 		mode = rfile->file->f_dentry->d_inode->i_mode;
 
 		if (S_ISREG(mode)) 
@@ -612,6 +610,8 @@ static void redirfs_set_files_orig_ops(struct redirfs_root_t *root)
 		else if (S_ISDIR(mode))
 			rfile->file->f_op = root->orig_ops.dir_fops;
 
+		list_del(&rfile->root);
+		INIT_LIST_HEAD(&rfile->root);
 		redirfs_fhash_table_remove(rfile);
 		redirfs_fput(rfile);
 	}
@@ -626,7 +626,6 @@ static void redirfs_disinherit_files(struct redirfs_root_t *parent,
 	struct dentry *dentry;
 	struct list_head *act;
 	struct list_head *tmp;
-	struct list_head *end;
 	mode_t mode;
 
 	if (!parent || !child)
@@ -635,10 +634,7 @@ static void redirfs_disinherit_files(struct redirfs_root_t *parent,
 	spin_lock(&parent->lock);
 	spin_lock(&child->lock);
 
-	end = &child->files;
-	act = end->next;
-
-	list_for_each_safe(act, tmp, end) {
+	list_for_each_safe(act, tmp, &child->files) {
 		rfile = list_entry(act, struct redirfs_file_t, root);
 		dentry = rfile->file->f_dentry;
 		mode =  dentry->d_inode->i_mode;
@@ -660,7 +656,6 @@ static void redirfs_inherit_files(struct redirfs_root_t *parent,
 	struct redirfs_file_t *rfile;
 	struct list_head *act;
 	struct list_head *tmp;
-	struct list_head *end;
 	struct dentry *dentry;
 	char *dentry_path;
 	char kbuf[PAGE_SIZE];
@@ -673,10 +668,7 @@ static void redirfs_inherit_files(struct redirfs_root_t *parent,
 	spin_lock(&parent->lock);
 	spin_lock(&child->lock);
 
-	end = &parent->files;
-	act = end->next;
-
-	list_for_each_safe(act, tmp, end) {
+	list_for_each_safe(act, tmp, &parent->files) {
 		rfile = list_entry(act, struct redirfs_file_t, root);
 		dentry = rfile->file->f_dentry;
 		mode =  dentry->d_inode->i_mode;

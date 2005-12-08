@@ -175,10 +175,20 @@ void redirfs_ihash_table_remove(struct redirfs_inode_t *rinode)
 	redirfs_debug("started");
 
 	spin_lock(&redirfs_ihash_table_lock);
-	hlist_del(&rinode->inode_hash);
-	spin_unlock(&redirfs_ihash_table_lock);
-	redirfs_iput(rinode);
+	spin_lock(&rinode->lock);
+	if (hlist_unhashed(&rinode->inode_hash))
+		goto ret;
 
+	rinode->nlink--;
+	if (!rinode->nlink) {
+		hlist_del(&rinode->inode_hash);
+		INIT_HLIST_NODE(&rinode->inode_hash);
+		redirfs_iput(rinode);
+	}
+
+ret:
+	spin_unlock(&rinode->lock);
+	spin_unlock(&redirfs_ihash_table_lock);
 	redirfs_debug("ended");
 }
 
@@ -231,8 +241,7 @@ int redirfs_add_inode(struct redirfs_root_t *root, struct inode *inode)
 			spin_unlock(&rinode->lock);
 		} else {
 			rinode->nlink++;
-			if (hlist_unhashed(&rinode->inode_hash))
-				unhashed = 1;
+			unhashed = hlist_unhashed(&rinode->inode_hash);
 			spin_unlock(&rinode->lock);
 			if (unhashed)
 				redirfs_ihash_table_add(rinode);
@@ -255,13 +264,7 @@ void redirfs_remove_inode(struct inode *inode)
 
 	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
 	if (rinode) {
-		spin_lock(&rinode->lock);
-		rinode->nlink--;
-		if (!rinode->nlink) {
-			redirfs_ihash_table_remove(rinode);
-			INIT_HLIST_NODE(&rinode->inode_hash);
-		}
-		spin_unlock(&rinode->lock);
+		redirfs_ihash_table_remove(rinode);
 		redirfs_iput(rinode);
 	}
 

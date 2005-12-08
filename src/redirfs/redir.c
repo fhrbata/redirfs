@@ -160,13 +160,7 @@ static void redirfs_d_iput(struct dentry *dentry, struct inode *inode)
 	redirfs_post_call_filters(root, REDIRFS_DENTRY, REDIRFS_DOP_IPUT,
 			NULL, &args);
 
-	spin_lock(&rinode->lock);
-	rinode->nlink--;
-	if (!rinode->nlink) {
-		redirfs_ihash_table_remove(rinode);
-		INIT_HLIST_NODE(&rinode->inode_hash);
-	}
-	spin_unlock(&rinode->lock);
+	redirfs_ihash_table_remove(rinode);
 
 	redirfs_iput(rinode);
 	redirfs_rput(root);

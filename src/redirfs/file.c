@@ -83,9 +83,12 @@ static void redirfs_fhash_table_add(struct redirfs_file_t *rfile)
 void redirfs_fhash_table_remove(struct redirfs_file_t *rfile)
 {
 	spin_lock(&redirfs_fhash_table_lock);
-	hlist_del(&rfile->file_hash);
+	if (!hlist_unhashed(&rfile->file_hash)) {
+		hlist_del(&rfile->file_hash);
+		INIT_HLIST_NODE(&rfile->file_hash);
+		redirfs_fput(rfile);
+	}
 	spin_unlock(&redirfs_fhash_table_lock);
-	redirfs_fput(rfile);
 }
 
 void __init redirfs_init_fcache(void)
@@ -112,6 +115,8 @@ static struct redirfs_file_t *redirfs_ffind(struct file *file)
 	unsigned long ino;
 	
 	
+	spin_lock(&redirfs_fhash_table_lock);
+
 	ino = file->f_dentry->d_inode->i_ino;
 	head = redirfs_fhash_table + redirfs_fhash(ino);
 
@@ -122,6 +127,8 @@ static struct redirfs_file_t *redirfs_ffind(struct file *file)
 		res = redirfs_fget(loop);
 		break;
 	}
+
+	spin_unlock(&redirfs_fhash_table_lock);
 
 	return res;
 }
@@ -139,9 +146,12 @@ static void redirfs_detach_file(struct redirfs_root_t *root,
 		struct redirfs_file_t *rfile)
 {
 	spin_lock(&root->lock);
-	list_del(&rfile->root);
+	if (!list_empty(&rfile->root)) {
+		list_del(&rfile->root);
+		INIT_LIST_HEAD(&rfile->root);
+		redirfs_fput(rfile);
+	}
 	spin_unlock(&root->lock);
-	redirfs_fput(rfile);
 }
 
 
