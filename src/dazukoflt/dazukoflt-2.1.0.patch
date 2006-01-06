@@ -1,0 +1,385 @@
+diff -rNu dazuko-2.1.0.orig/configure dazuko-2.1.0/configure
+--- dazuko-2.1.0.orig/configure	2005-09-08 20:50:40.000000000 +0200
++++ dazuko-2.1.0/configure	2006-01-06 14:46:04.000000000 +0100
+@@ -47,6 +47,7 @@
+ 	echo "override auto-detection values"
+ 	echo "  --kernelsrcdir=DIR   kernel source files in DIR (Linux only)"
+ 	echo "  --devicemajor=MAJ    use MAJ for device major number"
++	echo "  --redirfs-path=PATH  PATH to the RedirFS source code (RedirFS interface redirfs.h)"
+ 	echo "  --system=SYS         configure for system SYS (linux22,linux24,linux26,"
+ 	echo "                                                freebsd4,freebsd5,dummyos)"
+ 	echo ""
+@@ -63,6 +64,7 @@
+ 	echo "  --disable-stacking              disable LSM stacking (Linux 2.6 only)"
+ 	echo "  --disable-local-dpath           disable local __d_path() (Linux 2.6 only)"
+ 	echo "  --disable-compat1               disable 1.x compatibility (IO/Linux only)"
++	echo "  --enable-redirfs                use RedirFS Framework (for now Linux 2.6 only)"
+ 	echo "  --enable-debug                  print extra debug information"
+ 	echo ""
+ 	echo "optional packages"
+@@ -354,64 +356,67 @@
+ 
+ do_linux26()
+ {
+-	echo -n "checking if security module support is enabled... "
+-	if [ $CONFIG_SECURITY -eq 0 ]
++	if [ ${REDIRFS} -eq 0 ]
+ 	then
+-		echo "no"
+-		echo "error: security module support must be enabled in your kernel"
+-		exit 1
+-	else
+-		echo "yes"
+-	fi
++		echo -n "checking if security module support is enabled... "
++		if [ $CONFIG_SECURITY -eq 0 ]
++		then
++			echo "no"
++			echo "error: security module support must be enabled in your kernel"
++			exit 1
++		else
++			echo "yes"
++		fi
+ 
+-	echo -n "verifying capabilities are not built-in... "
+-	if [ $CONFIG_SECURITY_CAPABILITIES -ne 0 ]
+-	then
+-		echo "built-in :("
+-		echo "error: capabilities are built-in to the kernel:"
+-		echo "       you will need to recompile a kernel with capabilities"
+-		echo "       as a kernel module"
+-		exit 1
+-	else
+-		echo "ok"
+-	fi
++		echo -n "verifying capabilities are not built-in... "
++		if [ $CONFIG_SECURITY_CAPABILITIES -ne 0 ]
++		then
++			echo "built-in :("
++			echo "error: capabilities are built-in to the kernel:"
++			echo "       you will need to recompile a kernel with capabilities"
++			echo "       as a kernel module"
++			exit 1
++		else
++			echo "ok"
++		fi
+ 
+-	if [ $CONFIG_SECURITY_CAPABILITIES_MODULE -eq 0 ]
+-	then
+-		NO_CAPABILITIES=1
+-	fi
++		if [ $CONFIG_SECURITY_CAPABILITIES_MODULE -eq 0 ]
++		then
++			NO_CAPABILITIES=1
++		fi
+ 
+-	echo -n "locating LSM API header... "
++		echo -n "locating LSM API header... "
+ 
+-	SRC_PATH_END="/include/linux/security.h"
+-	get_src_path
++		SRC_PATH_END="/include/linux/security.h"
++		get_src_path
+ 
+-	if [ ! -f "$SRC_PATH" ]
+-	then
+-		echo "failed"
+-		echo "error: unable to locate security.h"
+-		exit 1
+-	else
+-		echo "ok"
+-	fi
++		if [ ! -f "$SRC_PATH" ]
++		then
++			echo "failed"
++			echo "error: unable to locate security.h"
++			exit 1
++		else
++			echo "ok"
++		fi
+ 
+-	echo -n "identifying LSM API... "
+-	if [ ! -x "linux_lsm_conf" ]
+-	then
+-		echo "failed"
+-		echo "error: linux_lsm_conf missing in Dazuko distribution"
+-		exit 1
+-	fi
++		echo -n "identifying LSM API... "
++		if [ ! -x "linux_lsm_conf" ]
++		then
++			echo "failed"
++			echo "error: linux_lsm_conf missing in Dazuko distribution"
++			exit 1
++		fi
+ 
+-	./linux_lsm_conf $SRC_PATH
+-	if [ $? -ne 0 ]
+-	then
+-		echo "failed"
+-		echo "error: could not analyze security.h"
+-		exit 1
+-	fi
++		./linux_lsm_conf $SRC_PATH
++		if [ $? -ne 0 ]
++		then
++			echo "failed"
++			echo "error: could not analyze security.h"
++			exit 1
++		fi
+ 
+-	echo "ok"
++		echo "ok"
++	fi
+ 
+ 	echo -n "inspecting suspend function... "
+ 
+@@ -483,7 +488,20 @@
+ 
+ 	echo "EXTRA_CFLAGS += -Wall -DLINUX26_SUPPORT" > Makefile
+ 
+-	if [ ${LSM_STACKING} -eq 1 ]
++	if [ ${REDIRFS} -eq 1 ]
++	then
++		if [ -z ${REDIRFS_PATH} ]
++		then
++			echo "error: if you want to use Dazuko with the RedirFS Framework"
++			echo "       you have to specify path to the RedirFS source" 
++			echo "       code with the --redirfs-path option"
++			exit 1
++		fi
++		echo "EXTRA_CFLAGS += -I${REDIRFS_PATH}" >> Makefile
++		echo "EXTRA_CFLAGS += -DDAZUKO_REDIRFS" >> Makefile
++	fi
++
++	if [ ${LSM_STACKING} -eq 1 -a ${REDIRFS} -eq 0 ]
+ 	then
+ 		LINUX26_OBJS="dazuko_linux26_lsm.o ${LINUX26_OBJS}"
+ 	else
+@@ -1096,6 +1114,8 @@
+ DEVFS=0
+ RSBAC=0
+ DEBUG=0
++REDIRFS=0
++REDIRFS_PATH=""
+ WITH_MODULE=1
+ WITH_LIBRARY=2
+ WITH_EXAMPLE_C=1
+@@ -1158,6 +1178,12 @@
+ 		--enable-debug)
+ 			DEBUG=1
+ 			;;
++		--enable-redirfs)
++			REDIRFS=1
++			;;
++		--redirfs-path=*)
++			REDIRFS_PATH=`echo $option | sed -e s/^--redirfs-path=//`
++			;;
+ 		--enable-trusted)
+ 			TRUSTED=1
+ 			;;
+@@ -1438,24 +1464,29 @@
+ 			. linux.config
+ 			rm -f linux.config
+ 
+-			echo -n "checking if Linux is RSBAC patched... "
+-			if [ $CONFIG_RSBAC -ne 0 ]
++			if [ $REDIRFS -ne 0 ]
+ 			then
+-				echo "yes"
+-				RSBAC=1
+-
+-				SYSTEM="rsbac"
++				echo "Dazuko will be compiled as a Filter for the RedirFS Framework"
+ 			else
+-				echo "no"
+-
+-				echo -n "checking if devfs is enabled... "
+-				if [ $CONFIG_DEVFS_FS -eq 0 ]
++				echo -n "checking if Linux is RSBAC patched... "
++				if [ $CONFIG_RSBAC -ne 0 ]
+ 				then
+-					DEVFS=0
+-					echo "no"
+-				else
+-					DEVFS=1
+ 					echo "yes"
++					RSBAC=1
++
++					SYSTEM="rsbac"
++				else
++					echo "no"
++
++					echo -n "checking if devfs is enabled... "
++					if [ $CONFIG_DEVFS_FS -eq 0 ]
++					then
++						DEVFS=0
++						echo "no"
++					else
++						DEVFS=1
++						echo "yes"
++					fi
+ 				fi
+ 			fi
+ 
+diff -rNu dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
+--- dazuko-2.1.0.orig/dazuko_linux26.c	2005-09-03 22:00:35.000000000 +0200
++++ dazuko-2.1.0/dazuko_linux26.c	2006-01-05 16:13:10.000000000 +0100
+@@ -35,6 +35,9 @@
+ #include <linux/suspend.h>
+ #endif
+ #include <asm/uaccess.h>
++#if defined(DAZUKO_REDIRFS)
++#include "redirfs.h"
++#endif
+ 
+ 
+ #ifndef DAZUKO_DM
+@@ -62,7 +65,7 @@
+ static struct dentry    *orig_root = NULL;
+ static int dev_major = -1;
+ 
+-#ifndef DAZUKO_FIST
++#if !defined(DAZUKO_FIST) && !defined(DAZUKO_REDIRFS)
+ #ifdef NO_STACKING_SUPPORT
+ struct security_operations dazuko_security_ops;
+ #else
+@@ -81,6 +84,19 @@
+ #endif
+ #endif
+ 
++#if defined(DAZUKO_REDIRFS)
++/*
++ *  Global stuffs for the RedirFS Framework
++ */
++redirfs_filter dazukoflt;
++static enum redirfs_retv dazukoflt_pre_permission(redirfs_context context, struct redirfs_args_t *args);
++static struct redirfs_op_t dazukoflt_ops[] = {
++	{REDIRFS_I_REG, REDIRFS_IOP_PERMISSION, dazukoflt_pre_permission, NULL},
++	REDIRFS_OP_END
++};
++#endif
++
++
+ #ifdef NO_CAPABILITIES
+ int lsm_capability_compare(struct security_operations *ops1, struct security_operations *ops2);
+ #endif
+@@ -801,10 +817,17 @@
+ 
+ #ifdef DAZUKO_FIST
+ int dazuko_sys_generic(int event, struct inode *inode, struct nameidata *nd, int daemon_is_allowed)
++#elif defined(DAZUKO_REDIRFS)
++static enum redirfs_retv dazukoflt_pre_permission(redirfs_context context, struct redirfs_args_t *args)
+ #else
+ static inline int dazuko_sys_generic(struct inode *inode, int mask, struct nameidata *nd)
+ #endif
+ {
++#if defined(DAZUKO_REDIRFS)
++	struct inode *inode = args->args.i_permission.inode;
++	struct nameidata *nd = args->args.i_permission.nd;
++	int mask = args->args.i_permission.mode;
++#endif
+ 	struct dazuko_file_struct *dfs = NULL;
+ 	int error = 0;
+ 	int check_error = 0;
+@@ -892,15 +915,31 @@
+ 		}
+ 	}
+ 
++#if defined(DAZUKO_REDIRFS)
++	if (error) {
++		args->retv.rv_int = XP_ERROR_PERMISSION;
++		return REDIRFS_RETV_STOP;
++	}
++
++	return REDIRFS_RETV_CONTINUE;
++#else
+ 	if (error)
+ 		return XP_ERROR_PERMISSION;
+ 
+ 	return 0;
++#endif
+ }
+ 
+ inline int xp_sys_hook()
+ {
+-#ifndef DAZUKO_FIST
++#if defined(DAZUKO_REDIRFS)
++	char name[] = "dazukoflt";
++	int priority = 666;
++	unsigned long flags = 0;
++	int error = 0;
++#endif
++
++#if !defined(DAZUKO_FIST) && !defined(DAZUKO_REDIRFS)
+ #ifndef NO_STACKING_SUPPORT
+ 	struct security_operations dummy_ops;
+ 	int got_dummy = 0;
+@@ -944,7 +983,7 @@
+ 	orig_root = current->fs->root;
+ 	read_unlock(&current->fs->lock);
+ 
+-#ifndef DAZUKO_FIST
++#if !defined(DAZUKO_FIST) && !defined(DAZUKO_REDIRFS)
+ #ifdef NO_STACKING_SUPPORT
+ 	memset(&dazuko_security_ops, 0, sizeof(dazuko_security_ops));
+ 	dazuko_security_ops.inode_permission = dazuko_sys_generic;
+@@ -994,6 +1033,23 @@
+ #endif
+ #endif
+ 
++#if defined(DAZUKO_REDIRFS)
++	/*
++	 * Registration to the RedirFS Framework
++	 */
++	dazukoflt = redirfs_register_filter(name, priority, flags);
++	if (IS_ERR(dazukoflt))
++		return PTR_ERR(dazukoflt);
++
++	error = redirfs_set_operations(dazukoflt, dazukoflt_ops);
++	if (error) {
++		redirfs_unregister_filter(dazukoflt);
++		return error;
++	}
++
++	redirfs_activate_filter(dazukoflt);
++#endif
++
+ 	dev_major = register_chrdev(DAZUKO_DM, DEVICE_NAME, &fops);
+ 	if (dev_major < 0)
+ 	{
+@@ -1028,7 +1084,7 @@
+ 	class_simple_destroy(dazuko_class);
+ #endif
+ 
+-#ifndef DAZUKO_FIST
++#if !defined(DAZUKO_FIST) && !defined(DAZUKO_REDIRFS)
+ #ifdef NO_STACKING_SUPPORT
+ 	if (secondary_register)
+ 		mod_unreg_security(DEVICE_NAME, &dazuko_security_ops);
+@@ -1042,6 +1098,13 @@
+ #endif
+ #endif
+ 
++#if defined(DAZUKO_REDIRFS)
++	/*
++	 * Unregistration from the RedirFS Framework
++	 */
++	redirfs_unregister_filter(dazukoflt);
++#endif
++
+ 	return 0;
+ }
+ 
+diff -rNu dazuko-2.1.0.orig/dazuko_transport.c dazuko-2.1.0/dazuko_transport.c
+--- dazuko-2.1.0.orig/dazuko_transport.c	2005-05-13 23:28:02.000000000 +0200
++++ dazuko-2.1.0/dazuko_transport.c	2006-01-05 14:11:31.000000000 +0100
+@@ -60,7 +60,7 @@
+ #if defined __KERNEL__ || defined _KERNEL
+   /* kernel part, every system has its own includes for NULL and int32_t :( */
+ 
+-  #if defined LINUX || defined LINUX26_SUPPORT
++  #if defined LINUX || defined LINUX26_SUPPORT || REDIRFS_SUPPORT
+     #include <linux/stddef.h>
+     #include <linux/types.h>
+   #elif defined __FreeBSD__
