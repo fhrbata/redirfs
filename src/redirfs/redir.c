@@ -440,6 +440,7 @@ static int redirfs_reg_permission(struct inode *inode, int mode, struct nameidat
 	struct redirfs_inode_t *rinode;
 	struct redirfs_root_t *root;
 	struct redirfs_args_t args;
+	char buff[PAGE_SIZE];
 	int (*permission) (struct inode *, int, struct nameidata *) = NULL;
 	int rv;
 	
@@ -454,6 +455,10 @@ static int redirfs_reg_permission(struct inode *inode, int mode, struct nameidat
 	args.args.i_permission.mode = mode;
 	args.args.i_permission.nd = nd;
 	args.info.call = REDIRFS_PRECALL;
+	if (nd && nd->dentry)
+		args.exts.full_path = redirfs_dpath(nd->dentry, buff, PAGE_SIZE);
+	else
+		args.exts.full_path = NULL;
 
 	rv = redirfs_pre_call_filters(root, REDIRFS_I_REG,
 			REDIRFS_IOP_PERMISSION, NULL, &args);
@@ -497,6 +502,7 @@ static int redirfs_reg_open(struct inode *inode, struct file *file)
 	struct redirfs_inode_t *rinode;
 	struct redirfs_root_t *root;
 	struct redirfs_args_t args;
+	char buff[PAGE_SIZE];
 	int remove_root = 0;
 	int rv;
 	int (*open) (struct inode *inode, struct file *file) = NULL;
@@ -511,6 +517,7 @@ static int redirfs_reg_open(struct inode *inode, struct file *file)
 	args.args.f_open.inode = inode;
 	args.args.f_open.file = file;
 	args.info.call = REDIRFS_PRECALL;
+	args.exts.full_path = redirfs_dpath(file->f_dentry, buff, PAGE_SIZE);
 
 	rv = redirfs_pre_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_OPEN,
 			NULL, &args);

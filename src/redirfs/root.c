@@ -28,7 +28,7 @@ static struct redirfs_root_t *redirfs_alloc_root(const char *path)
 	redirfs_debug("started");
 
 	if (!path)
-		return ERR_PTR(-EINVAL);
+		return ERR_PTR(REDIRFS_ERR_INVAL);
 
 	root_path_len = strlen(path);
 
@@ -37,7 +37,7 @@ static struct redirfs_root_t *redirfs_alloc_root(const char *path)
 		return ERR_PTR(err);
 
 	if (!S_ISDIR(nd.dentry->d_inode->i_mode))
-		return ERR_PTR(-ENOTDIR);
+		return ERR_PTR(REDIRFS_ERR_NOTDIR);
 
 	root = kmalloc(sizeof(struct redirfs_root_t), GFP_KERNEL);
 	root_path = kmalloc(root_path_len + 1, GFP_KERNEL);
@@ -45,7 +45,7 @@ static struct redirfs_root_t *redirfs_alloc_root(const char *path)
 	if (!root || !root_path) {
 		kfree(root);
 		kfree(root_path);
-		return ERR_PTR(-ENOMEM);
+		return ERR_PTR(REDIRFS_ERR_NOMEM);
 	}
 
 	redirfs_flt_arr_init(&root->attached_flts);
@@ -297,7 +297,7 @@ static int redirfs_inherit_root(struct redirfs_root_t *par, struct redirfs_root_
 
 	if (redirfs_flt_arr_copy(&par->attached_flts, &child->attached_flts) ||
 	    redirfs_flt_arr_copy(&par->attached_flts, &child->attached_flts)) 
-		rv = -ENOMEM;
+		rv = REDIRFS_ERR_NOMEM;
 
 	spin_unlock(&child->lock);
 	spin_unlock(&par->lock);
@@ -572,6 +572,79 @@ void redirfs_set_dir_ops(struct redirfs_root_t *root, struct inode *inode)
 	redirfs_debug("ended");
 }
 
+struct redirfs_find_root_dentry_t {
+	struct dentry *dentry;
+	struct redirfs_root_t *root;
+};
+
+static int redirfs_test_root_dentry(struct redirfs_root_t *root, void *data)
+{
+	struct redirfs_find_root_dentry_t *aux = (struct redirfs_find_root_dentry_t*)data;
+
+
+	if (aux->dentry == root->dentry) {
+		aux->root = redirfs_rget(root);
+		return 1;
+	}
+
+	return 0;
+}
+
+static struct redirfs_root_t *redirfs_find_root_dentry(struct dentry *dentry)
+{
+	struct redirfs_find_root_dentry_t data;
+
+
+	data.dentry = dentry;
+	data.root = NULL;
+	
+	redirfs_walk_roots(NULL, redirfs_test_root_dentry, &data);
+
+	return data.root;
+}
+
+char *redirfs_dpath(struct dentry *dentry, char* buff, int len)
+{
+	struct redirfs_root_t *root = NULL;
+	char *end = buff + len;
+	int path_len = 0;
+
+
+	if (len < 2)
+		return ERR_PTR(REDIRFS_ERR_NAMETOOLONG);
+
+	*--end = '\0';
+	len--;
+
+	spin_lock(&dcache_lock);
+
+	while(!(root = redirfs_find_root_dentry(dentry))) {
+		end -= dentry->d_name.len;
+		len -= dentry->d_name.len + 1;
+		if (len < 0) {
+			spin_unlock(&dcache_lock);
+			return ERR_PTR(REDIRFS_ERR_NAMETOOLONG);
+		}
+		memcpy(end, dentry->d_name.name, dentry->d_name.len);
+		*--end = '/';
+		BUG_ON(!dentry->d_parent);
+		dentry = dentry->d_parent;
+	}
+
+	path_len = strlen(root->path);
+	end -= path_len;
+	len -= path_len;
+	if (len < 0) {
+		spin_unlock(&dcache_lock);
+		return ERR_PTR(REDIRFS_ERR_NAMETOOLONG);
+	}
+	memcpy(end, root->path, path_len);
+
+	spin_unlock(&dcache_lock);
+
+	return end;
+}
+
 static int redirfs_test_root(struct redirfs_root_t *root, void *dentry)
 {
 	redirfs_debug("started");
@@ -586,8 +659,6 @@ static int redirfs_test_root(struct redirfs_root_t *root, void *dentry)
 
 static int redirfs_is_root(struct dentry *dentry)
 {
-	redirfs_debug("started");
-	redirfs_debug("ended");
 	return redirfs_walk_roots(NULL, redirfs_test_root, dentry);
 }
 
@@ -824,6 +895,12 @@ static void redirfs_walk_dcache(struct dentry *root,
 	act 	= end->next;
 	parent 	= end;
 	
+	if (root->d_mounted) {
+		if (redirfs_mount_dentry)
+			redirfs_mount_dentry(root, mount_data);
+		return;
+	}
+
 	redirfs_walk_dentry(root, dentry_data);
 
 	while (act != end) {
@@ -1104,7 +1181,7 @@ int redirfs_include_path(redirfs_filter filter, const char *path)
 	redirfs_debug("started");
 
 	if (!filter || !path)
-		return -EINVAL;
+		return REDIRFS_ERR_INVAL;
 
 	spin_lock(&redirfs_remove_roots_list_lock);
 	root = redirfs_find_root(path);
@@ -1133,8 +1210,7 @@ int redirfs_include_path(redirfs_filter filter, const char *path)
 		}
 		
 		if (root == aux_root) {
-			redirfs_walk_dcache(root->dentry, redirfs_set_new_ops,
-					(void *)root, NULL, NULL);
+			redirfs_walk_dcache(root->dentry, redirfs_set_new_ops, (void *)root, NULL, filter);
 
 			redirfs_inherit_files(root->parent, root);
 		} else
@@ -1162,7 +1238,7 @@ int redirfs_exclude_path(redirfs_filter filter, const char *path)
 
 
 	if (!filter)
-		return -EINVAL;
+		return REDIRFS_ERR_INVAL;
 
 	flt = redirfs_uncover_flt(filter);
 
@@ -1181,13 +1257,13 @@ int redirfs_exclude_path(redirfs_filter filter, const char *path)
 	parent = redirfs_find_root_parent(root);
 	if (!parent) {
 		redirfs_rput(root);
-		return -EINVAL;
+		return REDIRFS_ERR_NOPARENT;
 	}
 
 	if (redirfs_flt_arr_get(&parent->attached_flts, flt) == -1) {
 		redirfs_rput(root);
 		redirfs_rput(parent);
-		return -EINVAL;
+		return REDIRFS_ERR_NOTATTACHED;
 	}
 
 	aux_root = root;
@@ -1199,8 +1275,7 @@ int redirfs_exclude_path(redirfs_filter filter, const char *path)
 	}
 
 	if (root == aux_root) {
-		redirfs_walk_dcache(root->dentry, redirfs_set_new_ops,
-				(void *)root, NULL, NULL);
+		redirfs_walk_dcache(root->dentry, redirfs_set_new_ops, (void *)root, NULL, NULL);
 
 		redirfs_inherit_files(root->parent, root);
 	} else

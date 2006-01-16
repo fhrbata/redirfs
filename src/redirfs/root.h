@@ -44,5 +44,6 @@ void redirfs_remove_roots(void);
 void redirfs_replace_files_ops(const char *path, struct dentry *root_dentry,
 		struct file_operations *fops, int what);
 int redirfs_roots_info(char *buf, int size);
+char *redirfs_dpath(struct dentry *dentry, char* buff, int len);
 
 #endif

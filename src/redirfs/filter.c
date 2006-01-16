@@ -17,7 +17,7 @@ static struct redirfs_flt_t *redirfs_alloc_flt(const char *name, int priority,
 	redirfs_debug("started");
 
 	if (!name)
-		return ERR_PTR(-EINVAL);
+		return ERR_PTR(REDIRFS_ERR_INVAL);
 
 	flt_name_len = strlen(name);
 	
@@ -27,7 +27,7 @@ static struct redirfs_flt_t *redirfs_alloc_flt(const char *name, int priority,
 	if (!flt || !flt_name) {
 		kfree(flt_name);
 		kfree(flt);
-		return ERR_PTR(-ENOMEM);
+		return ERR_PTR(REDIRFS_ERR_NOMEM);
 	}
 	
 	atomic_set(&flt->active, 0);
@@ -98,7 +98,7 @@ redirfs_filter redirfs_register_filter(const char *name, int priority, unsigned 
 	flt = redirfs_find_flt_turn(priority);
 	if (flt) {
 		spin_unlock(&redirfs_flt_list_lock);
-		return ERR_PTR(-EEXIST);
+		return ERR_PTR(REDIRFS_ERR_FLTEXIST);
 	}
 
 	flt = redirfs_alloc_flt(name, priority, flags);
@@ -124,7 +124,7 @@ int redirfs_unregister_filter(redirfs_filter filter)
 	redirfs_debug("started");
 
 	if (!filter)
-		return -EINVAL;
+		return REDIRFS_ERR_INVAL;
 
 	flt = redirfs_uncover_flt(filter);
 
@@ -176,7 +176,7 @@ int redirfs_flt_arr_create(struct redirfs_flt_arr_t *flt_arr, int size)
 			GFP_KERNEL);
 
 	if (!flt_arr->arr)
-		return -ENOMEM;
+		return REDIRFS_ERR_NOMEM;
 
 	flt_arr->cnt =  0;
 	flt_arr->size = size;
@@ -271,7 +271,7 @@ int redirfs_flt_arr_add_flt(struct redirfs_flt_arr_t *flt_arr,
 		arr = kmalloc(size, GFP_KERNEL);
 		if (!arr) {
 			spin_unlock(&flt_arr->lock);
-			return -ENOMEM;
+			return REDIRFS_ERR_NOMEM;
 		}
 
 		size = sizeof(struct redirfs_flt_t *) * flt_arr->cnt;
@@ -345,7 +345,7 @@ int redirfs_flt_arr_copy(struct redirfs_flt_arr_t *src,
 	if (!arr) {
 		spin_unlock(&dst->lock);
 		spin_unlock(&src->lock);
-		return -ENOMEM;
+		return REDIRFS_ERR_NOMEM;
 	}
 
 	if (dst->arr) {

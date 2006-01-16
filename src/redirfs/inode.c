@@ -45,7 +45,7 @@ static struct redirfs_inode_t *redirfs_alloc_inode(struct super_block *sb,
 	rinode = kmem_cache_alloc(redirfs_icache, SLAB_KERNEL);
 
 	if (!rinode)
-		return ERR_PTR(-ENOMEM);
+		return ERR_PTR(REDIRFS_ERR_NOMEM);
 
 	INIT_HLIST_NODE(&rinode->inode_hash);
 	INIT_LIST_HEAD(&rinode->priv);
@@ -72,7 +72,7 @@ int __init redirfs_init_ihash_table(unsigned int size)
 
 	redirfs_ihash_table = kmalloc(sizeof(struct hlist_head) * redirfs_ihash_table_size, GFP_KERNEL);
 	if (!redirfs_ihash_table)
-		return -ENOMEM;
+		return REDIRFS_ERR_NOMEM;
 
 	for (loop = 0; loop < redirfs_ihash_table_size; loop++)
 		INIT_HLIST_HEAD(&redirfs_ihash_table[loop]);

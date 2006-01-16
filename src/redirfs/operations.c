@@ -295,7 +295,7 @@ int redirfs_set_operations(redirfs_filter filter, struct redirfs_op_t ops[])
 	redirfs_debug("started");
 
 	if (!filter || !ops)
-		return -EINVAL;
+		return REDIRFS_ERR_INVAL;
 
 	flt = redirfs_uncover_flt(filter);
 
@@ -359,7 +359,7 @@ int redirfs_remove_operations(redirfs_filter filter, struct redirfs_op_t ops[])
 	redirfs_debug("started");
 
 	if (!filter || !ops)
-		return -EINVAL;
+		return REDIRFS_ERR_INVAL;
 
 	flt = redirfs_uncover_flt(filter);
 	

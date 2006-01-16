@@ -29,7 +29,7 @@ static struct redirfs_file_t *redirfs_alloc_file(struct file *file)
 	rfile = kmem_cache_alloc(redirfs_fcache, SLAB_KERNEL);
 
 	if (!rfile)
-		return ERR_PTR(-ENOMEM);
+		return ERR_PTR(REDIRFS_ERR_NOMEM);
 
 	INIT_HLIST_NODE(&rfile->file_hash);
 	INIT_LIST_HEAD(&rfile->priv);
@@ -52,7 +52,7 @@ int __init redirfs_init_fhash_table(unsigned long size)
 			GFP_KERNEL);
 
 	if (!redirfs_fhash_table)
-		return -ENOMEM;
+		return REDIRFS_ERR_NOMEM;
 
 	for (loop = 0; loop < size; loop++)
 		INIT_HLIST_HEAD(&redirfs_fhash_table[loop]);
