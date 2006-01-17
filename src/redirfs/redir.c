@@ -119,6 +119,7 @@ static void redirfs_d_iput(struct dentry *dentry, struct inode *inode)
 	struct redirfs_inode_t *rinode;
 	struct redirfs_root_t *root;
 	struct redirfs_args_t args;
+	char buff[PAGE_SIZE];
 	void (*d_iput)(struct dentry *, struct inode *) = NULL; 
 	
 
@@ -143,6 +144,7 @@ static void redirfs_d_iput(struct dentry *dentry, struct inode *inode)
 	args.args.d_iput.dentry = dentry;
 	args.args.d_iput.inode = inode;
 	args.info.call = REDIRFS_PRECALL;
+	args.exts.full_path = redirfs_dpath(dentry, buff, PAGE_SIZE);
 
 	if (root->orig_ops.dops && root->orig_ops.dops->d_iput)
 		d_iput = root->orig_ops.dops->d_iput;
@@ -171,6 +173,7 @@ static int redirfs_dir_create(struct inode *inode, struct dentry *dentry, int mo
 	struct redirfs_inode_t *rinode;
 	struct redirfs_root_t *root;
 	struct redirfs_args_t args;
+	char buff[PAGE_SIZE];
 	int aux = 0;
 	int rv;
 
@@ -186,6 +189,7 @@ static int redirfs_dir_create(struct inode *inode, struct dentry *dentry, int mo
 	args.args.i_create.mode = mode;
 	args.args.i_create.nd = nd;
 	args.info.call = REDIRFS_POSTCALL;
+	args.exts.full_path = redirfs_dpath(dentry, buff, PAGE_SIZE);
 
 	rv = redirfs_pre_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_CREATE,
 			NULL, &args);
@@ -257,6 +261,7 @@ static struct dentry *redirfs_dir_lookup(struct inode *parent,
 	struct redirfs_inode_t *rinode;
 	struct redirfs_root_t *root;
 	struct redirfs_args_t args;
+	char buff[PAGE_SIZE];
 	int redirfs_rv;
 	int aux = 0;
 
@@ -271,6 +276,7 @@ static struct dentry *redirfs_dir_lookup(struct inode *parent,
 	args.args.i_lookup.dentry = dentry;
 	args.args.i_lookup.nd = nd;
 	args.info.call = REDIRFS_PRECALL;
+	args.exts.full_path = redirfs_dpath(dentry, buff, PAGE_SIZE);
 
 	redirfs_rv = redirfs_pre_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_LOOKUP,
 			NULL, &args);
@@ -378,6 +384,7 @@ static int redirfs_dir_mkdir(struct inode *parent, struct dentry *dentry, int mo
 	struct redirfs_inode_t *rinode;
 	struct redirfs_root_t *root;
 	struct redirfs_args_t args;
+	char buff[PAGE_SIZE];
 	int rv;
 
 
@@ -391,6 +398,7 @@ static int redirfs_dir_mkdir(struct inode *parent, struct dentry *dentry, int mo
 	args.args.i_mkdir.dentry = dentry;
 	args.args.i_mkdir.mode = mode;
 	args.info.call = REDIRFS_PRECALL;
+	args.exts.full_path = redirfs_dpath(dentry, buff, PAGE_SIZE);
 
 	rv = redirfs_pre_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_MKDIR,
 			NULL, &args);
@@ -564,6 +572,7 @@ static int redirfs_reg_release(struct inode *inode, struct file *file)
 	struct redirfs_inode_t *rinode;
 	struct redirfs_root_t *root;
 	struct redirfs_args_t args;
+	char buff[PAGE_SIZE];
 	int (*release) (struct inode *, struct file *) = NULL;
 	int rv;
 
@@ -579,6 +588,7 @@ static int redirfs_reg_release(struct inode *inode, struct file *file)
 	args.args.f_release.inode = inode;
 	args.args.f_release.file = file;
 	args.info.call = REDIRFS_PRECALL;
+	args.exts.full_path = redirfs_dpath(file->f_dentry, buff, PAGE_SIZE);
 
 	rv = redirfs_pre_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_RELEASE,
 			NULL, &args);
@@ -618,6 +628,7 @@ static int redirfs_dir_open(struct inode *inode, struct file *file)
 	struct redirfs_inode_t *rinode;
 	struct redirfs_root_t *root;
 	struct redirfs_args_t args;
+	char buff[PAGE_SIZE];
 	int remove_root = 0;
 	int rv;
 	int (*open) (struct inode *inode, struct file *file) = NULL;
@@ -632,6 +643,7 @@ static int redirfs_dir_open(struct inode *inode, struct file *file)
 	args.args.f_open.inode = inode;
 	args.args.f_open.file = file;
 	args.info.call = REDIRFS_PRECALL;
+	args.exts.full_path = redirfs_dpath(file->f_dentry, buff, PAGE_SIZE);
 
 	rv = redirfs_pre_call_filters(root, REDIRFS_F_DIR, REDIRFS_FOP_OPEN,
 			NULL, &args);
@@ -678,6 +690,7 @@ static int redirfs_dir_release(struct inode *inode, struct file *file)
 	struct redirfs_inode_t *rinode;
 	struct redirfs_root_t *root;
 	struct redirfs_args_t args;
+	char buff[PAGE_SIZE];
 	int (*release) (struct inode *, struct file *) = NULL;
 	int rv;
 
@@ -693,6 +706,7 @@ static int redirfs_dir_release(struct inode *inode, struct file *file)
 	args.args.f_release.inode = inode;
 	args.args.f_release.file = file;
 	args.info.call = REDIRFS_PRECALL;
+	args.exts.full_path = redirfs_dpath(file->f_dentry, buff, PAGE_SIZE);
 
 	rv = redirfs_pre_call_filters(root, REDIRFS_F_DIR, REDIRFS_FOP_RELEASE,
 			NULL, &args);
@@ -727,6 +741,148 @@ exit:
 	return rv;
 }
 
+static int redirfs_reg_flush(struct file *file)
+{
+	struct redirfs_inode_t *rinode;
+	struct redirfs_root_t *root;
+	struct redirfs_args_t args;
+	char buff[PAGE_SIZE];
+	int (*flush) (struct file *) = NULL;
+	int rv;
+
+	rinode = redirfs_ifind(file->f_dentry->d_inode->i_sb, file->f_dentry->d_inode->i_ino);
+	BUG_ON(!rinode);
+
+	root = redirfs_rget(rinode->root);
+	BUG_ON(!root);
+
+	args.args.f_flush.file = file;
+	args.info.call = REDIRFS_PRECALL;
+	args.exts.full_path = redirfs_dpath(file->f_dentry, buff, PAGE_SIZE);
+
+	rv = redirfs_pre_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_FLUSH, NULL, &args);
+	if (rv == REDIRFS_RETV_STOP) {
+		rv = args.retv.rv_int;
+		goto exit;
+	}
+
+	spin_lock(&root->lock);
+	if (root->orig_ops.reg_fops->flush)
+		flush = root->orig_ops.reg_fops->flush;
+	spin_unlock(&root->lock);
+
+	if (flush)
+		rv = flush(file);
+	else
+		rv = 0;
+
+	args.retv.rv_int = rv;
+	args.info.call = REDIRFS_POSTCALL;
+	rv = redirfs_post_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_FLUSH, NULL, &args);
+	rv = args.retv.rv_int;
+
+exit:
+	redirfs_iput(rinode);
+	redirfs_rput(root);
+	return rv;
+}
+
+static int redirfs_dir_unlink(struct inode *inode, struct dentry *dentry)
+{
+	struct redirfs_inode_t *rinode;
+	struct redirfs_root_t *root;
+	struct redirfs_args_t args;
+	char buff[PAGE_SIZE];
+	int (*unlink) (struct inode *, struct dentry *) = NULL;
+	int rv;
+
+	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
+	BUG_ON(!rinode);
+
+	root = redirfs_rget(rinode->root);
+	BUG_ON(!root);
+
+	args.args.i_unlink.dir = inode;
+	args.args.i_unlink.dentry = dentry;
+	args.info.call = REDIRFS_PRECALL;
+	args.exts.full_path = redirfs_dpath(dentry, buff, PAGE_SIZE);
+
+	rv = redirfs_pre_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_UNLINK, NULL, &args);
+	if (rv == REDIRFS_RETV_STOP) {
+		rv = args.retv.rv_int;
+		goto exit;
+	}
+
+	spin_lock(&root->lock);
+	if (root->orig_ops.dir_iops->unlink)
+		unlink = root->orig_ops.dir_iops->unlink;
+	spin_unlock(&root->lock);
+
+	if (unlink)
+		rv = unlink(inode, dentry);
+	else
+		rv = 0;
+
+	args.retv.rv_int = rv;
+	args.info.call = REDIRFS_POSTCALL;
+	rv = redirfs_post_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_UNLINK, NULL, &args);
+	rv = args.retv.rv_int;
+
+exit:
+	redirfs_iput(rinode);
+	redirfs_rput(root);
+	return rv;
+
+}
+
+static int redirfs_dir_rmdir(struct inode *inode, struct dentry *dentry)
+{
+	struct redirfs_inode_t *rinode;
+	struct redirfs_root_t *root;
+	struct redirfs_args_t args;
+	char buff[PAGE_SIZE];
+	int (*rmdir) (struct inode *, struct dentry *) = NULL;
+	int rv;
+
+	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
+	BUG_ON(!rinode);
+
+	root = redirfs_rget(rinode->root);
+	BUG_ON(!root);
+
+	args.args.i_rmdir.dir = inode;
+	args.args.i_rmdir.dentry = dentry;
+	args.info.call = REDIRFS_PRECALL;
+	args.exts.full_path = redirfs_dpath(dentry, buff, PAGE_SIZE);
+
+	rv = redirfs_pre_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_RMDIR, NULL, &args);
+	if (rv == REDIRFS_RETV_STOP) {
+		rv = args.retv.rv_int;
+		goto exit;
+	}
+
+	spin_lock(&root->lock);
+	if (root->orig_ops.dir_iops->rmdir)
+		rmdir= root->orig_ops.dir_iops->rmdir;
+	spin_unlock(&root->lock);
+
+	if (rmdir)
+		rv = rmdir(inode, dentry);
+	else
+		rv = 0;
+
+	args.retv.rv_int = rv;
+	args.info.call = REDIRFS_POSTCALL;
+	rv = redirfs_post_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_RMDIR, NULL, &args);
+	rv = args.retv.rv_int;
+
+exit:
+	redirfs_iput(rinode);
+	redirfs_rput(root);
+	return rv;
+
+
+}
 
 static int __init redirfs_init(void)
 {
@@ -744,6 +900,9 @@ static int __init redirfs_init(void)
 	redirfs_fw_ops.reg_fops->release = redirfs_reg_release;
 	redirfs_fw_ops.dir_fops->open = redirfs_dir_open;
 	redirfs_fw_ops.dir_fops->release = redirfs_dir_release;
+	redirfs_fw_ops.reg_fops->flush= redirfs_reg_flush;
+	redirfs_fw_ops.dir_iops->unlink = redirfs_dir_unlink;
+	redirfs_fw_ops.dir_iops->rmdir = redirfs_dir_rmdir;
 
 	rv = redirfs_init_ihash_table(1<<14);
 	if (rv) goto out;
