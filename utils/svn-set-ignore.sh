@@ -10,6 +10,6 @@ test -f .cvsignore && {
   exit 0
 }
 
-echo "No .svnignore file found in current directory"
+echo "No .svnignore or .cvsignore file found in current directory"
 exit 1
 
