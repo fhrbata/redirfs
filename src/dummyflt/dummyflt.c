@@ -76,7 +76,7 @@ static int __init dummyflt_init(void)
 	error = redirfs_include_path(dummyflt, "/usr");
 	if (error) goto unregister;
 	
-	error = redirfs_include_path(dummyflt, "/home/qwertyn");
+	error = redirfs_include_path(dummyflt, "/tmp");
 	if (error) goto unregister;
 	
 	redirfs_activate_filter(dummyflt);
