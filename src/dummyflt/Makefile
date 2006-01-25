@@ -4,7 +4,7 @@ obj-m += dummyflt.o
 $(obj)/dummyflt.o: $(obj)/.tmp_versions/redirfs.mod
 
 $(obj)/.tmp_versions/redirfs.mod: $(PWD)/../redirfs/redirfs.ko
-        @@ cd $(PWD); \
-        rm -f $(obj)/.tmp_versions/redirfs.mod; \
-        ln -s ../../redirfs/.tmp_versions/redirfs.mod $(obj)/.tmp_versions/
+	@@ cd $(PWD); \
+	rm -f $(obj)/.tmp_versions/redirfs.mod; \
+	ln -s ../../redirfs/.tmp_versions/redirfs.mod $(obj)/.tmp_versions/
 
