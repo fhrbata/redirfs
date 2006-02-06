@@ -18,19 +18,14 @@ extern void redirfs_proc_destroy(void);
 struct redirfs_operations_t redirfs_fw_ops;
 struct redirfs_vfs_operations_t redirfs_vfs_ops;
 
-static int redirfs_pre_call_filters(struct redirfs_root_t *root,
-		int type,
-		int op,
-		struct redirfs_context_t *context, 
-		struct redirfs_args_t *args)
+static int redirfs_pre_call_filters(struct redirfs_root_t *root, int type, int op, struct redirfs_context_t *context,  struct redirfs_args_t *args)
 {
 	struct redirfs_flt_t *flt;
 	int rv = REDIRFS_RETV_CONTINUE;
 	void ***pre_ops;
 	struct redirfs_flt_arr_t flt_arr;
 	int i = 0;
-	enum redirfs_retv (*operation)(redirfs_context *,
-			struct redirfs_args_t *) = NULL;
+	enum redirfs_retv (*operation)(redirfs_context *, struct redirfs_args_t *) = NULL;
 
 
 	args->info.type = type;
@@ -50,8 +45,7 @@ static int redirfs_pre_call_filters(struct redirfs_root_t *root,
 
 		pre_ops = redirfs_gettype(type, &flt->pre_ops);
 		if (*pre_ops[op]) 
-			operation = (enum redirfs_retv (*)(redirfs_context *,
-				struct redirfs_args_t *)) (*pre_ops[op]);
+			operation = (enum redirfs_retv (*)(redirfs_context *, struct redirfs_args_t *)) (*pre_ops[op]);
 
 		spin_unlock(&flt->lock);
 
@@ -67,19 +61,14 @@ static int redirfs_pre_call_filters(struct redirfs_root_t *root,
 	return rv;
 }
 
-static int redirfs_post_call_filters(struct redirfs_root_t *root,
-		int type,
-		int op,
-		struct redirfs_context_t *context,
-		struct redirfs_args_t *args)
+static int redirfs_post_call_filters(struct redirfs_root_t *root, int type, int op, struct redirfs_context_t *context, struct redirfs_args_t *args)
 {
 	struct redirfs_flt_t *flt;
 	int rv = REDIRFS_RETV_CONTINUE;
 	void ***post_ops;
 	struct redirfs_flt_arr_t flt_arr;
 	int i = 0;
-	enum redirfs_retv (*operation)(redirfs_context *,
-			struct redirfs_args_t *) = NULL;
+	enum redirfs_retv (*operation)(redirfs_context *, struct redirfs_args_t *) = NULL;
 
 	
 	redirfs_flt_arr_init(&flt_arr);
@@ -96,8 +85,7 @@ static int redirfs_post_call_filters(struct redirfs_root_t *root,
 
 		post_ops = redirfs_gettype(type, &flt->post_ops);
 		if (*post_ops[op]) 
-			operation = (enum redirfs_retv (*)(redirfs_context *,
-				struct redirfs_args_t *)) (*post_ops[op]);
+			operation = (enum redirfs_retv (*)(redirfs_context *, struct redirfs_args_t *)) (*post_ops[op]);
 
 		spin_unlock(&flt->lock);
 
@@ -124,7 +112,19 @@ static void redirfs_d_iput(struct dentry *dentry, struct inode *inode)
 	
 
 	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
-	BUG_ON(!rinode);
+
+	if (!rinode) {
+		if (dentry->d_op->d_iput != redirfs_d_iput) {
+			if (dentry->d_op->d_iput) {
+				dentry->d_op->d_iput(dentry, inode);
+				return;
+			} else 
+				return;
+		} else {
+			BUG();
+			return;
+		}
+	}
 
 	root = redirfs_rget(rinode->root);
 	BUG_ON(!rinode->root);
@@ -144,23 +144,22 @@ static void redirfs_d_iput(struct dentry *dentry, struct inode *inode)
 	args.args.d_iput.dentry = dentry;
 	args.args.d_iput.inode = inode;
 	args.info.call = REDIRFS_PRECALL;
-	args.exts.full_path = redirfs_dpath(dentry, buff, PAGE_SIZE);
 
 	if (root->orig_ops.dops && root->orig_ops.dops->d_iput)
 		d_iput = root->orig_ops.dops->d_iput;
 
 	spin_unlock(&root->lock);
 
-	redirfs_pre_call_filters(root, REDIRFS_DENTRY, REDIRFS_DOP_IPUT,
-			NULL, &args);
+	args.exts.full_path = redirfs_dpath(dentry, buff, PAGE_SIZE);
+
+	redirfs_pre_call_filters(root, REDIRFS_DENTRY, REDIRFS_DOP_IPUT, NULL, &args);
 	if (d_iput)
 		d_iput(dentry, inode);
 	else
 		iput(inode);
 
 	args.info.call = REDIRFS_POSTCALL;
-	redirfs_post_call_filters(root, REDIRFS_DENTRY, REDIRFS_DOP_IPUT,
-			NULL, &args);
+	redirfs_post_call_filters(root, REDIRFS_DENTRY, REDIRFS_DOP_IPUT, NULL, &args);
 
 	redirfs_ihash_table_remove(rinode);
 
@@ -179,7 +178,17 @@ static int redirfs_dir_create(struct inode *inode, struct dentry *dentry, int mo
 
 
 	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
-	BUG_ON(!rinode);
+	if (!rinode) {
+		if (inode->i_op->create != redirfs_dir_create) {
+			if (inode->i_op->create)
+				return inode->i_op->create(inode, dentry, mode, nd);
+			else
+				return 0;
+		} else {
+			BUG();
+			return -1;
+		}
+	}
 
 	root = redirfs_rget(rinode->root);
 	BUG_ON(!rinode->root);
@@ -191,8 +200,7 @@ static int redirfs_dir_create(struct inode *inode, struct dentry *dentry, int mo
 	args.info.call = REDIRFS_POSTCALL;
 	args.exts.full_path = redirfs_dpath(dentry, buff, PAGE_SIZE);
 
-	rv = redirfs_pre_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_CREATE,
-			NULL, &args);
+	rv = redirfs_pre_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_CREATE, NULL, &args);
 
 	if (rv == REDIRFS_RETV_STOP) {
 		rv = args.retv.rv_int;
@@ -200,20 +208,17 @@ static int redirfs_dir_create(struct inode *inode, struct dentry *dentry, int mo
 	}
 
 	rv = root->orig_ops.dir_iops->create(inode, dentry, mode, nd);
-	
-	if (rv)
-		goto exit;
+	spin_lock(&root->lock);
+	aux = root->flags & REDIRFS_ROOT_REMOVE;
+	spin_unlock(&root->lock);
 
-	BUG_ON(!dentry->d_inode);
-
-	if (S_ISREG(dentry->d_inode->i_mode)) {
+	if (!aux && dentry->d_inode && S_ISREG(dentry->d_inode->i_mode)) {
 		spin_lock(&rinode->lock);
 		redirfs_rput(root);
 		root = redirfs_rget(rinode->root);
 
 		spin_lock(&root->lock);
-		if (!root->orig_ops.reg_iops) 
-			aux = 1;
+		aux = !root->orig_ops.reg_iops;
 		spin_unlock(&root->lock);
 
 		if (aux) {
@@ -222,10 +227,8 @@ static int redirfs_dir_create(struct inode *inode, struct dentry *dentry, int mo
 			redirfs_set_root_ops(root, REDIRFS_F_REG);
 
 			spin_lock(&root->lock);
-			root->new_ops.reg_fops->open =
-				root->fw_ops->reg_fops->open;
-			root->new_ops.reg_fops->release =
-				root->fw_ops->reg_fops->release;
+			root->new_ops.reg_fops->open = root->fw_ops->reg_fops->open;
+			root->new_ops.reg_fops->release = root->fw_ops->reg_fops->release;
 			spin_unlock(&root->lock);
 		}
 
@@ -243,8 +246,7 @@ static int redirfs_dir_create(struct inode *inode, struct dentry *dentry, int mo
 
 	args.retv.rv_int = rv;
 	args.info.call = REDIRFS_POSTCALL;
-	rv = redirfs_post_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_CREATE,
-			NULL, &args);
+	rv = redirfs_post_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_CREATE, NULL, &args);
 
 	rv = args.retv.rv_int;
 
@@ -254,8 +256,7 @@ exit:
 	return rv;
 }
 
-static struct dentry *redirfs_dir_lookup(struct inode *parent,
-		struct dentry *dentry, struct nameidata *nd)
+static struct dentry *redirfs_dir_lookup(struct inode *parent, struct dentry *dentry, struct nameidata *nd)
 {
 	struct dentry *rv = NULL;
 	struct redirfs_inode_t *rinode;
@@ -267,7 +268,17 @@ static struct dentry *redirfs_dir_lookup(struct inode *parent,
 
 
 	rinode = redirfs_ifind(parent->i_sb, parent->i_ino);
-	BUG_ON(!rinode);
+	if (!rinode) {
+		if (parent->i_op->lookup != redirfs_dir_lookup)
+			if (parent->i_op->create)
+				return parent->i_op->lookup(parent, dentry, nd);
+			else
+				return NULL;
+		else {
+			BUG();
+			return NULL;
+		}
+	}
 
 	root = redirfs_rget(rinode->root);
 	BUG_ON(!rinode->root);
@@ -278,8 +289,7 @@ static struct dentry *redirfs_dir_lookup(struct inode *parent,
 	args.info.call = REDIRFS_PRECALL;
 	args.exts.full_path = redirfs_dpath(dentry, buff, PAGE_SIZE);
 
-	redirfs_rv = redirfs_pre_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_LOOKUP,
-			NULL, &args);
+	redirfs_rv = redirfs_pre_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_LOOKUP, NULL, &args);
 
 	if (redirfs_rv == REDIRFS_RETV_STOP) {
 		rv = args.retv.rv_dentry;
@@ -287,18 +297,17 @@ static struct dentry *redirfs_dir_lookup(struct inode *parent,
 	}
 
 	rv = root->orig_ops.dir_iops->lookup(parent, dentry, nd);
+	spin_lock(&root->lock);
+	aux = root->flags & REDIRFS_ROOT_REMOVE;
+	spin_unlock(&root->lock);
 
-	if (rv || !dentry->d_inode)
-		goto exit;
-
-	if (S_ISREG(dentry->d_inode->i_mode)) {
+	if (!aux && dentry->d_inode && S_ISREG(dentry->d_inode->i_mode)) {
 		spin_lock(&rinode->lock);
 		redirfs_rput(root);
 		root = redirfs_rget(rinode->root);
 
 		spin_lock(&root->lock);
-		if (!root->orig_ops.reg_iops) 
-			aux = 1;
+		aux = !root->orig_ops.reg_iops;
 		spin_unlock(&root->lock);
 
 		if (aux) {
@@ -307,10 +316,8 @@ static struct dentry *redirfs_dir_lookup(struct inode *parent,
 			redirfs_set_root_ops(root, REDIRFS_F_REG);
 
 			spin_lock(&root->lock);
-			root->new_ops.reg_fops->open =
-				root->fw_ops->reg_fops->open;
-			root->new_ops.reg_fops->release =
-				root->fw_ops->reg_fops->release;
+			root->new_ops.reg_fops->open = root->fw_ops->reg_fops->open;
+			root->new_ops.reg_fops->release = root->fw_ops->reg_fops->release;
 			spin_unlock(&root->lock);
 		}
 
@@ -325,14 +332,13 @@ static struct dentry *redirfs_dir_lookup(struct inode *parent,
 		spin_unlock(&root->lock);
 		spin_unlock(&rinode->lock);
 
-	} else if (S_ISDIR(dentry->d_inode->i_mode) && !dentry->d_mounted) {
+	} else if (!aux && dentry->d_inode && S_ISDIR(dentry->d_inode->i_mode) && !dentry->d_mounted) {
 		spin_lock(&rinode->lock);
 		redirfs_rput(root);
 		root = redirfs_rget(rinode->root);
 
 		spin_lock(&root->lock);
-		if (!root->orig_ops.dir_iops)
-			aux = 1;
+		aux = !root->orig_ops.dir_iops;
 		spin_unlock(&root->lock);
 
 		if (aux) {
@@ -341,16 +347,11 @@ static struct dentry *redirfs_dir_lookup(struct inode *parent,
 			redirfs_set_root_ops(root, REDIRFS_F_DIR);
 
 			spin_lock(&root->lock);
-			root->new_ops.dir_iops->lookup =
-				root->fw_ops->dir_iops->lookup;
-			root->new_ops.dir_iops->mkdir =
-				root->fw_ops->dir_iops->mkdir;
-			root->new_ops.dir_iops->create =
-				root->fw_ops->dir_iops->create;
-			root->new_ops.dir_fops->open =
-				root->fw_ops->dir_fops->open;
-			root->new_ops.dir_fops->release =
-				root->fw_ops->dir_fops->release;
+			root->new_ops.dir_iops->lookup = root->fw_ops->dir_iops->lookup;
+			root->new_ops.dir_iops->mkdir = root->fw_ops->dir_iops->mkdir;
+			root->new_ops.dir_iops->create = root->fw_ops->dir_iops->create;
+			root->new_ops.dir_fops->open = root->fw_ops->dir_fops->open;
+			root->new_ops.dir_fops->release = root->fw_ops->dir_fops->release;
 			spin_unlock(&root->lock);
 		}
 
@@ -369,8 +370,7 @@ static struct dentry *redirfs_dir_lookup(struct inode *parent,
 	args.retv.rv_dentry = rv;
 	args.info.call = REDIRFS_POSTCALL;
 
-	redirfs_rv = redirfs_post_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_LOOKUP,
-			NULL, &args);
+	redirfs_rv = redirfs_post_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_LOOKUP, NULL, &args);
 
 	rv = args.retv.rv_dentry;
 exit:
@@ -386,11 +386,22 @@ static int redirfs_dir_mkdir(struct inode *parent, struct dentry *dentry, int mo
 	struct redirfs_args_t args;
 	char buff[PAGE_SIZE];
 	int rv;
+	int aux = 0;
 
 
 	rinode = redirfs_ifind(parent->i_sb, parent->i_ino);
-	BUG_ON(!rinode);
-
+	if (!rinode) {
+		if (parent->i_op->mkdir != redirfs_dir_mkdir)
+			if (parent->i_op->mkdir)
+				return parent->i_op->mkdir(parent, dentry, mode);
+			else
+				return -EPERM;
+		else {
+			BUG();
+			return -EPERM;
+		}
+	}
+		
 	root = redirfs_rget(rinode->root);
 	BUG_ON(!rinode->root);
 
@@ -400,8 +411,7 @@ static int redirfs_dir_mkdir(struct inode *parent, struct dentry *dentry, int mo
 	args.info.call = REDIRFS_PRECALL;
 	args.exts.full_path = redirfs_dpath(dentry, buff, PAGE_SIZE);
 
-	rv = redirfs_pre_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_MKDIR,
-			NULL, &args);
+	rv = redirfs_pre_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_MKDIR, NULL, &args);
 
 	if (rv == REDIRFS_RETV_STOP) {
 		rv = args.retv.rv_int;
@@ -409,31 +419,29 @@ static int redirfs_dir_mkdir(struct inode *parent, struct dentry *dentry, int mo
 	}
 
 	rv = root->orig_ops.dir_iops->mkdir(parent, dentry, mode);
-
-	if (rv)
-		goto exit;
-
-	BUG_ON(!dentry->d_inode);
-
-	spin_lock(&rinode->lock);
-	redirfs_rput(root);
-	root = redirfs_rget(rinode->root);
-
-	redirfs_add_inode(root, dentry->d_inode);
-
 	spin_lock(&root->lock);
-	dentry->d_inode->i_op = root->new_ops.dir_iops;
-	dentry->d_inode->i_fop = root->new_ops.dir_fops;
-	dentry->d_op = root->new_ops.dops;
+	aux = root->flags & REDIRFS_ROOT_REMOVE;
 	spin_unlock(&root->lock);
 
-	spin_unlock(&rinode->lock);
+	if (!aux && dentry->d_inode)
+		spin_lock(&rinode->lock);
+		redirfs_rput(root);
+		root = redirfs_rget(rinode->root);
+
+		redirfs_add_inode(root, dentry->d_inode);
+
+		spin_lock(&root->lock);
+		dentry->d_inode->i_op = root->new_ops.dir_iops;
+		dentry->d_inode->i_fop = root->new_ops.dir_fops;
+		dentry->d_op = root->new_ops.dops;
+		spin_unlock(&root->lock);
+
+		spin_unlock(&rinode->lock);
 
 	args.retv.rv_int = rv;
 	args.info.call = REDIRFS_POSTCALL;
 
-	rv = redirfs_post_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_MKDIR,
-			NULL, &args);
+	rv = redirfs_post_call_filters(root, REDIRFS_I_DIR, REDIRFS_IOP_MKDIR, NULL, &args);
 
 	rv = args.retv.rv_int;
 
@@ -454,7 +462,17 @@ static int redirfs_reg_permission(struct inode *inode, int mode, struct nameidat
 	
 
 	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
-	BUG_ON(!rinode);
+	if (!rinode) {
+		if (inode->i_op->permission != redirfs_reg_permission)
+			if (inode->i_op->permission)
+				return inode->i_op->permission(inode, mode, nd);
+			else
+				return generic_permission(inode, mode, NULL);
+		else {
+			BUG();
+			return -EPERM;
+		}
+	}
 
 	root = redirfs_rget(rinode->root);
 	BUG_ON(!root);
@@ -468,8 +486,7 @@ static int redirfs_reg_permission(struct inode *inode, int mode, struct nameidat
 	else
 		args.exts.full_path = NULL;
 
-	rv = redirfs_pre_call_filters(root, REDIRFS_I_REG,
-			REDIRFS_IOP_PERMISSION, NULL, &args);
+	rv = redirfs_pre_call_filters(root, REDIRFS_I_REG, REDIRFS_IOP_PERMISSION, NULL, &args);
 
 	if (rv == REDIRFS_RETV_STOP) {
 		rv = args.retv.rv_int;
@@ -483,19 +500,14 @@ static int redirfs_reg_permission(struct inode *inode, int mode, struct nameidat
 
 
 	if (permission)
-		rv = permission(args.args.i_permission.inode,
-				args.args.i_permission.mode,
-				args.args.i_permission.nd);
+		rv = permission(args.args.i_permission.inode, args.args.i_permission.mode, args.args.i_permission.nd);
 	else
-		rv = generic_permission(args.args.i_permission.inode,
-				args.args.i_permission.mode,
-				NULL);
+		rv = generic_permission(args.args.i_permission.inode, args.args.i_permission.mode, NULL);
 
 	args.retv.rv_int = rv;
 	args.info.call = REDIRFS_POSTCALL;
 
-	rv = redirfs_post_call_filters(root, REDIRFS_I_REG,
-			REDIRFS_IOP_PERMISSION, NULL, &args);
+	rv = redirfs_post_call_filters(root, REDIRFS_I_REG, REDIRFS_IOP_PERMISSION, NULL, &args);
 	
 	rv = args.retv.rv_int;
 
@@ -517,7 +529,17 @@ static int redirfs_reg_open(struct inode *inode, struct file *file)
 
 
 	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
-	BUG_ON(!rinode);
+	if (!rinode) {
+		if (file->f_op->open != redirfs_reg_open)
+			if (file->f_op->open)
+				return file->f_op->open(inode, file);
+			else
+				return 0;
+		else {
+			BUG();
+			return 0;
+		}
+	}
 
 	root = redirfs_rget(rinode->root);
 	BUG_ON(!root);
@@ -527,8 +549,7 @@ static int redirfs_reg_open(struct inode *inode, struct file *file)
 	args.info.call = REDIRFS_PRECALL;
 	args.exts.full_path = redirfs_dpath(file->f_dentry, buff, PAGE_SIZE);
 
-	rv = redirfs_pre_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_OPEN,
-			NULL, &args);
+	rv = redirfs_pre_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_OPEN, NULL, &args);
 
 	if (rv == REDIRFS_RETV_STOP) {
 		rv = args.retv.rv_int;
@@ -548,8 +569,7 @@ static int redirfs_reg_open(struct inode *inode, struct file *file)
 	args.retv.rv_int = rv;
 	args.info.call = REDIRFS_POSTCALL;
 
-	rv = redirfs_post_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_OPEN,
-			NULL, &args);
+	rv = redirfs_post_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_OPEN, NULL, &args);
 
 	rv = args.retv.rv_int;
 
@@ -559,6 +579,8 @@ static int redirfs_reg_open(struct inode *inode, struct file *file)
 
 	if (!remove_root)
 		redirfs_add_file(root, file);
+	else 
+		file->f_op = root->orig_ops.reg_fops;
 
 exit:
 	redirfs_iput(rinode);
@@ -578,7 +600,17 @@ static int redirfs_reg_release(struct inode *inode, struct file *file)
 
 
 	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
-	BUG_ON(!rinode);
+	if (!rinode) {
+		if (file->f_op->release != redirfs_reg_release)
+			if (file->f_op->release)
+				return file->f_op->release(inode, file);
+			else
+				return 0;
+		else {
+			BUG();
+			return 0;
+		}
+	}
 
 	root = redirfs_rget(rinode->root);
 	BUG_ON(!root);
@@ -590,8 +622,7 @@ static int redirfs_reg_release(struct inode *inode, struct file *file)
 	args.info.call = REDIRFS_PRECALL;
 	args.exts.full_path = redirfs_dpath(file->f_dentry, buff, PAGE_SIZE);
 
-	rv = redirfs_pre_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_RELEASE,
-			NULL, &args);
+	rv = redirfs_pre_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_RELEASE, NULL, &args);
 	
 
 	if (rv == REDIRFS_RETV_STOP) {
@@ -612,8 +643,7 @@ static int redirfs_reg_release(struct inode *inode, struct file *file)
 	args.retv.rv_int = rv;
 	args.info.call = REDIRFS_POSTCALL;
 
-	rv = redirfs_post_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_RELEASE,
-			NULL, &args);
+	rv = redirfs_post_call_filters(root, REDIRFS_F_REG, REDIRFS_FOP_RELEASE, NULL, &args);
 
 	rv = args.retv.rv_int;
 
@@ -635,7 +665,17 @@ static int redirfs_dir_open(struct inode *inode, struct file *file)
 
 
 	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
-	BUG_ON(!rinode);
+	if (!rinode) {
+		if (file->f_op->open != redirfs_dir_open)
+			if (file->f_op->open)
+				return file->f_op->open(inode, file);
+			else
+				return 0;
+		else {
+			BUG();
+			return 0;
+		}
+	}
 
 	root = redirfs_rget(rinode->root);
 	BUG_ON(!root);
@@ -645,8 +685,7 @@ static int redirfs_dir_open(struct inode *inode, struct file *file)
 	args.info.call = REDIRFS_PRECALL;
 	args.exts.full_path = redirfs_dpath(file->f_dentry, buff, PAGE_SIZE);
 
-	rv = redirfs_pre_call_filters(root, REDIRFS_F_DIR, REDIRFS_FOP_OPEN,
-			NULL, &args);
+	rv = redirfs_pre_call_filters(root, REDIRFS_F_DIR, REDIRFS_FOP_OPEN, NULL, &args);
 
 	if (rv == REDIRFS_RETV_STOP) {
 		rv = args.retv.rv_int;
@@ -666,8 +705,7 @@ static int redirfs_dir_open(struct inode *inode, struct file *file)
 	args.retv.rv_int = rv;
 	args.info.call = REDIRFS_POSTCALL;
 
-	rv = redirfs_post_call_filters(root, REDIRFS_F_DIR, REDIRFS_FOP_OPEN,
-			NULL, &args);
+	rv = redirfs_post_call_filters(root, REDIRFS_F_DIR, REDIRFS_FOP_OPEN, NULL, &args);
 
 	rv = args.retv.rv_int;
 
@@ -677,6 +715,8 @@ static int redirfs_dir_open(struct inode *inode, struct file *file)
 
 	if (!remove_root)
 		redirfs_add_file(root, file);
+	else
+		file->f_op = root->orig_ops.dir_fops;
 
 exit:
 	redirfs_iput(rinode);
@@ -696,7 +736,17 @@ static int redirfs_dir_release(struct inode *inode, struct file *file)
 
 
 	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
-	BUG_ON(!rinode);
+	if (!rinode) {
+		if (file->f_op->release != redirfs_dir_release)
+			if (file->f_op->release)
+				return file->f_op->release(inode, file);
+			else
+				return 0;
+		else {
+			BUG();
+			return 0;
+		}
+	}
 
 	root = redirfs_rget(rinode->root);
 	BUG_ON(!root);
@@ -708,8 +758,7 @@ static int redirfs_dir_release(struct inode *inode, struct file *file)
 	args.info.call = REDIRFS_PRECALL;
 	args.exts.full_path = redirfs_dpath(file->f_dentry, buff, PAGE_SIZE);
 
-	rv = redirfs_pre_call_filters(root, REDIRFS_F_DIR, REDIRFS_FOP_RELEASE,
-			NULL, &args);
+	rv = redirfs_pre_call_filters(root, REDIRFS_F_DIR, REDIRFS_FOP_RELEASE, NULL, &args);
 	
 	if (rv == REDIRFS_RETV_STOP) {
 		rv = args.retv.rv_int;
@@ -730,8 +779,7 @@ static int redirfs_dir_release(struct inode *inode, struct file *file)
 	args.retv.rv_int = rv;
 	args.info.call = REDIRFS_POSTCALL;
 
-	rv = redirfs_post_call_filters(root, REDIRFS_F_DIR, REDIRFS_FOP_RELEASE,
-			NULL, &args);
+	rv = redirfs_post_call_filters(root, REDIRFS_F_DIR, REDIRFS_FOP_RELEASE, NULL, &args);
 
 	rv = args.retv.rv_int;
 
@@ -751,7 +799,17 @@ static int redirfs_reg_flush(struct file *file)
 	int rv;
 
 	rinode = redirfs_ifind(file->f_dentry->d_inode->i_sb, file->f_dentry->d_inode->i_ino);
-	BUG_ON(!rinode);
+	if (!rinode) {
+		if (file->f_op->flush != redirfs_reg_flush)
+			if (file->f_op->flush)
+				file->f_op->flush(file);
+			else
+				return 0;
+		else {
+			BUG();
+			return 0;
+		}
+	}
 
 	root = redirfs_rget(rinode->root);
 	BUG_ON(!root);
@@ -797,7 +855,17 @@ static int redirfs_dir_unlink(struct inode *inode, struct dentry *dentry)
 	int rv;
 
 	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
-	BUG_ON(!rinode);
+	if (!rinode) {
+		if (inode->i_op->unlink != redirfs_dir_unlink)
+			if (inode->i_op->unlink)
+				inode->i_op->unlink(inode, dentry);
+			else
+				return -EPERM;
+		else {
+			BUG();
+			return -EPERM;
+		}
+	}
 
 	root = redirfs_rget(rinode->root);
 	BUG_ON(!root);
@@ -845,7 +913,17 @@ static int redirfs_dir_rmdir(struct inode *inode, struct dentry *dentry)
 	int rv;
 
 	rinode = redirfs_ifind(inode->i_sb, inode->i_ino);
-	BUG_ON(!rinode);
+	if (!rinode) {
+		if (inode->i_op->rmdir != redirfs_dir_rmdir)
+			if (inode->i_op->rmdir)
+				inode->i_op->rmdir(inode, dentry);
+			else
+				return -EPERM;
+		else {
+			BUG();
+			return -EPERM;
+		}
+	}
 
 	root = redirfs_rget(rinode->root);
 	BUG_ON(!root);
