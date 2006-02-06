@@ -270,7 +270,7 @@ static struct dentry *redirfs_dir_lookup(struct inode *parent, struct dentry *de
 	rinode = redirfs_ifind(parent->i_sb, parent->i_ino);
 	if (!rinode) {
 		if (parent->i_op->lookup != redirfs_dir_lookup)
-			if (parent->i_op->create)
+			if (parent->i_op->lookup)
 				return parent->i_op->lookup(parent, dentry, nd);
 			else
 				return NULL;
