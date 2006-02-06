@@ -1,6 +1,6 @@
-diff -rNu dazuko-2.1.0.orig/configure dazuko-2.1.0/configure
+diff -urN dazuko-2.1.0.orig/configure dazuko-2.1.0/configure
 --- dazuko-2.1.0.orig/configure	2005-09-08 20:50:40.000000000 +0200
-+++ dazuko-2.1.0/configure	2006-01-06 14:46:04.000000000 +0100
++++ dazuko-2.1.0/configure	2006-02-06 17:08:49.000000000 +0100
 @@ -47,6 +47,7 @@
  	echo "override auto-detection values"
  	echo "  --kernelsrcdir=DIR   kernel source files in DIR (Linux only)"
@@ -134,11 +134,62 @@ diff -rNu dazuko-2.1.0.orig/configure dazuko-2.1.0/configure
  
  	echo -n "inspecting suspend function... "
  
-@@ -483,7 +488,20 @@
+@@ -453,22 +458,41 @@
+ 		echo "ok (class_simple)"
+ 	fi
  
- 	echo "EXTRA_CFLAGS += -Wall -DLINUX26_SUPPORT" > Makefile
+-	if [ $ON_CLOSE -ne 0 ]
++	echo "configure: creating Makefile"
++
++	echo "EXTRA_CFLAGS += -Wall -DLINUX26_SUPPORT" > Makefile
++
++	if [ ${ON_CLOSE} -ne 0 ]
+ 	then
+-		echo "disabling ON_CLOSE events (not available for Linux 2.6)"
+-		ON_CLOSE=0
++		if [ ${REDIRFS} -eq 0 ]
++		then
++			echo "disabling ON_CLOSE events (not available for Linux 2.6)"
++			ON_CLOSE=0
++		else
++			echo "EXTRA_CFLAGS += -DON_CLOSE_SUPPORT" >> Makefile
++		fi
+ 	fi
  
--	if [ ${LSM_STACKING} -eq 1 ]
+ 	if [ ${ON_UNLINK} -ne 0 ]
+ 	then
+-		echo "disabling ON_UNLINK events (not available for Linux 2.6)"
+-		ON_UNLINK=0
++		if [ ${REDIRFS} -eq 0 ]
++		then
++			echo "disabling ON_UNLINK events (not available for Linux 2.6)"
++			ON_UNLINK=0
++		else
++			echo "EXTRA_CFLAGS += -DON_UNLINK_SUPPORT" >> Makefile
++		fi
+ 	fi
+ 
+ 	if [ ${ON_RMDIR} -ne 0 ]
+ 	then
+-		echo "disabling ON_RMDIR events (not available for Linux 2.6)"
+-		ON_RMDIR=0
++		if [ ${REDIRFS} -eq 0 ]
++		then
++			echo "disabling ON_RMDIR events (not available for Linux 2.6)"
++			ON_RMDIR=0
++		else
++			echo "EXTRA_CFLAGS += -DON_RMDIR_SUPPORT" >> Makefile
++		fi
+ 	fi
+ 
+ 	if [ ${ON_CLOSE_MODIFIED} -ne 0 ]
+@@ -479,11 +503,20 @@
+ 
+ 	LINUX26_OBJS="dazuko_linux26.o"
+ 
+-	echo "configure: creating Makefile"
+-
+-	echo "EXTRA_CFLAGS += -Wall -DLINUX26_SUPPORT" > Makefile
 +	if [ ${REDIRFS} -eq 1 ]
 +	then
 +		if [ -z ${REDIRFS_PATH} ]
@@ -151,12 +202,28 @@ diff -rNu dazuko-2.1.0.orig/configure dazuko-2.1.0/configure
 +		echo "EXTRA_CFLAGS += -I${REDIRFS_PATH}" >> Makefile
 +		echo "EXTRA_CFLAGS += -DDAZUKO_REDIRFS" >> Makefile
 +	fi
-+
+ 
+-	if [ ${LSM_STACKING} -eq 1 ]
 +	if [ ${LSM_STACKING} -eq 1 -a ${REDIRFS} -eq 0 ]
  	then
  		LINUX26_OBJS="dazuko_linux26_lsm.o ${LINUX26_OBJS}"
  	else
-@@ -1096,6 +1114,8 @@
+@@ -1014,6 +1047,14 @@
+ 				echo "no"
+ 			fi
+ 
++			echo -n "redirfs support = "
++			if [ ${REDIRFS} -eq 1 ]
++			then
++				echo "yes"
++			else
++				echo "no"
++			fi
++
+ 			if echo $LINUX_VERSION | grep -q ^2\.6\.
+ 			then
+ 				echo -n "stacking support = "
+@@ -1096,6 +1137,8 @@
  DEVFS=0
  RSBAC=0
  DEBUG=0
@@ -165,7 +232,7 @@ diff -rNu dazuko-2.1.0.orig/configure dazuko-2.1.0/configure
  WITH_MODULE=1
  WITH_LIBRARY=2
  WITH_EXAMPLE_C=1
-@@ -1158,6 +1178,12 @@
+@@ -1158,6 +1201,12 @@
  		--enable-debug)
  			DEBUG=1
  			;;
@@ -178,7 +245,7 @@ diff -rNu dazuko-2.1.0.orig/configure dazuko-2.1.0/configure
  		--enable-trusted)
  			TRUSTED=1
  			;;
-@@ -1438,24 +1464,29 @@
+@@ -1438,24 +1487,38 @@
  			. linux.config
  			rm -f linux.config
  
@@ -190,19 +257,28 @@ diff -rNu dazuko-2.1.0.orig/configure dazuko-2.1.0/configure
 -				RSBAC=1
 -
 -				SYSTEM="rsbac"
-+				echo "Dazuko will be compiled as a Filter for the RedirFS Framework"
- 			else
+-			else
 -				echo "no"
 -
 -				echo -n "checking if devfs is enabled... "
 -				if [ $CONFIG_DEVFS_FS -eq 0 ]
-+				echo -n "checking if Linux is RSBAC patched... "
-+				if [ $CONFIG_RSBAC -ne 0 ]
++				echo -n "checking for redirfs.h... "
++				if [ -f ${REDIRFS_PATH}/redirfs.h ]
  				then
 -					DEVFS=0
 -					echo "no"
--				else
++					echo "yes"
+ 				else
 -					DEVFS=1
++					echo "no"
++					echo "error: file ${REDIRFS_PATH}/redirfs.h not found"
++					echo "       please check the --redirfs-path option"
++					exit 1
++				fi
++			else
++				echo -n "checking if Linux is RSBAC patched... "
++				if [ $CONFIG_RSBAC -ne 0 ]
++				then
  					echo "yes"
 +					RSBAC=1
 +
@@ -222,9 +298,52 @@ diff -rNu dazuko-2.1.0.orig/configure dazuko-2.1.0/configure
  				fi
  			fi
  
-diff -rNu dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
+diff -urN dazuko-2.1.0.orig/dazuko_core.c dazuko-2.1.0/dazuko_core.c
+--- dazuko-2.1.0.orig/dazuko_core.c	2005-09-01 20:26:57.000000000 +0200
++++ dazuko-2.1.0/dazuko_core.c	2006-01-06 14:42:24.000000000 +0100
+@@ -35,6 +35,9 @@
+ #include "dazuko_platform.h"
+ #include "dazuko_core.h"
+ #include "dazuko_version.h"
++#if defined(DAZUKO_REDIRFS)
++#include "redirfs.h"
++#endif
+ 
+ /* inline code */
+ #include "dazuko_call.h"
+@@ -58,6 +61,10 @@
+ 
+ #define AMC_UNSET	255
+ 
++#if defined(DAZUKO_REDIRFS)
++extern redirfs_filter dazukoflt;
++#endif
++
+ struct path
+ {
+ 	/* A node in a linked list of paths. Used
+@@ -1547,10 +1554,18 @@
+ 
+ 		case ADD_INCLUDE_PATH:
+ 			error = dazuko_insert_path_fs(&(sl->incl_paths), &(sl->lock_lists), (char *)param, len);
++#if defined(DAZUKO_REDIRFS)
++			if (!error)
++				error = redirfs_include_path(dazukoflt, param);
++#endif
+ 			break;
+ 
+ 		case ADD_EXCLUDE_PATH:
+ 			error = dazuko_insert_path_fs(&(sl->excl_paths), &(sl->lock_lists), (char *)param, len);
++#if defined(DAZUKO_REDIRFS)
++			if (!error)
++				error = redirfs_exclude_path(dazukoflt, param);
++#endif
+ 			break;
+ 
+ 		case REMOVE_ALL_PATHS:
+diff -urN dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
 --- dazuko-2.1.0.orig/dazuko_linux26.c	2005-09-03 22:00:35.000000000 +0200
-+++ dazuko-2.1.0/dazuko_linux26.c	2006-01-05 16:13:10.000000000 +0100
++++ dazuko-2.1.0/dazuko_linux26.c	2006-02-06 17:15:52.000000000 +0100
 @@ -35,6 +35,9 @@
  #include <linux/suspend.h>
  #endif
@@ -244,7 +363,7 @@ diff -rNu dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  #ifdef NO_STACKING_SUPPORT
  struct security_operations dazuko_security_ops;
  #else
-@@ -81,6 +84,19 @@
+@@ -81,6 +84,43 @@
  #endif
  #endif
  
@@ -253,9 +372,33 @@ diff -rNu dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
 + *  Global stuffs for the RedirFS Framework
 + */
 +redirfs_filter dazukoflt;
++
++#if defined(ON_OPEN_SUPPORT)
 +static enum redirfs_retv dazukoflt_pre_permission(redirfs_context context, struct redirfs_args_t *args);
++#endif
++#if defined(ON_CLOSE_SUPPORT) 
++static enum redirfs_retv dazukoflt_post_flush(redirfs_context context, struct redirfs_args_t *args);
++#endif
++#if defined(ON_UNLINK_SUPPORT)
++static enum redirfs_retv dazukoflt_pre_unlink(redirfs_context context, struct redirfs_args_t *args);
++#endif
++#if defined(ON_RMDIR_SUPPORT)
++static enum redirfs_retv dazukoflt_pre_rmdir(redirfs_context context, struct redirfs_args_t *args);
++#endif
++
 +static struct redirfs_op_t dazukoflt_ops[] = {
++#if defined(ON_OPEN_SUPPORT)
 +	{REDIRFS_I_REG, REDIRFS_IOP_PERMISSION, dazukoflt_pre_permission, NULL},
++#endif
++#if defined(ON_CLOSE_SUPPORT) 
++	{REDIRFS_F_REG, REDIRFS_FOP_FLUSH, NULL, dazukoflt_post_flush},
++#endif
++#if defined(ON_UNLINK_SUPPORT)
++	{REDIRFS_I_DIR, REDIRFS_IOP_UNLINK, dazukoflt_pre_unlink, NULL},
++#endif
++#if defined(ON_RMDIR_SUPPORT)
++	{REDIRFS_I_DIR, REDIRFS_IOP_RMDIR, dazukoflt_pre_rmdir, NULL},
++#endif
 +	REDIRFS_OP_END
 +};
 +#endif
@@ -264,43 +407,108 @@ diff -rNu dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  #ifdef NO_CAPABILITIES
  int lsm_capability_compare(struct security_operations *ops1, struct security_operations *ops2);
  #endif
-@@ -801,10 +817,17 @@
- 
- #ifdef DAZUKO_FIST
- int dazuko_sys_generic(int event, struct inode *inode, struct nameidata *nd, int daemon_is_allowed)
-+#elif defined(DAZUKO_REDIRFS)
-+static enum redirfs_retv dazukoflt_pre_permission(redirfs_context context, struct redirfs_args_t *args)
- #else
- static inline int dazuko_sys_generic(struct inode *inode, int mask, struct nameidata *nd)
- #endif
- {
-+#if defined(DAZUKO_REDIRFS)
-+	struct inode *inode = args->args.i_permission.inode;
-+	struct nameidata *nd = args->args.i_permission.nd;
-+	int mask = args->args.i_permission.mode;
-+#endif
- 	struct dazuko_file_struct *dfs = NULL;
- 	int error = 0;
- 	int check_error = 0;
-@@ -892,15 +915,31 @@
- 		}
- 	}
+@@ -898,9 +938,114 @@
+ 	return 0;
+ }
  
 +#if defined(DAZUKO_REDIRFS)
++static int redirfs_generic(int event, struct inode *inode, struct redirfs_args_t *args, const char *filepath, unsigned int filepath_len, int daemon_is_allowed)
++{
++	struct dazuko_file_struct *dfs = NULL;
++	int error = 0;
++	int check_error = 0;
++	struct event_properties event_p;
++	struct xp_daemon_id xp_id;
++	struct slot_list *sl = NULL;
++
++	dazuko_bzero(&event_p, sizeof(event_p));
++
++	xp_id.pid = current->pid;
++	xp_id.file = NULL;
++	xp_id.current_p = current;
++	xp_id.files = current->files;
++
++	check_error = dazuko_check_access(event, daemon_is_allowed, &xp_id, &sl);
++
++	if (!check_error)
++	{
++		event_p.mode = inode->i_mode;
++		event_p.set_mode = 1;
++		event_p.pid = current->pid;
++		event_p.set_pid = 1;
++		event_p.uid = current->uid;
++		event_p.set_uid = 1;
++
++		dfs = (struct dazuko_file_struct *)xp_malloc(sizeof(struct dazuko_file_struct));
++		if (dfs != NULL)
++		{
++			dazuko_bzero(dfs, sizeof(struct dazuko_file_struct));
++
++			dfs->extra_data = (struct xp_file_struct *)xp_malloc(sizeof(struct xp_file_struct));
++			if (dfs->extra_data != NULL)
++			{
++				dazuko_bzero(dfs->extra_data, sizeof(struct xp_file_struct));
++
++				dfs->filename = dfs->extra_data->full_filename = (char *)filepath;
++				dfs->filename_length = dfs->extra_data->full_filename_length = filepath_len;
++				dfs->extra_data->inode = inode;
++
++				error = dazuko_process_access(event, dfs, &event_p, sl);
++			}
++			else
++			{
++				xp_free(dfs);
++				dfs = NULL;
++			}
++
++			dazuko_file_struct_cleanup(&dfs);
++		}
++	}
++
 +	if (error) {
 +		args->retv.rv_int = XP_ERROR_PERMISSION;
 +		return REDIRFS_RETV_STOP;
 +	}
 +
 +	return REDIRFS_RETV_CONTINUE;
-+#else
- 	if (error)
- 		return XP_ERROR_PERMISSION;
- 
- 	return 0;
++
++}
++
++#if defined(ON_OPEN_SUPPORT)
++static enum redirfs_retv dazukoflt_pre_permission(redirfs_context context, struct redirfs_args_t *args)
++{
++	int event = DAZUKO_ON_OPEN;
++
++	if (args->args.i_permission.mode & MAY_EXEC)
++		event = DAZUKO_ON_EXEC;
++
++	return redirfs_generic(event, args->args.i_permission.inode, args, args->exts.full_path, strlen(args->exts.full_path), 1);
++}
 +#endif
- }
- 
++
++#if defined(ON_CLOSE_SUPPORT) 
++static enum redirfs_retv dazukoflt_post_flush(redirfs_context context, struct redirfs_args_t *args)
++{
++	return redirfs_generic(DAZUKO_ON_CLOSE, args->args.f_flush.file->f_dentry->d_inode, args, args->exts.full_path, strlen(args->exts.full_path), 1);
++}
++#endif
++
++#if defined(ON_UNLINK_SUPPORT)
++static enum redirfs_retv dazukoflt_pre_unlink(redirfs_context context, struct redirfs_args_t *args)
++{
++	return redirfs_generic(DAZUKO_ON_UNLINK, args->args.i_unlink.dentry->d_inode, args, args->exts.full_path, strlen(args->exts.full_path), 1);
++}
++#endif
++
++#if defined(ON_RMDIR_SUPPORT)
++static enum redirfs_retv dazukoflt_pre_rmdir(redirfs_context context, struct redirfs_args_t *args)
++{
++	return redirfs_generic(DAZUKO_ON_RMDIR, args->args.i_rmdir.dentry->d_inode, args, args->exts.full_path, strlen(args->exts.full_path), 1);
++}
++#endif
++
++#endif /* DAZUKO_REDIRFS */
++
  inline int xp_sys_hook()
  {
 -#ifndef DAZUKO_FIST
@@ -315,7 +523,7 @@ diff -rNu dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  #ifndef NO_STACKING_SUPPORT
  	struct security_operations dummy_ops;
  	int got_dummy = 0;
-@@ -944,7 +983,7 @@
+@@ -944,7 +1089,7 @@
  	orig_root = current->fs->root;
  	read_unlock(&current->fs->lock);
  
@@ -324,7 +532,7 @@ diff -rNu dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  #ifdef NO_STACKING_SUPPORT
  	memset(&dazuko_security_ops, 0, sizeof(dazuko_security_ops));
  	dazuko_security_ops.inode_permission = dazuko_sys_generic;
-@@ -994,6 +1033,23 @@
+@@ -994,6 +1139,23 @@
  #endif
  #endif
  
@@ -348,7 +556,7 @@ diff -rNu dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  	dev_major = register_chrdev(DAZUKO_DM, DEVICE_NAME, &fops);
  	if (dev_major < 0)
  	{
-@@ -1028,7 +1084,7 @@
+@@ -1028,7 +1190,7 @@
  	class_simple_destroy(dazuko_class);
  #endif
  
@@ -357,7 +565,7 @@ diff -rNu dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  #ifdef NO_STACKING_SUPPORT
  	if (secondary_register)
  		mod_unreg_security(DEVICE_NAME, &dazuko_security_ops);
-@@ -1042,6 +1098,13 @@
+@@ -1042,6 +1204,13 @@
  #endif
  #endif
  
@@ -371,15 +579,3 @@ diff -rNu dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  	return 0;
  }
  
-diff -rNu dazuko-2.1.0.orig/dazuko_transport.c dazuko-2.1.0/dazuko_transport.c
---- dazuko-2.1.0.orig/dazuko_transport.c	2005-05-13 23:28:02.000000000 +0200
-+++ dazuko-2.1.0/dazuko_transport.c	2006-01-05 14:11:31.000000000 +0100
-@@ -60,7 +60,7 @@
- #if defined __KERNEL__ || defined _KERNEL
-   /* kernel part, every system has its own includes for NULL and int32_t :( */
- 
--  #if defined LINUX || defined LINUX26_SUPPORT
-+  #if defined LINUX || defined LINUX26_SUPPORT || REDIRFS_SUPPORT
-     #include <linux/stddef.h>
-     #include <linux/types.h>
-   #elif defined __FreeBSD__
