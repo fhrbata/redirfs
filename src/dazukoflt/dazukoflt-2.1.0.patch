@@ -343,7 +343,7 @@ diff -urN dazuko-2.1.0.orig/dazuko_core.c dazuko-2.1.0/dazuko_core.c
  		case REMOVE_ALL_PATHS:
 diff -urN dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
 --- dazuko-2.1.0.orig/dazuko_linux26.c	2005-09-03 22:00:35.000000000 +0200
-+++ dazuko-2.1.0/dazuko_linux26.c	2006-02-06 17:15:52.000000000 +0100
++++ dazuko-2.1.0/dazuko_linux26.c	2006-02-07 13:45:43.000000000 +0100
 @@ -35,6 +35,9 @@
  #include <linux/suspend.h>
  #endif
@@ -407,7 +407,7 @@ diff -urN dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  #ifdef NO_CAPABILITIES
  int lsm_capability_compare(struct security_operations *ops1, struct security_operations *ops2);
  #endif
-@@ -898,9 +938,114 @@
+@@ -898,9 +938,119 @@
  	return 0;
  }
  
@@ -481,6 +481,11 @@ diff -urN dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
 +
 +	if (args->args.i_permission.mode & MAY_EXEC)
 +		event = DAZUKO_ON_EXEC;
++	
++	/* if full_path is NULL it means that the nameidata structure is NULL
++	 * and  we cannot get the full dentry path */
++	if (!args->exts.full_path)
++		return REDIRFS_RETV_CONTINUE;
 +
 +	return redirfs_generic(event, args->args.i_permission.inode, args, args->exts.full_path, strlen(args->exts.full_path), 1);
 +}
@@ -523,7 +528,7 @@ diff -urN dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  #ifndef NO_STACKING_SUPPORT
  	struct security_operations dummy_ops;
  	int got_dummy = 0;
-@@ -944,7 +1089,7 @@
+@@ -944,7 +1094,7 @@
  	orig_root = current->fs->root;
  	read_unlock(&current->fs->lock);
  
@@ -532,7 +537,7 @@ diff -urN dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  #ifdef NO_STACKING_SUPPORT
  	memset(&dazuko_security_ops, 0, sizeof(dazuko_security_ops));
  	dazuko_security_ops.inode_permission = dazuko_sys_generic;
-@@ -994,6 +1139,23 @@
+@@ -994,6 +1144,23 @@
  #endif
  #endif
  
@@ -556,7 +561,7 @@ diff -urN dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  	dev_major = register_chrdev(DAZUKO_DM, DEVICE_NAME, &fops);
  	if (dev_major < 0)
  	{
-@@ -1028,7 +1190,7 @@
+@@ -1028,7 +1195,7 @@
  	class_simple_destroy(dazuko_class);
  #endif
  
@@ -565,7 +570,7 @@ diff -urN dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  #ifdef NO_STACKING_SUPPORT
  	if (secondary_register)
  		mod_unreg_security(DEVICE_NAME, &dazuko_security_ops);
-@@ -1042,6 +1204,13 @@
+@@ -1042,6 +1209,13 @@
  #endif
  #endif
  
