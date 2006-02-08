@@ -300,7 +300,7 @@ diff -urN dazuko-2.1.0.orig/configure dazuko-2.1.0/configure
  
 diff -urN dazuko-2.1.0.orig/dazuko_core.c dazuko-2.1.0/dazuko_core.c
 --- dazuko-2.1.0.orig/dazuko_core.c	2005-09-01 20:26:57.000000000 +0200
-+++ dazuko-2.1.0/dazuko_core.c	2006-01-06 14:42:24.000000000 +0100
++++ dazuko-2.1.0/dazuko_core.c	2006-02-08 10:00:32.000000000 +0100
 @@ -35,6 +35,9 @@
  #include "dazuko_platform.h"
  #include "dazuko_core.h"
@@ -341,9 +341,18 @@ diff -urN dazuko-2.1.0.orig/dazuko_core.c dazuko-2.1.0/dazuko_core.c
  			break;
  
  		case REMOVE_ALL_PATHS:
+@@ -1882,7 +1897,7 @@
+ 	int			error;
+ 
+ 	i = dazuko_event2index(event);
+-	if (i < 0 || i >= NUM_SLOT_LISTS)
++	if (i < 0 || i > NUM_SLOT_LISTS)
+ 	{
+ 		call_xp_print("dazuko: unknown event:%d, allowing access (possible bug)\n", event);
+ 		return 0;
 diff -urN dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
 --- dazuko-2.1.0.orig/dazuko_linux26.c	2005-09-03 22:00:35.000000000 +0200
-+++ dazuko-2.1.0/dazuko_linux26.c	2006-02-07 13:45:43.000000000 +0100
++++ dazuko-2.1.0/dazuko_linux26.c	2006-02-08 09:57:11.000000000 +0100
 @@ -35,6 +35,9 @@
  #include <linux/suspend.h>
  #endif
@@ -407,12 +416,12 @@ diff -urN dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  #ifdef NO_CAPABILITIES
  int lsm_capability_compare(struct security_operations *ops1, struct security_operations *ops2);
  #endif
-@@ -898,9 +938,119 @@
+@@ -898,9 +938,129 @@
  	return 0;
  }
  
 +#if defined(DAZUKO_REDIRFS)
-+static int redirfs_generic(int event, struct inode *inode, struct redirfs_args_t *args, const char *filepath, unsigned int filepath_len, int daemon_is_allowed)
++static int redirfs_generic(int event, struct inode *inode, struct redirfs_args_t *args, int daemon_is_allowed)
 +{
 +	struct dazuko_file_struct *dfs = NULL;
 +	int error = 0;
@@ -449,9 +458,19 @@ diff -urN dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
 +			{
 +				dazuko_bzero(dfs->extra_data, sizeof(struct xp_file_struct));
 +
-+				dfs->filename = dfs->extra_data->full_filename = (char *)filepath;
-+				dfs->filename_length = dfs->extra_data->full_filename_length = filepath_len;
++				dfs->filename = dfs->extra_data->full_filename = (char *)args->exts.full_path;
++				dfs->filename_length = dfs->extra_data->full_filename_length = strlen(args->exts.full_path);
 +				dfs->extra_data->inode = inode;
++				dfs->file_p.size = inode->i_size;
++				dfs->file_p.set_size = 1;
++				dfs->file_p.uid = inode->i_uid;
++				dfs->file_p.set_uid = 1;
++				dfs->file_p.gid = inode->i_gid;
++				dfs->file_p.set_gid = 1;
++				dfs->file_p.mode = inode->i_mode;
++				dfs->file_p.set_mode = 1;
++				dfs->file_p.device_type = inode->i_rdev;
++				dfs->file_p.set_device_type = 1;
 +
 +				error = dazuko_process_access(event, dfs, &event_p, sl);
 +			}
@@ -487,28 +506,28 @@ diff -urN dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
 +	if (!args->exts.full_path)
 +		return REDIRFS_RETV_CONTINUE;
 +
-+	return redirfs_generic(event, args->args.i_permission.inode, args, args->exts.full_path, strlen(args->exts.full_path), 1);
++	return redirfs_generic(event, args->args.i_permission.inode, args, 1);
 +}
 +#endif
 +
 +#if defined(ON_CLOSE_SUPPORT) 
 +static enum redirfs_retv dazukoflt_post_flush(redirfs_context context, struct redirfs_args_t *args)
 +{
-+	return redirfs_generic(DAZUKO_ON_CLOSE, args->args.f_flush.file->f_dentry->d_inode, args, args->exts.full_path, strlen(args->exts.full_path), 1);
++	return redirfs_generic(DAZUKO_ON_CLOSE, args->args.f_flush.file->f_dentry->d_inode, args, 1);
 +}
 +#endif
 +
 +#if defined(ON_UNLINK_SUPPORT)
 +static enum redirfs_retv dazukoflt_pre_unlink(redirfs_context context, struct redirfs_args_t *args)
 +{
-+	return redirfs_generic(DAZUKO_ON_UNLINK, args->args.i_unlink.dentry->d_inode, args, args->exts.full_path, strlen(args->exts.full_path), 1);
++	return redirfs_generic(DAZUKO_ON_UNLINK, args->args.i_unlink.dentry->d_inode, args, 1);
 +}
 +#endif
 +
 +#if defined(ON_RMDIR_SUPPORT)
 +static enum redirfs_retv dazukoflt_pre_rmdir(redirfs_context context, struct redirfs_args_t *args)
 +{
-+	return redirfs_generic(DAZUKO_ON_RMDIR, args->args.i_rmdir.dentry->d_inode, args, args->exts.full_path, strlen(args->exts.full_path), 1);
++	return redirfs_generic(DAZUKO_ON_RMDIR, args->args.i_rmdir.dentry->d_inode, args, 1);
 +}
 +#endif
 +
@@ -528,7 +547,7 @@ diff -urN dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  #ifndef NO_STACKING_SUPPORT
  	struct security_operations dummy_ops;
  	int got_dummy = 0;
-@@ -944,7 +1094,7 @@
+@@ -944,7 +1104,7 @@
  	orig_root = current->fs->root;
  	read_unlock(&current->fs->lock);
  
@@ -537,7 +556,7 @@ diff -urN dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  #ifdef NO_STACKING_SUPPORT
  	memset(&dazuko_security_ops, 0, sizeof(dazuko_security_ops));
  	dazuko_security_ops.inode_permission = dazuko_sys_generic;
-@@ -994,6 +1144,23 @@
+@@ -994,6 +1154,23 @@
  #endif
  #endif
  
@@ -561,7 +580,7 @@ diff -urN dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  	dev_major = register_chrdev(DAZUKO_DM, DEVICE_NAME, &fops);
  	if (dev_major < 0)
  	{
-@@ -1028,7 +1195,7 @@
+@@ -1028,7 +1205,7 @@
  	class_simple_destroy(dazuko_class);
  #endif
  
@@ -570,7 +589,7 @@ diff -urN dazuko-2.1.0.orig/dazuko_linux26.c dazuko-2.1.0/dazuko_linux26.c
  #ifdef NO_STACKING_SUPPORT
  	if (secondary_register)
  		mod_unreg_security(DEVICE_NAME, &dazuko_security_ops);
-@@ -1042,6 +1209,13 @@
+@@ -1042,6 +1219,13 @@
  #endif
  #endif
  
