@@ -12,17 +12,25 @@
 
 /*@{*/ 
 
-#define REDIRFS_OP_END {REDIRFS_END, 0, NULL, NULL}	/**< end mark for operations array */
+/** end mark for operations array */
+#define REDIRFS_OP_END {REDIRFS_END, 0, NULL, NULL}	
 
-
-#define REDIRFS_NO_ERR			0		/**< no error occured */
-#define REDIRFS_ERR_NOMEM		-ENOMEM		/**< kernel out of memory*/
-#define REDIRFS_ERR_NAMETOOLONG		-ENAMETOOLONG	/**< dentry full path too long*/
-#define REDIRFS_ERR_EXIST		-EEXIST		/**< Filter exists */
-#define REDIRFS_ERR_INVAL		-EINVAL		/**< invalid argument */
-#define REDIRFS_ERR_NOTDIR		-ENOTDIR	/**< path is not a directory */
-#define REDIRFS_ERR_NOENT		-ENOENT		/**< path not found */
-#define REDIRFS_ERR_NOTATTACHED		-201		/**< path can not be excluded because is not attached */
+/** no error occured */
+#define REDIRFS_NO_ERR			0
+/** kernel out of memory*/
+#define REDIRFS_ERR_NOMEM		-ENOMEM	
+/** dentry full path too long*/
+#define REDIRFS_ERR_NAMETOOLONG		-ENAMETOOLONG
+/** Filter exists */
+#define REDIRFS_ERR_EXIST		-EEXIST	
+/** invalid argument */
+#define REDIRFS_ERR_INVAL		-EINVAL	
+/** path is not a directory */
+#define REDIRFS_ERR_NOTDIR		-ENOTDIR
+/** path not found */
+#define REDIRFS_ERR_NOENT		-ENOENT	
+/** path can not be excluded because is not attached */
+#define REDIRFS_ERR_NOTATTACHED		-201
 
 /**
  * Type of operations.
