@@ -98,7 +98,7 @@ redirfs_filter redirfs_register_filter(const char *name, int priority, unsigned 
 	flt = redirfs_find_flt_turn(priority);
 	if (flt) {
 		spin_unlock(&redirfs_flt_list_lock);
-		return ERR_PTR(REDIRFS_ERR_FLTEXIST);
+		return ERR_PTR(REDIRFS_ERR_EXIST);
 	}
 
 	flt = redirfs_alloc_flt(name, priority, flags);
@@ -121,8 +121,6 @@ int redirfs_unregister_filter(redirfs_filter filter)
 	struct redirfs_flt_t *flt;
 
 
-	redirfs_debug("started");
-
 	if (!filter)
 		return REDIRFS_ERR_INVAL;
 
@@ -135,31 +133,33 @@ int redirfs_unregister_filter(redirfs_filter filter)
 	list_del(&flt->flt_list);
 	spin_unlock(&redirfs_flt_list_lock);
 
-	redirfs_fltput(flt);
-
-	redirfs_debug("ended");
-
 	return 0;
 }
 
-void redirfs_activate_filter(redirfs_filter filter)
+int redirfs_activate_filter(redirfs_filter filter)
 {
 	struct redirfs_flt_t *flt = redirfs_uncover_flt(filter);
 
 
-	redirfs_debug("started");
+	if (!flt)
+		return REDIRFS_ERR_INVAL;
+
 	atomic_set(&flt->active, 1);
-	redirfs_debug("ended");
+
+	return REDIRFS_NO_ERR;
 }
 
-void redirfs_deactivate_filter(redirfs_filter filter)
+int redirfs_deactivate_filter(redirfs_filter filter)
 {
 	struct redirfs_flt_t *flt = redirfs_uncover_flt(filter);
 
 
-	redirfs_debug("started");
+	if (!flt)
+		return REDIRFS_ERR_INVAL;
+
 	atomic_set(&flt->active, 0);
-	redirfs_debug("ended");
+
+	return REDIRFS_NO_ERR;
 }
 
 void redirfs_flt_arr_init(struct redirfs_flt_arr_t *flt_arr)
