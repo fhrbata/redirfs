@@ -34,7 +34,7 @@ static struct redirfs_root_t *redirfs_alloc_root(const char *path)
 
 	err = path_lookup(path, LOOKUP_FOLLOW, &nd);
 	if (err)
-		return ERR_PTR(err);
+		return ERR_PTR(REDIRFS_ERR_NOENT);
 
 	if (!S_ISDIR(nd.dentry->d_inode->i_mode))
 		return ERR_PTR(REDIRFS_ERR_NOTDIR);
@@ -1237,7 +1237,7 @@ int redirfs_exclude_path(redirfs_filter filter, const char *path)
 	struct redirfs_root_t *aux_root;
 
 
-	if (!filter)
+	if (!filter || !path)
 		return REDIRFS_ERR_INVAL;
 
 	flt = redirfs_uncover_flt(filter);
@@ -1257,7 +1257,7 @@ int redirfs_exclude_path(redirfs_filter filter, const char *path)
 	parent = redirfs_find_root_parent(root);
 	if (!parent) {
 		redirfs_rput(root);
-		return REDIRFS_ERR_NOPARENT;
+		return REDIRFS_ERR_NOTATTACHED;
 	}
 
 	if (redirfs_flt_arr_get(&parent->attached_flts, flt) == -1) {
