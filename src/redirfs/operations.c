@@ -288,11 +288,10 @@ int redirfs_set_operations(redirfs_filter filter, struct redirfs_op_t ops[])
 	struct redirfs_cb_data_t data;
 	int idx = 0;
 	int inc_op = 0;
+	int dec_op = 0;
 	void ***pre_ops;
 	void ***post_ops;
 
-
-	redirfs_debug("started");
 
 	if (!filter || !ops)
 		return REDIRFS_ERR_INVAL;
@@ -302,12 +301,8 @@ int redirfs_set_operations(redirfs_filter filter, struct redirfs_op_t ops[])
 	while (ops[idx].type != REDIRFS_END) {
 		int type = ops[idx].type;
 		int op = ops[idx].op;
-
-
-		if (!ops[idx].pre_op && !ops[idx].post_op) {
-			idx++;
-			continue;
-		}
+		inc_op = 0;
+		dec_op = 0;
 
 		spin_lock(&flt->lock);
 
@@ -319,6 +314,11 @@ int redirfs_set_operations(redirfs_filter filter, struct redirfs_op_t ops[])
 				inc_op += 1;
 
 			*pre_ops[op] = (void*)ops[idx].pre_op;
+		} else {
+			if (*pre_ops[op])
+				dec_op += 1;
+
+			*pre_ops[op] = NULL;
 		}
 		
 		if (ops[idx].post_op) {
@@ -326,84 +326,33 @@ int redirfs_set_operations(redirfs_filter filter, struct redirfs_op_t ops[])
 				inc_op += 1;
 
 			*post_ops[op] = (void*)ops[idx].post_op;
+		} else {
+			if (*post_ops[op])
+				dec_op +=1;
+
+			*post_ops[op] = NULL;
 		}
 
 		spin_unlock(&flt->lock);
 		
 		data.flt = flt;
-		data.i_val = inc_op;
 		data.type = type;
 		data.op = op;
 
-		if (inc_op)
+		if (inc_op) {
+			data.i_val = inc_op;
 			redirfs_walk_roots(NULL, redirfs_set_flt_ops, &data);
+		}
+
+		if (dec_op) {
+			data.i_val = dec_op;
+			redirfs_walk_roots(NULL, redirfs_remove_flt_ops, &data);
+		}
 
 		idx++;
 	}
 
-	redirfs_debug("ended");
-
-	return 0;
-}
-
-int redirfs_remove_operations(redirfs_filter filter, struct redirfs_op_t ops[])
-{
-	struct redirfs_flt_t *flt;
-	struct redirfs_cb_data_t data;
-	int idx = 0;
-	int dec_op = 0;
-	void ***pre_ops;
-	void ***post_ops;
-
-
-	redirfs_debug("started");
-
-	if (!filter || !ops)
-		return REDIRFS_ERR_INVAL;
-
-	flt = redirfs_uncover_flt(filter);
-	
-	while (ops[idx].type != REDIRFS_END) {
-		int type = ops[idx].type;
-		int op = ops[idx].op;
-
-		
-		spin_lock(&flt->lock);
-
-		pre_ops = redirfs_gettype(type, &flt->pre_ops);
-		post_ops = redirfs_gettype(type, &flt->post_ops);
-
-		if (!*pre_ops[op] && !*post_ops[op]) {
-			idx++;
-			continue;
-		}
-
-		if (!ops[idx].pre_op && *pre_ops[op]) {
-			*pre_ops[op] = NULL;
-			dec_op += 1;
-		}
-
-		if (!ops[idx].post_op && *post_ops[op]) {
-			*post_ops[op] = NULL;
-			dec_op += 1;
-		}
-
-		data.flt = flt;
-		data.i_val = dec_op;
-		data.type = type;
-		data.op = op;
-
-		spin_unlock(&flt->lock);
-
-		if (dec_op)
-			redirfs_walk_roots(NULL, redirfs_remove_flt_ops, &data);
-
-	}
-
-	redirfs_debug("ended");
-
-	return 0;
+	return REDIRFS_NO_ERR;
 }
 
 EXPORT_SYMBOL(redirfs_set_operations);
-EXPORT_SYMBOL(redirfs_remove_operations);
