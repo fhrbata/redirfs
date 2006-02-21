@@ -12,15 +12,25 @@ KERVER=`uname -r`
 KERSRC="/lib/modules/${KERVER}/build"
 KERVER26=`echo $KERVER | grep '^2\.6.*'`
 
+echo -n "checking Linux kernel version ... "
 if [ -z "$KERVER26" ]
 then
+	echo "failed"
 	error "For now RedirFS supports only 2.6.x Linux kernels"
+else
+	echo "ok"
 fi
 
+echo -n "checking for Linux kernel source ... "
 if [ ! -d $KERSRC ]
 then
+	echo "failed"
 	error "Linux kernel source not found"
+else
+	echo "ok"
 fi
+
+echo -n "generating Makefile ... "
 
 echo "obj-m += redirfs.o" > $MAKEFILE
 echo "redirfs-y := operations.o filter.o root.o redir.o inode.o file.o proc.o" >> $MAKEFILE
@@ -31,3 +41,5 @@ echo >> $MAKEFILE
 echo ".PHONY: clean" >> $MAKEFILE
 echo "clean:" >> $MAKEFILE
 echo "	\$(MAKE) -C $KERSRC M=$RFSSRC clean" >> $MAKEFILE
+
+echo "ok"
