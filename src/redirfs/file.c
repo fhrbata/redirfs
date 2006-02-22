@@ -96,7 +96,11 @@ void __init redirfs_init_fcache(void)
 	redirfs_fcache = kmem_cache_create("redirfs_fcache",
 			sizeof(struct redirfs_file_t),
 			0,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,7)
 			SLAB_PANIC,
+#else
+			0,
+#endif
 			NULL,
 			NULL);
 }

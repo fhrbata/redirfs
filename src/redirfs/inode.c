@@ -199,7 +199,11 @@ void __init redirfs_init_icache(void)
 	redirfs_icache = kmem_cache_create("redirfs_icache",
 			sizeof(struct redirfs_inode_t),
 			0,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,7)
 			SLAB_PANIC,
+#else
+			0,
+#endif
 			NULL,
 			NULL);
 
