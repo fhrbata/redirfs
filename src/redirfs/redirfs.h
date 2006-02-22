@@ -91,7 +91,7 @@ enum redirfs_fop {
 	REDIRFS_FOP_READDIR,		/**< not implemented yet */
 	REDIRFS_FOP_POLL,		/**< not implemented yet */
 	REDIRFS_FOP_IOCTL,		/**< not implemented yet */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,8)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
 	REDIRFS_FOP_UNLOCKED_IOCTL,	/**< not implemented yet */
 	REDIRFS_FOP_COMPAT_IOCTL,	/**< not implemented yet */
 #endif
@@ -329,7 +329,7 @@ union redirfs_op_args_t {
 		unsigned long			arg;
 	} f_ioctl;						/**< not implemented yet */
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,8)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
 	struct {
 		struct file			*file;
 		unsigned int			cmd;
