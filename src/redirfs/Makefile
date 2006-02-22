@@ -12,8 +12,8 @@ obj-m += redirfs.o
 redirfs-y := operations.o filter.o root.o redir.o inode.o file.o proc.o
 
 redirfs.ko:
-	$(MAKE) -C $(KERN_SRC) M=$(RFS_SRC)
+	$(MAKE) -C $(KERN_SRC) SUBDIRS=$(RFS_SRC) modules
 
 .PHONY: clean
 clean:
-	$(MAKE) -C $(KERN_SRC) M=$(RFS_SRC) clean
+	$(MAKE) -C $(KERN_SRC) SUBDIRS=$(RFS_SRC) clean
