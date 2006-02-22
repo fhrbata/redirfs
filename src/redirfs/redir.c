@@ -1031,6 +1031,6 @@ static void __exit redirfs_exit(void)
 module_init(redirfs_init);
 module_exit(redirfs_exit);
 
-MODULE_LICENSE("Dual BSD/GPL");
-MODULE_AUTHOR("Frantisek Hrbata <franta@grisoft.cz>");
-MODULE_DESCRIPTION("Provides framework allowing redirect native Filesystem calls in VFS objects");
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Frantisek Hrbata <franta@redirfs.org>");
+MODULE_DESCRIPTION("RedirFS Framework allows to notify 3rd-party modules about events in the VFS layer");
