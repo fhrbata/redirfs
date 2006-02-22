@@ -9,7 +9,6 @@ void ***redirfs_gettype(int type, struct redirfs_operations_t *ops)
 	void ***rv = NULL;
 
 
-	redirfs_debug("started");
 
 	switch (type) {
 		case REDIRFS_I_REG:
@@ -31,7 +30,6 @@ void ***redirfs_gettype(int type, struct redirfs_operations_t *ops)
 			BUG();
 	}
 
-	redirfs_debug("ended");
 
 	return rv;
 }
@@ -41,7 +39,6 @@ unsigned int *redirfs_getcnt(int type, struct redirfs_operations_counters_t *cnt
 	unsigned int  *rv = NULL;
 
 
-	redirfs_debug("started");
 
 	switch (type) {
 		case REDIRFS_I_REG:
@@ -63,7 +60,6 @@ unsigned int *redirfs_getcnt(int type, struct redirfs_operations_counters_t *cnt
 			BUG();
 	}
 
-	redirfs_debug("ended");
 
 	return rv;
 }
@@ -71,7 +67,6 @@ unsigned int *redirfs_getcnt(int type, struct redirfs_operations_counters_t *cnt
 
 void redirfs_init_iops_arr(void ***arr, struct inode_operations *iops)
 {
-	redirfs_debug("started");
 
 	arr[REDIRFS_IOP_CREATE]	= (void**)&iops->create; 
 	arr[REDIRFS_IOP_LOOKUP] = (void**)&iops->lookup; 
@@ -95,14 +90,10 @@ void redirfs_init_iops_arr(void ***arr, struct inode_operations *iops)
 	arr[REDIRFS_IOP_GETXATTR] = (void**)&iops->getxattr; 
 	arr[REDIRFS_IOP_LISTXATTR] = (void**)&iops->listxattr; 
 	arr[REDIRFS_IOP_REMOVEXATTR] = (void**)&iops->removexattr; 
-
-	redirfs_debug("ended");
 }
 
 void redirfs_init_fops_arr(void ***arr, struct file_operations *fops)
 {
-	redirfs_debug("started");
-
 	arr[REDIRFS_FOP_LLSEEK] = (void**)&fops->llseek; 
 	arr[REDIRFS_FOP_READ] = (void**)&fops->read; 
 	arr[REDIRFS_FOP_AIO_READ] = (void**)&fops->aio_read; 
@@ -136,27 +127,20 @@ void redirfs_init_fops_arr(void ***arr, struct file_operations *fops)
 	arr[REDIRFS_FOP_FLOCK] = (void**)&fops->flock;
 #endif
 
-	redirfs_debug("ended");
 }
 
 void redirfs_init_dops_arr(void ***arr, struct dentry_operations *dops) 
 {
-	redirfs_debug("started");
-
 	arr[REDIRFS_DOP_REVALIDATE] = (void**)&dops->d_revalidate;
 	arr[REDIRFS_DOP_HASH] = (void**)&dops->d_hash;
 	arr[REDIRFS_DOP_COMPARE] = (void**)&dops->d_compare;
 	arr[REDIRFS_DOP_DELETE] = (void**)&dops->d_delete;
 	arr[REDIRFS_DOP_RELEASE] = (void**)&dops->d_release;
 	arr[REDIRFS_DOP_IPUT] = (void**)&dops->d_iput;
-
-	redirfs_debug("ended");
 }
 
 void redirfs_init_ops(struct redirfs_operations_t *ops, struct redirfs_vfs_operations_t *vfs_ops)
 {
-	redirfs_debug("started");
-
 	memset(vfs_ops, 0, sizeof(struct redirfs_vfs_operations_t));
 	ops->reg_iops = &vfs_ops->reg_iops;
 	ops->dir_iops = &vfs_ops->dir_iops;
@@ -173,23 +157,15 @@ void redirfs_init_ops(struct redirfs_operations_t *ops, struct redirfs_vfs_opera
 	ops->ops_arr_sizes[REDIRFS_F_REG] = REDIRFS_FOP_END;
 	ops->ops_arr_sizes[REDIRFS_F_DIR] = REDIRFS_FOP_END;
 	ops->ops_arr_sizes[REDIRFS_DENTRY] = REDIRFS_DOP_END;
-
-	redirfs_debug("ended");
 }
 
 void redirfs_init_cnts(struct redirfs_operations_counters_t *cnts)
 {
-	redirfs_debug("started");
-
 	memset(cnts, 0, sizeof(struct redirfs_operations_counters_t));
-
-	redirfs_debug("ended");
 }
 
 void redirfs_init_orig_ops(struct redirfs_operations_t *ops)
 {
-	redirfs_debug("started");
-
 	ops->reg_iops = NULL;
 	ops->dir_iops = NULL;
 	ops->reg_fops = NULL;
@@ -205,8 +181,6 @@ void redirfs_init_orig_ops(struct redirfs_operations_t *ops)
 	ops->ops_arr_sizes[REDIRFS_F_REG] = REDIRFS_FOP_END;
 	ops->ops_arr_sizes[REDIRFS_F_DIR] = REDIRFS_FOP_END;
 	ops->ops_arr_sizes[REDIRFS_DENTRY] = REDIRFS_DOP_END;
-
-	redirfs_debug("ended");
 }
 
 struct redirfs_cb_data_t {
@@ -229,8 +203,6 @@ static int redirfs_set_flt_ops(struct redirfs_root_t *root, void *data)
 	unsigned int *cnts;
 
 
-	redirfs_debug("started");
-
 	if (redirfs_flt_arr_get(&root->attached_flts, flt) >= 0) {
 		spin_lock(&root->lock);
 
@@ -251,7 +223,6 @@ static int redirfs_set_flt_ops(struct redirfs_root_t *root, void *data)
 		spin_unlock(&root->lock);
 	}
 
-	redirfs_debug("ended");
 	return 0;
 }
 
@@ -266,8 +237,6 @@ static int redirfs_remove_flt_ops(struct redirfs_root_t *root, void *data)
 	void ***new_ops;
 	unsigned int *cnts;
 
-
-	redirfs_debug("started");
 
 	if (redirfs_flt_arr_get(&root->attached_flts, flt) >= 0) {
 		spin_lock(&root->lock);
@@ -286,8 +255,6 @@ static int redirfs_remove_flt_ops(struct redirfs_root_t *root, void *data)
 
 		spin_unlock(&root->lock);
 	}
-
-	redirfs_debug("ended");
 
 	return 0;
 }

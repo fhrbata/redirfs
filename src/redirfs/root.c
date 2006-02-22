@@ -25,8 +25,6 @@ static struct redirfs_root_t *redirfs_alloc_root(const char *path)
 	int err;
 
 
-	redirfs_debug("started");
-
 	if (!path)
 		return ERR_PTR(REDIRFS_ERR_INVAL);
 
@@ -89,8 +87,6 @@ static struct redirfs_root_t *redirfs_alloc_root(const char *path)
 	} else
 		root->new_ops.dops->d_iput = root->fw_ops->dops->d_iput;
 
-	redirfs_debug("ended");
-
 	return root;
 }
 
@@ -109,7 +105,6 @@ static struct redirfs_root_t *__redirfs_rget(struct redirfs_root_t *root)
 struct redirfs_root_t *redirfs_rget(struct redirfs_root_t *root)
 {
 	struct redirfs_root_t *rv;
-	redirfs_debug("started");
 
 	if (!root)
 		return NULL;
@@ -120,8 +115,6 @@ struct redirfs_root_t *redirfs_rget(struct redirfs_root_t *root)
 
 	spin_unlock(&root->lock);
 
-	redirfs_debug("ended");
-
 	return rv;
 }
 
@@ -130,8 +123,6 @@ void redirfs_rput(struct redirfs_root_t *root)
 	int not_used = 0;
 
 	
-	redirfs_debug("started");
-
 	if (!root)
 		return;
 
@@ -150,8 +141,6 @@ void redirfs_rput(struct redirfs_root_t *root)
 	redirfs_flt_arr_destroy(&root->attached_flts);
 	redirfs_flt_arr_destroy(&root->detached_flts);
 	kfree(root);
-	
-	redirfs_debug("ended");
 }
 
 static struct redirfs_root_t *__redirfs_find_root_parent(struct redirfs_root_t *root)
@@ -163,8 +152,6 @@ static struct redirfs_root_t *__redirfs_find_root_parent(struct redirfs_root_t *
 	struct list_head *end;
 	struct list_head *act;
 
-
-	redirfs_debug("started");
 
 	path_len = strlen(root->path);
 
@@ -188,8 +175,6 @@ static struct redirfs_root_t *__redirfs_find_root_parent(struct redirfs_root_t *
 
 		act = act->next;
 	}
-
-	redirfs_debug("ended");
 
 	return parent;
 }
@@ -215,8 +200,6 @@ static struct redirfs_root_t *__redirfs_find_root(const char *path)
 	struct list_head *end;
 	struct list_head *act;
 
-
-	redirfs_debug("started");
 
 	path_len = strlen(path);
 
@@ -244,8 +227,6 @@ static struct redirfs_root_t *__redirfs_find_root(const char *path)
 		act = act->next;
 	}
 
-	redirfs_debug("ended");
-
 	return found;
 }
 
@@ -254,13 +235,9 @@ static struct redirfs_root_t *redirfs_find_root(const char *path)
 	struct redirfs_root_t *root;
 
 
-	redirfs_debug("started");
-
 	spin_lock(&redirfs_root_list_lock);
 	root = __redirfs_find_root(path);
 	spin_unlock(&redirfs_root_list_lock);
-
-	redirfs_debug("ended");
 
 	return root;
 }
@@ -318,8 +295,6 @@ static struct redirfs_root_t *redirfs_add_root(struct redirfs_root_t *root)
 	int rv = 0;
 
 	
-	redirfs_debug("started");
-
 	spin_lock(&redirfs_root_list_lock);
 
 	new_root = __redirfs_find_root(root->path);
@@ -377,8 +352,6 @@ static struct redirfs_root_t *redirfs_add_root(struct redirfs_root_t *root)
 ret:
 	spin_unlock(&redirfs_root_list_lock);
 
-	redirfs_debug("ended");
-
 	return ret_root;
 }
 
@@ -390,8 +363,6 @@ static void redirfs_remove_root(struct redirfs_root_t *root)
 	struct list_head *dst;
 	struct list_head *tmp;
 
-
-	redirfs_debug("started");
 
 	spin_lock(&redirfs_root_list_lock);
 	spin_lock(&root->lock);
@@ -417,7 +388,6 @@ static void redirfs_remove_root(struct redirfs_root_t *root)
 
 	spin_unlock(&redirfs_root_list_lock);
 
-	redirfs_debug("ended");
 }
 
 int redirfs_walk_roots(struct redirfs_root_t *root,
@@ -431,7 +401,6 @@ int redirfs_walk_roots(struct redirfs_root_t *root,
 	int stop = 0;
 
 
-	redirfs_debug("started");
 	spin_lock(&redirfs_root_list_lock);
 
 	if (!root)
@@ -475,8 +444,6 @@ int redirfs_walk_roots(struct redirfs_root_t *root,
 
 	spin_unlock(&redirfs_root_list_lock);
 
-	redirfs_debug("ended");
-
 	return 0;
 }
 
@@ -492,8 +459,6 @@ void redirfs_set_root_ops(struct redirfs_root_t *root, int type)
 	void ***fw_ops;
 	unsigned int *cnts;
 
-
-	redirfs_debug("started");
 
 	spin_lock(&root->lock);
 	
@@ -528,14 +493,10 @@ void redirfs_set_root_ops(struct redirfs_root_t *root, int type)
 	}
 
 	spin_unlock(&root->lock);
-
-	redirfs_debug("ended");
 }
 
 void redirfs_set_reg_ops(struct redirfs_root_t *root, struct inode *inode)
 {
-	redirfs_debug("started");
-
 	spin_lock(&root->lock);
 
 	root->orig_ops.reg_iops = inode->i_op;
@@ -549,13 +510,10 @@ void redirfs_set_reg_ops(struct redirfs_root_t *root, struct inode *inode)
 
 	spin_unlock(&root->lock);
 
-	redirfs_debug("ended");
 }
 
 void redirfs_set_dir_ops(struct redirfs_root_t *root, struct inode *inode)
 {
-	redirfs_debug("started");
-
 	spin_lock(&root->lock);
 
 	root->orig_ops.dir_iops = inode->i_op;
@@ -568,8 +526,6 @@ void redirfs_set_dir_ops(struct redirfs_root_t *root, struct inode *inode)
 	memcpy(root->new_ops.dir_fops, inode->i_fop, sizeof(struct file_operations));
 
 	spin_unlock(&root->lock);
-	
-	redirfs_debug("ended");
 }
 
 struct redirfs_find_root_dentry_t {
@@ -647,14 +603,10 @@ char *redirfs_dpath(struct dentry *dentry, char* buff, int len)
 
 static int redirfs_test_root(struct redirfs_root_t *root, void *dentry)
 {
-	redirfs_debug("started");
-
 	if ((struct dentry*)dentry == root->dentry)
 		return 1;
 
 	return 0;
-
-	redirfs_debug("ended");
 }
 
 static int redirfs_is_root(struct dentry *dentry)
@@ -770,8 +722,6 @@ static void redirfs_set_new_ops(struct dentry *dentry, void *data)
 	int aux = 0;
 
 
-	redirfs_debug("started");
-
 	if (dentry && dentry->d_inode) {
 		umode_t mode = dentry->d_inode->i_mode;
 
@@ -835,15 +785,12 @@ static void redirfs_set_new_ops(struct dentry *dentry, void *data)
 		}
 	}
 	
-	redirfs_debug("ended");
 }
 
 static void redirfs_set_orig_ops(struct dentry *dentry, void *data)
 {
 	struct redirfs_root_t *root = (struct redirfs_root_t *)data;
 
-
-	redirfs_debug("started");
 
 	if (dentry && dentry->d_inode) {
 		umode_t mode = dentry->d_inode->i_mode;
@@ -869,8 +816,6 @@ static void redirfs_set_orig_ops(struct dentry *dentry, void *data)
 
 		redirfs_remove_inode(dentry->d_inode);
 	}
-
-	redirfs_debug("ended");
 }
 
 static void redirfs_walk_dcache(struct dentry *root, 
@@ -884,8 +829,6 @@ static void redirfs_walk_dcache(struct dentry *root,
 	struct list_head *parent;
 	struct dentry *dentry;
 
-
-	redirfs_debug("started");
 
 	shrink_dcache_parent(root);
 
@@ -933,8 +876,6 @@ skip_subtree:
 	}
 	
 	spin_unlock(&dcache_lock);
-
-	redirfs_debug("ended");
 }
 
 static void redirfs_root_rejection(struct redirfs_root_t *root)
@@ -1143,8 +1084,6 @@ void redirfs_remove_roots(void)
 	struct redirfs_root_t *parent = NULL;
 
 
-	redirfs_debug("started");
-
 	spin_lock(&redirfs_remove_roots_list_lock);
 
 	list_for_each_safe(act, tmp, &redirfs_remove_roots_list) {
@@ -1167,8 +1106,6 @@ void redirfs_remove_roots(void)
 	}
 
 	spin_unlock(&redirfs_remove_roots_list_lock);
-
-	redirfs_debug("ended");
 }
 
 int redirfs_include_path(redirfs_filter filter, const char *path)
@@ -1177,8 +1114,6 @@ int redirfs_include_path(redirfs_filter filter, const char *path)
 	struct redirfs_root_t *aux_root;
 	int rv = 0;
 
-
-	redirfs_debug("started");
 
 	if (!filter || !path)
 		return REDIRFS_ERR_INVAL;
@@ -1223,8 +1158,6 @@ int redirfs_include_path(redirfs_filter filter, const char *path)
 	
 	redirfs_rput(root);
 	redirfs_remove_roots();
-
-	redirfs_debug("ended");
 
 	return rv;
 }

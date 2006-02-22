@@ -14,8 +14,6 @@ static struct redirfs_flt_t *redirfs_alloc_flt(const char *name, int priority,
 	size_t flt_name_len;
 	
 
-	redirfs_debug("started");
-
 	if (!name)
 		return ERR_PTR(REDIRFS_ERR_INVAL);
 
@@ -41,29 +39,21 @@ static struct redirfs_flt_t *redirfs_alloc_flt(const char *name, int priority,
 	redirfs_init_ops(&flt->pre_ops, &flt->vfs_pre_ops);
 	redirfs_init_ops(&flt->post_ops, &flt->vfs_post_ops);
 
-	redirfs_debug("ended");
-
 	return flt;
 }
 
 struct redirfs_flt_t *redirfs_fltget(struct redirfs_flt_t *flt)
 {
-	redirfs_debug("started");
 	atomic_inc(&flt->ref_cnt);
-	redirfs_debug("ended");
 	return flt;
 }
 
 void redirfs_fltput(struct redirfs_flt_t *flt)
 {
-	redirfs_debug("started");
-
 	if (atomic_dec_and_test(&flt->ref_cnt)) {
 		kfree(flt->name);
 		kfree(flt);
 	}
-
-	redirfs_debug("ended");
 }
 
 static struct redirfs_flt_t *redirfs_find_flt_turn(int priority)
@@ -72,16 +62,12 @@ static struct redirfs_flt_t *redirfs_find_flt_turn(int priority)
 	struct redirfs_flt_t *found = NULL;
 	
 
-	redirfs_debug("started");
-
 	list_for_each_entry(flt, &redirfs_flt_list, flt_list) {
 		if (flt->priority == priority) {
 			found = flt;
 		}
 			break;
 	}
-
-	redirfs_debug("ended");
 
 	return found;
 }
@@ -91,8 +77,6 @@ redirfs_filter redirfs_register_filter(const char *name, int priority, unsigned 
 	struct redirfs_flt_t *flt;
 
 	
-	redirfs_debug("started");
-
 	spin_lock(&redirfs_flt_list_lock);
 
 	flt = redirfs_find_flt_turn(priority);
@@ -111,8 +95,6 @@ redirfs_filter redirfs_register_filter(const char *name, int priority, unsigned 
 
 	spin_unlock(&redirfs_flt_list_lock);
 	
-	redirfs_debug("ended");
-
 	return redirfs_cover_flt(flt);
 }
 
