@@ -111,6 +111,10 @@ void redirfs_init_fops_arr(void ***arr, struct file_operations *fops)
 	arr[REDIRFS_FOP_READDIR] = (void**)&fops->readdir; 
 	arr[REDIRFS_FOP_POLL] = (void**)&fops->poll; 
 	arr[REDIRFS_FOP_IOCTL] = (void**)&fops->ioctl; 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
+	arr[REDIRFS_FOP_UNLOCKED_IOCTL]	= (void**)&fops->unlocked_ioctl;
+	arr[REDIRFS_FOP_COMPAT_IOCTL] = (void**)&fops->compat_ioctl;
+#endif
 	arr[REDIRFS_FOP_MMAP] = (void**)&fops->mmap; 
 	arr[REDIRFS_FOP_OPEN] = (void**)&fops->open; 
 	arr[REDIRFS_FOP_FLUSH] = (void**)&fops->flush; 
