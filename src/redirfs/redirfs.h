@@ -91,6 +91,10 @@ enum redirfs_fop {
 	REDIRFS_FOP_READDIR,		/**< not implemented yet */
 	REDIRFS_FOP_POLL,		/**< not implemented yet */
 	REDIRFS_FOP_IOCTL,		/**< not implemented yet */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,8)
+	REDIRFS_FOP_UNLOCKED_IOCTL,	/**< not implemented yet */
+	REDIRFS_FOP_COMPAT_IOCTL,	/**< not implemented yet */
+#endif
 	REDIRFS_FOP_MMAP,		/**< not implemented yet */
 	REDIRFS_FOP_OPEN,		/**< open file */
 	REDIRFS_FOP_FLUSH,		/**< close file - decreases usage counter*/
@@ -217,10 +221,12 @@ union redirfs_op_args_t {
 		struct nameidata		*nd;
 	} i_follow_link;					/**< not implemented yet */
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,8)
 	struct {
 		struct dentry			*dentry;
 		struct nameidata		*nd;
 	} i_put_link;						/**< not implemented yet */
+#endif
 
 	struct {
 		struct inode			*inode;
@@ -323,6 +329,20 @@ union redirfs_op_args_t {
 		unsigned long			arg;
 	} f_ioctl;						/**< not implemented yet */
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,8)
+	struct {
+		struct file			*file;
+		unsigned int			cmd;
+		unsigned long			arg;
+	} f_unlocked_ioctl;					/**< not implemented yet */
+
+	struct {
+		struct file			*file;
+		unsigned int			cmd;
+		unsigned long			arg;
+	} f_compat_ioctl;					/**< not implemented yet */
+#endif
+
 	struct {
 		struct file			*file;
 		struct vm_area_struct		*vm_area;
@@ -404,6 +424,7 @@ union redirfs_op_args_t {
 		unsigned long			flags;
 	} f_get_unmapped_area;					/**< not implemented yet */
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,8)
 	struct {
 		int				flags;
 	} f_check_flags;					/**< not implemented yet */
@@ -412,13 +433,14 @@ union redirfs_op_args_t {
 		struct file			*file;
 		unsigned long			arg;
 	} f_dir_notify;						/**< not implemented yet */
-
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9)
 	struct {
 		struct file			*file;
 		int				flags;
 		struct file_lock		*lock;
 	} f_flock;						/**< not implemented yet */
-
+#endif
 
 
 	struct {
