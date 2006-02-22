@@ -5,6 +5,7 @@
 #include <linux/list.h>
 #include <linux/fs.h>
 #include <linux/dcache.h>
+#include <linux/init.h>
 #include "root.h"
 
 #define redirfs_ihash(ino) (ino % redirfs_ihash_table_size)

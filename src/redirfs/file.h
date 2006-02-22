@@ -4,6 +4,7 @@
 #include <linux/module.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
+#include <linux/init.h>
 #include <linux/fs.h>
 #include "root.h"
 
