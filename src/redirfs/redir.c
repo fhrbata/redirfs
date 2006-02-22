@@ -3,6 +3,7 @@
 #include <linux/init.h>
 #include <linux/smp_lock.h>
 #include <linux/stat.h>
+#include <linux/version.h>
 #include "redirfs.h"
 #include "operations.h"
 #include "root.h"
@@ -467,7 +468,11 @@ static int redirfs_reg_permission(struct inode *inode, int mode, struct nameidat
 			if (inode->i_op->permission)
 				return inode->i_op->permission(inode, mode, nd);
 			else
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,9)
+				return vfs_permission(inode, mode);
+#else
 				return generic_permission(inode, mode, NULL);
+#endif
 		else {
 			BUG();
 			return -EPERM;
@@ -502,7 +507,11 @@ static int redirfs_reg_permission(struct inode *inode, int mode, struct nameidat
 	if (permission)
 		rv = permission(args.args.i_permission.inode, args.args.i_permission.mode, args.args.i_permission.nd);
 	else
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,9)
+		rv = vfs_permission(inode, mode);
+#else
 		rv = generic_permission(args.args.i_permission.inode, args.args.i_permission.mode, NULL);
+#endif
 
 	args.retv.rv_int = rv;
 	args.info.call = REDIRFS_POSTCALL;
@@ -1024,5 +1033,4 @@ module_exit(redirfs_exit);
 
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Frantisek Hrbata <franta@grisoft.cz>");
-MODULE_VERSION("v0.001");
 MODULE_DESCRIPTION("Provides framework allowing redirect native Filesystem calls in VFS objects");
