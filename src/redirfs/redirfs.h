@@ -5,6 +5,7 @@
 #include <linux/fs.h>
 #include <linux/dcache.h>
 #include <linux/namei.h>
+#include <linux/version.h>
 
 /**
  * \defgroup interface RedirFS Interface Documentation
@@ -64,7 +65,9 @@ enum redirfs_iop {
 	REDIRFS_IOP_RENAME,		/**< not implemented yet */
 	REDIRFS_IOP_READLINK,		/**< not implemented yet */
 	REDIRFS_IOP_FOLLOW_LINK,	/**< not implemented yet */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,8)
 	REDIRFS_IOP_PUT_LINK,		/**< not implemented yet */
+#endif
 	REDIRFS_IOP_TRUNCATE,		/**< not implemented yet */
 	REDIRFS_IOP_PERMISSION,		/**< check inode permissions */
 	REDIRFS_IOP_SETATTR,		/**< not implemented yet */
@@ -101,9 +104,13 @@ enum redirfs_fop {
 	REDIRFS_FOP_SENDFILE,		/**< not implemented yet */
 	REDIRFS_FOP_SENDPAGE,		/**< not implemented yet */
 	REDIRFS_FOP_GET_UNMAPPED_AREA,	/**< not implemented yet */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,8)
 	REDIRFS_FOP_CHECK_FLAGS,	/**< not implemented yet */
 	REDIRFS_FOP_DIR_NOTIFY,		/**< not implemented yet */
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9)
 	REDIRFS_FOP_FLOCK,		/**< not implemented yet */
+#endif
 	REDIRFS_FOP_END			/**< end mark for file operations*/
 };
 

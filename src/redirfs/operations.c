@@ -84,7 +84,9 @@ void redirfs_init_iops_arr(void ***arr, struct inode_operations *iops)
 	arr[REDIRFS_IOP_RENAME] = (void**)&iops->rename; 
 	arr[REDIRFS_IOP_READLINK] = (void**)&iops->readlink; 
 	arr[REDIRFS_IOP_FOLLOW_LINK] = (void**)&iops->follow_link; 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,8)
 	arr[REDIRFS_IOP_PUT_LINK] = (void**)&iops->put_link; 
+#endif
 	arr[REDIRFS_IOP_TRUNCATE] = (void**)&iops->truncate; 
 	arr[REDIRFS_IOP_PERMISSION] = (void**)&iops->permission; 
 	arr[REDIRFS_IOP_SETATTR] = (void**)&iops->setattr; 
@@ -122,9 +124,13 @@ void redirfs_init_fops_arr(void ***arr, struct file_operations *fops)
 	arr[REDIRFS_FOP_SENDFILE] = (void**)&fops->sendfile; 
 	arr[REDIRFS_FOP_SENDPAGE] = (void**)&fops->sendpage; 
 	arr[REDIRFS_FOP_GET_UNMAPPED_AREA] = (void**)&fops->get_unmapped_area; 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,8)
 	arr[REDIRFS_FOP_CHECK_FLAGS] = (void**)&fops->check_flags; 
 	arr[REDIRFS_FOP_DIR_NOTIFY] = (void**)&fops->dir_notify; 
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9)
 	arr[REDIRFS_FOP_FLOCK] = (void**)&fops->flock;
+#endif
 
 	redirfs_debug("ended");
 }
