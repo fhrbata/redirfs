@@ -56,11 +56,13 @@ enum redirfs_op_type {
 enum redirfs_iop {
 	REDIRFS_IOP_CREATE,		/**< create regular file */
 	REDIRFS_IOP_LOOKUP,		/**< directory lookup */ 
-	REDIRFS_IOP_LINK,		/**< not implemented yet */
 	REDIRFS_IOP_UNLINK,		/**< remove file */
-	REDIRFS_IOP_SYMLINK,		/**< not implemented yet */
 	REDIRFS_IOP_MKDIR,		/**< create directory */
 	REDIRFS_IOP_RMDIR,		/**< remove directory */
+	REDIRFS_IOP_PERMISSION,		/**< check inode permissions */
+#if 0
+	REDIRFS_IOP_LINK,		/**< not implemented yet */
+	REDIRFS_IOP_SYMLINK,		/**< not implemented yet */
 	REDIRFS_IOP_MKNOD,		/**< not implemented yet */
 	REDIRFS_IOP_RENAME,		/**< not implemented yet */
 	REDIRFS_IOP_READLINK,		/**< not implemented yet */
@@ -69,13 +71,13 @@ enum redirfs_iop {
 	REDIRFS_IOP_PUT_LINK,		/**< not implemented yet */
 #endif
 	REDIRFS_IOP_TRUNCATE,		/**< not implemented yet */
-	REDIRFS_IOP_PERMISSION,		/**< check inode permissions */
 	REDIRFS_IOP_SETATTR,		/**< not implemented yet */
 	REDIRFS_IOP_GETATTR,		/**< not implemented yet */
 	REDIRFS_IOP_SETXATTR,		/**< not implemented yet */
 	REDIRFS_IOP_GETXATTR,		/**< not implemented yet */
 	REDIRFS_IOP_LISTXATTR,		/**< not implemented yet */
 	REDIRFS_IOP_REMOVEXATTR,	/**< not implemented yet */
+#endif /* 0 */
 	REDIRFS_IOP_END			/**< end mark for inode operations*/
 };
 
@@ -83,6 +85,10 @@ enum redirfs_iop {
  * File operations identifiers.
  */
 enum redirfs_fop {
+	REDIRFS_FOP_OPEN,		/**< open file */
+	REDIRFS_FOP_FLUSH,		/**< close file - decreases usage counter*/
+	REDIRFS_FOP_RELEASE,		/**< release file - no one is using it */
+#if 0
 	REDIRFS_FOP_LLSEEK,		/**< not implemented yet */
 	REDIRFS_FOP_READ,		/**< not implemented yet */
 	REDIRFS_FOP_AIO_READ,		/**< not implemented yet */
@@ -96,9 +102,6 @@ enum redirfs_fop {
 	REDIRFS_FOP_COMPAT_IOCTL,	/**< not implemented yet */
 #endif
 	REDIRFS_FOP_MMAP,		/**< not implemented yet */
-	REDIRFS_FOP_OPEN,		/**< open file */
-	REDIRFS_FOP_FLUSH,		/**< close file - decreases usage counter*/
-	REDIRFS_FOP_RELEASE,		/**< release file - no one is using it */
 	REDIRFS_FOP_FSYNC,		/**< not implemented yet */
 	REDIRFS_FOP_AIO_FSYNC,		/**< not implemented yet */
 	REDIRFS_FOP_FASYNC,		/**< not implemented yet */
@@ -115,6 +118,7 @@ enum redirfs_fop {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9)
 	REDIRFS_FOP_FLOCK,		/**< not implemented yet */
 #endif
+#endif /* 0 */
 	REDIRFS_FOP_END			/**< end mark for file operations*/
 };
 
@@ -122,12 +126,14 @@ enum redirfs_fop {
  * Dentry operations identifiers.
  */
 enum redirfs_dop {
+	REDIRFS_DOP_IPUT,		/**< release the dentry's inode */
+#if 0
 	REDIRFS_DOP_REVALIDATE,		/**< not implemented yet */
 	REDIRFS_DOP_HASH,		/**< not implemented yet */
 	REDIRFS_DOP_COMPARE,		/**< not implemented yet */
 	REDIRFS_DOP_DELETE,		/**< not implemented yet */
 	REDIRFS_DOP_RELEASE,		/**< not implemented yet */
-	REDIRFS_DOP_IPUT,		/**< release the dentry's inode */
+#endif /* 0 */
 	REDIRFS_DOP_END			/**< end mark for dentry operations*/
 };
 

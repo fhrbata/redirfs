@@ -70,11 +70,14 @@ void redirfs_init_iops_arr(void ***arr, struct inode_operations *iops)
 
 	arr[REDIRFS_IOP_CREATE]	= (void**)&iops->create; 
 	arr[REDIRFS_IOP_LOOKUP] = (void**)&iops->lookup; 
-	arr[REDIRFS_IOP_LINK] = (void**)&iops->link; 
 	arr[REDIRFS_IOP_UNLINK] = (void**)&iops->unlink; 
-	arr[REDIRFS_IOP_SYMLINK] = (void**)&iops->symlink; 
 	arr[REDIRFS_IOP_MKDIR] = (void**)&iops->mkdir; 
 	arr[REDIRFS_IOP_RMDIR] = (void**)&iops->rmdir; 
+	arr[REDIRFS_IOP_PERMISSION] = (void**)&iops->permission; 
+
+#if 0
+	arr[REDIRFS_IOP_LINK] = (void**)&iops->link; 
+	arr[REDIRFS_IOP_SYMLINK] = (void**)&iops->symlink; 
 	arr[REDIRFS_IOP_MKNOD] = (void**)&iops->mknod; 
 	arr[REDIRFS_IOP_RENAME] = (void**)&iops->rename; 
 	arr[REDIRFS_IOP_READLINK] = (void**)&iops->readlink; 
@@ -83,17 +86,21 @@ void redirfs_init_iops_arr(void ***arr, struct inode_operations *iops)
 	arr[REDIRFS_IOP_PUT_LINK] = (void**)&iops->put_link; 
 #endif
 	arr[REDIRFS_IOP_TRUNCATE] = (void**)&iops->truncate; 
-	arr[REDIRFS_IOP_PERMISSION] = (void**)&iops->permission; 
 	arr[REDIRFS_IOP_SETATTR] = (void**)&iops->setattr; 
 	arr[REDIRFS_IOP_GETATTR] = (void**)&iops->getattr; 
 	arr[REDIRFS_IOP_SETXATTR] = (void**)&iops->setxattr; 
 	arr[REDIRFS_IOP_GETXATTR] = (void**)&iops->getxattr; 
 	arr[REDIRFS_IOP_LISTXATTR] = (void**)&iops->listxattr; 
 	arr[REDIRFS_IOP_REMOVEXATTR] = (void**)&iops->removexattr; 
+#endif /* 0 */
 }
 
 void redirfs_init_fops_arr(void ***arr, struct file_operations *fops)
 {
+	arr[REDIRFS_FOP_OPEN] = (void**)&fops->open; 
+	arr[REDIRFS_FOP_FLUSH] = (void**)&fops->flush; 
+	arr[REDIRFS_FOP_RELEASE] = (void**)&fops->release; 
+#if 0
 	arr[REDIRFS_FOP_LLSEEK] = (void**)&fops->llseek; 
 	arr[REDIRFS_FOP_READ] = (void**)&fops->read; 
 	arr[REDIRFS_FOP_AIO_READ] = (void**)&fops->aio_read; 
@@ -107,9 +114,6 @@ void redirfs_init_fops_arr(void ***arr, struct file_operations *fops)
 	arr[REDIRFS_FOP_COMPAT_IOCTL] = (void**)&fops->compat_ioctl;
 #endif
 	arr[REDIRFS_FOP_MMAP] = (void**)&fops->mmap; 
-	arr[REDIRFS_FOP_OPEN] = (void**)&fops->open; 
-	arr[REDIRFS_FOP_FLUSH] = (void**)&fops->flush; 
-	arr[REDIRFS_FOP_RELEASE] = (void**)&fops->release; 
 	arr[REDIRFS_FOP_FSYNC] = (void**)&fops->fsync; 
 	arr[REDIRFS_FOP_AIO_FSYNC] = (void**)&fops->aio_fsync; 
 	arr[REDIRFS_FOP_FASYNC] = (void**)&fops->fasync; 
@@ -126,17 +130,20 @@ void redirfs_init_fops_arr(void ***arr, struct file_operations *fops)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9)
 	arr[REDIRFS_FOP_FLOCK] = (void**)&fops->flock;
 #endif
+#endif /* 0 */
 
 }
 
 void redirfs_init_dops_arr(void ***arr, struct dentry_operations *dops) 
 {
+	arr[REDIRFS_DOP_IPUT] = (void**)&dops->d_iput;
+#if 0
 	arr[REDIRFS_DOP_REVALIDATE] = (void**)&dops->d_revalidate;
 	arr[REDIRFS_DOP_HASH] = (void**)&dops->d_hash;
 	arr[REDIRFS_DOP_COMPARE] = (void**)&dops->d_compare;
 	arr[REDIRFS_DOP_DELETE] = (void**)&dops->d_delete;
 	arr[REDIRFS_DOP_RELEASE] = (void**)&dops->d_release;
-	arr[REDIRFS_DOP_IPUT] = (void**)&dops->d_iput;
+#endif
 }
 
 void redirfs_init_ops(struct redirfs_operations_t *ops, struct redirfs_vfs_operations_t *vfs_ops)
