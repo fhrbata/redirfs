@@ -1,3 +1,8 @@
+		================================
+		RedirFS - Redirecting FileSystem
+			      TODO 
+		================================
+
 * support for sub-mounts
 * support for character devices, block devices, FIFOs, symbolic links and sockets
 * allow filters to attach their private data to the VFS objects
