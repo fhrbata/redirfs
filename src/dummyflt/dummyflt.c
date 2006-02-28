@@ -70,7 +70,7 @@ static enum redirfs_retv dymmyflt_post_flush(redirfs_context context, struct red
  * Array of redirfs_op_t structures is used to register callback functions to RedirFS.
  * Each function is identified by type and operation. Type specifies group of
  * operations(e.g. file operations of regular file - REDIRFS_F_REG, dentry operations - REDIRFS_DENTRY,
- * inode operations of directory REDIRFS_I_DIR). Operation specifies on function from selected
+ * inode operations of directory REDIRFS_I_DIR). Operation specifies a function from selected
  * group(e.g. file open operation - REDIRFS_FOP_OPEN, inode lookup operation - REDIRFS_IOP_LOOKUP).
  */
 static struct redirfs_op_t dummyflt_ops[] = {
@@ -93,7 +93,7 @@ static int __init dummyflt_init(void)
 	
 	/* Registers Filter to the RedirFS Framework. Each Filter has to
 	 * specify its name, priority and flags. Name is used only for debug
-	 * and /proc info. Priority is a unique number determining Filter's
+	 * and /proc info. Priority is an unique number determining Filter's
 	 * position in the Filter chain. RedirFS Framework allows to register one or
 	 * more Filters. The priority is used to determine order in which registered
 	 * Filters will be called. Flags are reserved for future use. */
