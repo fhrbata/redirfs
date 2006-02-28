@@ -3,3 +3,42 @@
 				    A Quick Guide
 			======================================
 
+1. Requirements
+	
+	* Compiled RedirFS Framework - follow the RedirFS install file
+	* Correspondent Dazuko source code - download from www.dazuko.org
+
+2. Download
+	
+	* Get the latest patch at http://www.redirfs.org/packages/dazukoflt_patch-x.y.z.tar.gz
+
+3. Compilation
+	
+	* Unpack package
+		$ tar -xvzf dazukoflt_path-x.y.z.tar.gz
+
+	* Copy Dazukoflt patch to Dazuko source directory
+		$ cp dazukoflt_patch-x.y.z/dazukoflt-x.y.z.patch <Dazuko source code directory>
+	
+	* Patch Dazuko source code
+		$ cd <Dazuko source code directory>
+		$ patch -p1 < dazukoflt-x.y.z.patch
+
+	* Configure Dazuko with RedirFS support (see ./configure --help)
+		$ ./configure --enable-redirfs --redirfs-path=<patch to the RedirFS source directory>
+
+	* Compile Dazuko
+		$ make
+
+4. Inserting Dazuko Filter module
+	Note: The RedirFS module has to be already loaded in Linux kernel
+	
+	* Change user to root
+		$ su
+
+	* Insert module
+		# insmod dazuko.ko
+
+5. Problems & Bugs
+
+	* Can be reported to Bugzilla at http://www.redirfs.org/cgi-bin/bugzilla/index.cgi
