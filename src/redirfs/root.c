@@ -847,7 +847,11 @@ static void redirfs_walk_dcache(struct dentry *root,
 	redirfs_walk_dentry(root, dentry_data);
 
 	while (act != end) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16)
 		dentry = list_entry(act, struct dentry, d_child);
+#else
+		dentry = list_entry(act, struct dentry, d_u.d_child);
+#endif
 
 		if (redirfs_is_root(dentry))
 			goto skip_subtree;
@@ -871,7 +875,11 @@ skip_subtree:
 		while ((act == parent) && (act != end)) {
 			dentry = dentry->d_parent;
 			parent = &dentry->d_parent->d_subdirs;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16)
 			act = dentry->d_child.next;
+#else
+			act = dentry->d_u.d_child.next;
+#endif
 		}
 	}
 	
