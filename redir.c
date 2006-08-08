@@ -1,44 +1,109 @@
 #include "redir.h"
 
-static int rfs_replace_ops(struct dentry *dentry, void *data)
+extern spinlock_t rdentry_list_lock;
+extern struct list_head rdentry_list;
+
+static inline int rfs_replace_ops_cb(struct dentry *dentry, void *data)
 {
 	struct path *path = (struct path *)data;
-	struct rdentry *rdentry;
-	struct rinode *rinode;
+	struct rdentry *rdentry = rdentry_add(dentry, path);
 
-	rdentry = rdentry_add(dentry, path);
-	if (IS_ERR(rdentry)) {
-		BUG();
+
+	if (IS_ERR(rdentry))
 		return PTR_ERR(rdentry);
-	}
 
-	rinode = rinode_add(dentry->d_inode, rdentry, path);
-	if (IS_ERR(rinode)) {
-		BUG();
-		rdentry_put(rdentry);
-		return PTR_ERR(rinode);
-	}
-
-	path_add_rinode(path, rinode);
-	path_add_rdentry(path, rdentry);
 	rdentry_put(rdentry);
-	rinode_put(rinode);
 
 	return 0;
 }
 
-static int rfs_restore_ops(struct dentry *dentry, void *data)
+static int rfs_restore_ops_cb(struct dentry *dentry, void *data)
+{
+	struct rfile *rfile;
+	struct rfile *tmp;
+	struct rdentry *rdentry = rdentry_find(dentry);
+	struct rdentry *rdentry_rem;
+
+
+	if (!rdentry)
+		return 0;
+
+	rdentry_rem = rdentry_del(dentry);
+	if (rdentry_rem) {
+		spin_lock(&rdentry_list_lock);
+		list_del_init(&rdentry_rem->rd_list);
+		spin_unlock(&rdentry_list_lock);
+
+		spin_lock(&dentry->d_lock);
+		list_for_each_entry_safe(rfile, tmp, &rdentry->rd_rfiles,
+				rf_rdentry_list) {
+			rfile_del(rfile->rf_file);
+		}
+		spin_unlock(&dentry->d_lock);
+		rdentry_put(rdentry_rem);
+	}
+
+	rdentry_put(rdentry);
+
+	return 0; 
+}
+
+static int rfs_set_path(struct dentry *dentry, void *data)
 {
 	struct path *path = (struct path *)data;
 	struct rdentry *rdentry = rdentry_find(dentry);
-	struct rinode *rinode = rinode_find(dentry->d_inode);
+	struct rfile *rfile = NULL;
 
-	rinode_del(dentry->d_inode);
-	path_del_rinode(path, rinode);
-	rdentry_del(dentry);
-	path_del_rdentry(path, rdentry);
+
+	if (!rdentry)
+		return 0;
+
+	spin_lock(&dentry->d_lock);
+
+	path_put(rdentry->rd_path);
+	rdentry->rd_path = path_get(path);
+	
+	if (rdentry->rd_rinode) {
+		path_put(rdentry->rd_rinode->ri_path);
+		rdentry->rd_rinode->ri_path = path_get(path);
+	}
+ 
+	list_for_each_entry(rfile, &rdentry->rd_rfiles, rf_rdentry_list) {
+		path_put(rfile->rf_path);
+		rfile->rf_path = path_get(path);
+	}
+
+	spin_unlock(&dentry->d_lock);
+
 	rdentry_put(rdentry);
-	rinode_put(rinode);
+
+	return 0;
+}
+
+static int rfs_set_ops(struct dentry *dentry, void *data)
+{
+	struct path *path = (struct path *)data;
+	struct rdentry *rdentry = rdentry_find(dentry);
+	struct rfile *rfile = NULL;
+
+
+	if (!rdentry)
+		return 0;
+
+	spin_lock(&dentry->d_lock);
+
+	rdentry_set_ops(rdentry, path);
+
+	if (rdentry->rd_rinode)
+		rinode_set_ops(rdentry->rd_rinode, path);
+
+	list_for_each_entry(rfile, &rdentry->rd_rfiles, rf_rdentry_list) {
+		rfile_set_ops(rfile, path);
+	}
+
+	spin_unlock(&dentry->d_lock);
+
+	rdentry_put(rdentry);
 
 	return 0;
 }
@@ -111,7 +176,7 @@ int rfs_walk_dcache(struct dentry *root,
 
 			sib = kmalloc(sizeof(struct entry), GFP_ATOMIC);
 			if (!sib)
-				goto err_dcache_lock;
+				goto err_lock;
 
 			INIT_LIST_HEAD(&sib->e_list);
 			sib->e_dentry = dentry;
@@ -120,36 +185,33 @@ int rfs_walk_dcache(struct dentry *root,
 
 		spin_unlock(&dcache_lock);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16)
+		up(&inode->i_sem);
+#else
+		mutex_unlock(&inode->i_mutex);
+#endif
 		list_for_each_entry_safe(sib, tmp, &sibs, e_list) {
 			dentry = sib->e_dentry;
 			itmp = dentry->d_inode;
 
 			if (dcb(dentry, dcb_data))
-				goto err_inode_lock;
+				goto err;
 
 			if (!itmp || !S_ISDIR(itmp->i_mode))
 				goto next_sib;
 
 			subdir = kmalloc(sizeof(struct entry), GFP_KERNEL);
 			if (!subdir) 
-				goto err_inode_lock;
+				goto err;
 
 			INIT_LIST_HEAD(&subdir->e_list);
 			subdir->e_dentry = dget(dentry);
 			list_add_tail(&subdir->e_list, &dirs);
-
 next_sib:
 			list_del(&sib->e_list);
 			dput(sib->e_dentry);
 			kfree(sib);
 		}
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16)
-		up(&inode->i_sem);
-#else
-		mutex_unlock(&inode->i_mutex);
-#endif
-
 next_dir:
 		list_del(&dir->e_list);
 		dput(dir->e_dentry);
@@ -158,14 +220,15 @@ next_dir:
 
 	return 0;
 
-err_dcache_lock:
+err_lock:
 	spin_unlock(&dcache_lock);
-err_inode_lock:
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16)
 	up(&inode->i_sem);
 #else
 	mutex_unlock(&inode->i_mutex);
 #endif
+
 err:
 	BUG();
 	list_splice(&sibs, &dirs);
@@ -196,6 +259,9 @@ static int __init rfs_init(void)
 	if (rinode_cache_create())
 		return -1;
 
+	if (rfile_cache_create())
+		return -1;
+
 	if (path_lookup("/home", LOOKUP_FOLLOW, &nd)) {
 		synchronize_rcu();
 		rdentry_cache_destroy();
@@ -204,21 +270,45 @@ static int __init rfs_init(void)
 
 	dentry = dget(nd.dentry);
 
-	rfs_walk_dcache(dentry, rfs_replace_ops, path, NULL, NULL);
+	rfs_walk_dcache(dentry, rfs_replace_ops_cb, path, NULL, NULL);
 
 	return 0;
 }
 
 static void __exit rfs_exit(void)
 {
-	rfs_walk_dcache(dentry, rfs_restore_ops, path, NULL, NULL);
-	dput(dentry);
+	struct rdentry *rdentry;
+	struct rdentry *rdentry_rem;
+	struct list_head *loop;
+	struct list_head *tmp;
 
-	path_del(path);
+
+	rfs_walk_dcache(dentry, rfs_restore_ops_cb, path, NULL, NULL);
+
+	spin_lock(&rdentry_list_lock);
+
+	list_for_each_safe(loop, tmp, &rdentry_list) {
+		rdentry = list_entry(loop, struct rdentry, rd_list);
+		rdentry_rem = rdentry_del(rdentry->rd_dentry);
+		if (rdentry_rem) {
+			list_del_init(&rdentry_rem->rd_list);
+			rdentry_put(rdentry_rem);
+		}
+	}
+
+	spin_unlock(&rdentry_list_lock);
+
+	dput(dentry);
 	path_put(path);
 	synchronize_rcu();
+	/*
+	 * This sleep is just a temporary solution. Here RedirFS should wait
+	 * on event when all slab objects will be released via call_rcu.
+	 */
+	ssleep(10);
 	rdentry_cache_destroy();
 	rinode_cache_destroy();
+	rfile_cache_destroy();
 }
 
 module_init(rfs_init);

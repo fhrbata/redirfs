@@ -2,17 +2,7 @@
 
 static kmem_cache_t *rinode_cache = NULL;
 
-int rfs_permission(struct inode *inode, int mask, struct nameidata *nd);
-int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode);
-struct dentry *rfs_lookup(struct inode *inode,
-			  struct dentry *dentry,
-			  struct nameidata *nd);
-int rfs_create(struct inode *dir,
-	       struct dentry *dentry,
-	       int mode,
-	       struct nameidata *nd);
-
-static struct rinode *rinode_alloc(struct inode *inode, struct path *path)
+struct rinode *rinode_alloc(struct inode *inode, struct path *path)
 {
 	struct rinode *rinode = NULL;
 
@@ -21,11 +11,11 @@ static struct rinode *rinode_alloc(struct inode *inode, struct path *path)
 	if (!rinode)
 		return ERR_PTR(-ENOMEM);
 
-	INIT_LIST_HEAD(&rinode->ri_list);
 	INIT_RCU_HEAD(&rinode->ri_rcu);
+	INIT_LIST_HEAD(&rinode->ri_rdentries);
 	rinode->ri_inode = inode;
 	rinode->ri_op_old = inode->i_op;
-	rinode->ri_fop_old = inode->i_fop;
+	rinode->ri_fop_old = (struct file_operations *)inode->i_fop;
 	rinode->ri_aop_old = inode->i_mapping->a_ops;
 	rinode->ri_path = path_get(path);
 	atomic_set(&rinode->ri_count, 1);
@@ -38,26 +28,12 @@ static struct rinode *rinode_alloc(struct inode *inode, struct path *path)
 		memset(&rinode->ri_op_new, 0,
 				sizeof(struct inode_operations));
 
-	/*
-	if (inode->i_fop)
-		memcpy(&rinode->ri_fop_new, inode->i_fop,
-				sizeof(struct file_operations));
-	else
-		memset(&rinode->ri_fop_new, 0,
-				sizeof(struct file_operations));
-
 	if (inode->i_mapping->a_ops)
 		memcpy(&rinode->ri_aop_new, inode->i_mapping->a_ops,
 				sizeof(struct address_space_operations));
 	else
 		memset(&rinode->ri_aop_new, 0,
 				sizeof(struct address_space_operations));
-	*/
-
-	rinode->ri_op_new.lookup = rfs_lookup;
-	rinode->ri_op_new.permission = rfs_permission;
-	rinode->ri_op_new.mkdir = rfs_mkdir;
-	rinode->ri_op_new.create= rfs_create;
 
 	return rinode;
 }
@@ -71,7 +47,7 @@ inline struct rinode *rinode_get(struct rinode *rinode)
 
 inline void rinode_put(struct rinode *rinode)
 {
-	if (!rinode)
+	if (!rinode || IS_ERR(rinode))
 		return;
 
 	BUG_ON(!atomic_read(&rinode->ri_count));
@@ -79,6 +55,7 @@ inline void rinode_put(struct rinode *rinode)
 		return;
 	
 	path_put(rinode->ri_path);
+	BUG_ON(!list_empty(&rinode->ri_rdentries));
 	kmem_cache_free(rinode_cache, rinode);
 }
 
@@ -87,13 +64,11 @@ inline struct rinode *rinode_find(struct inode *inode)
 	struct rinode *rinode = NULL;
 	struct inode_operations *i_op;
 
-	if (!inode)
-		return NULL;
 
 	rcu_read_lock();
 	i_op = rcu_dereference(inode->i_op);
 	if (i_op) {
-		if(i_op->lookup == rfs_lookup) {
+		if (i_op->lookup == rfs_lookup) {
 			rinode = container_of(i_op, struct rinode, ri_op_new);
 			rinode = rinode_get(rinode);
 		}
@@ -101,44 +76,6 @@ inline struct rinode *rinode_find(struct inode *inode)
 	rcu_read_unlock();
 
 	return rinode;
-
-}
-
-struct rinode *rinode_add(struct inode *inode,
-			  struct rdentry *rdentry,
-			  struct path *path)
-{
-	struct rinode *rinode;
-	struct rinode *rinode_new;
-
-
-	if (!inode)
-		return NULL;
-
-	rinode_new = rinode_alloc(inode, path);
-	if (IS_ERR(rinode_new))
-		return rinode_new;
-
-	spin_lock(&inode->i_lock);
-	rinode = rinode_find(inode);
-	if (rinode) {
-		if (rdentry)
-			atomic_inc(&rinode->ri_nlink);
-		rinode_put(rinode_new);
-		rinode_put(rinode);
-		spin_unlock(&inode->i_lock);
-		return NULL;
-	}
-
-	/*
-	inode->i_fop = &rinode_new->ri_fop_new;
-	inode->i_mapping->a_ops = &rinode_new->ri_aop_new;
-	*/
-	rcu_assign_pointer(inode->i_op, &rinode_new->ri_op_new);
-
-	spin_unlock(&inode->i_lock);
-
-	return rinode_get(rinode_new);
 }
 
 static inline void rinode_del_rcu(struct rcu_head *head)
@@ -155,10 +92,8 @@ void rinode_del(struct inode *inode)
 	struct rinode *rinode = NULL;
 
 
-	if (!inode)
-		return;
-
 	spin_lock(&inode->i_lock);
+
 	rinode = rinode_find(inode);
 	if (!rinode) {
 		spin_unlock(&inode->i_lock);
@@ -171,21 +106,36 @@ void rinode_del(struct inode *inode)
 		return;
 	}
 
-	/*
 	inode->i_fop = rinode->ri_fop_old;
 	inode->i_mapping->a_ops = rinode->ri_aop_old;
-	*/
 	rcu_assign_pointer(inode->i_op, rinode->ri_op_old);
 
-	spin_unlock(&inode->i_lock);
 	rinode_put(rinode);
+
+	spin_unlock(&inode->i_lock);
+
 	call_rcu(&rinode->ri_rcu, rinode_del_rcu);
+}
+
+inline struct path *rinode_get_path(struct rinode *rinode)
+{
+	struct path *path;
+
+
+	if (!rinode)
+		return NULL;
+
+	spin_lock(&rinode->ri_inode->i_lock);
+	path = path_get(rinode->ri_path);
+	spin_unlock(&rinode->ri_inode->i_lock);
+
+	return path;
 }
 
 int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 {
 	struct rinode *parent = rinode_find(dir);
-	struct rinode *rinode;
+	struct path *path = rinode_get_path(parent);
 	struct rdentry *rdentry;
 	int rv = -EPERM;
 
@@ -199,21 +149,12 @@ int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	if (parent->ri_op_old && parent->ri_op_old->mkdir)
 		rv = parent->ri_op_old->mkdir(dir, dentry, mode);
 
-	spin_lock(&dir->i_lock);
-	rdentry = rdentry_add(dentry, parent->ri_path);
+	rdentry = rdentry_add(dentry, path);
 	BUG_ON(IS_ERR(rdentry));
 
-	rinode = rinode_add(dentry->d_inode, rdentry, parent->ri_path);
-	BUG_ON(IS_ERR(rinode));
-
-	path_add_rinode(parent->ri_path, rinode);
-	path_add_rdentry(parent->ri_path, rdentry);
-
-	spin_unlock(&dir->i_lock);
-
-	rinode_put(rinode);
 	rdentry_put(rdentry);
 	rinode_put(parent);
+	path_put(path);
 
 	return rv;
 }
@@ -224,7 +165,7 @@ int rfs_create(struct inode *dir,
 	       struct nameidata *nd)
 {
 	struct rinode *parent = rinode_find(dir);
-	struct rinode *rinode;
+	struct path *path = rinode_get_path(parent);
 	struct rdentry *rdentry;
 	int rv = -EACCES;
 
@@ -238,21 +179,12 @@ int rfs_create(struct inode *dir,
 	if (parent->ri_op_old && parent->ri_op_old->create)
 		rv = parent->ri_op_old->create(dir, dentry, mode, nd);
 
-	spin_lock(&dir->i_lock);
-	rdentry = rdentry_add(dentry, parent->ri_path);
+	rdentry = rdentry_add(dentry, path);
 	BUG_ON(IS_ERR(rdentry));
 
-	rinode = rinode_add(dentry->d_inode, rdentry, parent->ri_path);
-	BUG_ON(IS_ERR(rinode));
-
-	path_add_rinode(parent->ri_path, rinode);
-	path_add_rdentry(parent->ri_path, rdentry);
-
-	spin_unlock(&dir->i_lock);
-
-	rinode_put(rinode);
 	rdentry_put(rdentry);
 	rinode_put(parent);
+	path_put(path);
 
 	return rv;
 }
@@ -262,7 +194,7 @@ struct dentry *rfs_lookup(struct inode *inode,
 			  struct nameidata *nd)
 {
 	struct rinode *parent = rinode_find(inode);
-	struct rinode *rinode;
+	struct path *path = rinode_get_path(parent);
 	struct rdentry *rdentry;
 	struct dentry *rv = NULL;
 
@@ -276,21 +208,12 @@ struct dentry *rfs_lookup(struct inode *inode,
 	if (parent->ri_op_old && parent->ri_op_old->lookup)
 		rv = parent->ri_op_old->lookup(inode, dentry, nd);
 
-	spin_lock(&inode->i_lock);
-	rdentry = rdentry_add(dentry, parent->ri_path);
+	rdentry = rdentry_add(dentry, path);
 	BUG_ON(IS_ERR(rdentry));
 
-	rinode = rinode_add(dentry->d_inode, rdentry, parent->ri_path);
-	BUG_ON(IS_ERR(rinode));
-
-	path_add_rinode(parent->ri_path, rinode);
-	path_add_rdentry(parent->ri_path, rdentry);
-
-	spin_unlock(&inode->i_lock);
-
-	rinode_put(rinode);
 	rdentry_put(rdentry);
 	rinode_put(parent);
+	path_put(path);
 
 	return rv;
 }
@@ -298,6 +221,7 @@ struct dentry *rfs_lookup(struct inode *inode,
 int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 {
 	struct rinode *rinode = rinode_find(inode);
+	struct path *path = rinode_get_path(rinode);
 	int submask = mask & ~MAY_APPEND;
 	int rv;
 
@@ -316,11 +240,20 @@ int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 		rv = generic_permission(inode, submask, NULL);
 
 	rinode_put(rinode);
-
-	if (nd && nd->dentry)
-		printk(KERN_ERR "rfs_permission dname: %s\n", nd->dentry->d_name.name);
+	path_put(path);
 
 	return rv;
+}
+
+void rinode_set_ops(struct rinode *rinode, struct path *path)
+{
+	spin_lock(&path->p_lock);
+
+	rinode->ri_op_new.lookup = rfs_lookup;
+	rinode->ri_op_new.mkdir = rfs_mkdir;
+	rinode->ri_op_new.create = rfs_create;
+
+	spin_unlock(&path->p_lock);
 }
 
 int rinode_cache_create(void)
