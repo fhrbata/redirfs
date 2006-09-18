@@ -13,6 +13,7 @@
 #include <linux/version.h>
 #include <linux/namei.h>
 #include <linux/delay.h>
+#include <linux/wait.h>
 
 struct rdentry;
 struct rinode;
@@ -69,7 +70,7 @@ struct rdentry {
 int rdentry_cache_create(void);
 void rdentry_cache_destroy(void);
 struct rdentry *rdentry_add(struct dentry *dentry, struct path *path);
-struct rdentry *rdentry_del(struct dentry *dentry);
+void rdentry_del(struct dentry *dentry);
 struct rdentry *rdentry_get(struct rdentry *rdentry);
 void rdentry_put(struct rdentry *rdentry);
 struct rdentry *rdentry_find(struct dentry *dentry);

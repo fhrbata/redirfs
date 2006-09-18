@@ -1,5 +1,8 @@
 #include "redir.h"
 
+DECLARE_WAIT_QUEUE_HEAD(rdentries_wait);
+atomic_t rdentries_freed;
+
 extern spinlock_t rdentry_list_lock;
 extern struct list_head rdentry_list;
 
@@ -22,26 +25,19 @@ static int rfs_restore_ops_cb(struct dentry *dentry, void *data)
 	struct rfile *rfile;
 	struct rfile *tmp;
 	struct rdentry *rdentry = rdentry_find(dentry);
-	struct rdentry *rdentry_rem;
 
 
 	if (!rdentry)
 		return 0;
+	
+	rdentry_del(dentry);
 
-	rdentry_rem = rdentry_del(dentry);
-	if (rdentry_rem) {
-		spin_lock(&rdentry_list_lock);
-		list_del_init(&rdentry_rem->rd_list);
-		spin_unlock(&rdentry_list_lock);
-
-		spin_lock(&dentry->d_lock);
-		list_for_each_entry_safe(rfile, tmp, &rdentry->rd_rfiles,
-				rf_rdentry_list) {
-			rfile_del(rfile->rf_file);
-		}
-		spin_unlock(&dentry->d_lock);
-		rdentry_put(rdentry_rem);
+	spin_lock(&dentry->d_lock);
+	list_for_each_entry_safe(rfile, tmp, &rdentry->rd_rfiles,
+			rf_rdentry_list) {
+		rfile_del(rfile->rf_file);
 	}
+	spin_unlock(&dentry->d_lock);
 
 	rdentry_put(rdentry);
 
@@ -249,6 +245,7 @@ static int __init rfs_init(void)
 	struct nameidata nd;
 
 
+	atomic_set(&rdentries_freed, 0);
 	path = path_alloc();
 	if (!path)
 		return -1;
@@ -277,35 +274,13 @@ static int __init rfs_init(void)
 
 static void __exit rfs_exit(void)
 {
-	struct rdentry *rdentry;
-	struct rdentry *rdentry_rem;
-	struct list_head *loop;
-	struct list_head *tmp;
-
-
 	rfs_walk_dcache(dentry, rfs_restore_ops_cb, path, NULL, NULL);
-
-	spin_lock(&rdentry_list_lock);
-
-	list_for_each_safe(loop, tmp, &rdentry_list) {
-		rdentry = list_entry(loop, struct rdentry, rd_list);
-		rdentry_rem = rdentry_del(rdentry->rd_dentry);
-		if (rdentry_rem) {
-			list_del_init(&rdentry_rem->rd_list);
-			rdentry_put(rdentry_rem);
-		}
-	}
-
-	spin_unlock(&rdentry_list_lock);
 
 	dput(dentry);
 	path_put(path);
-	synchronize_rcu();
-	/*
-	 * This sleep is just a temporary solution. Here RedirFS should wait
-	 * on event when all slab objects will be released via call_rcu.
-	 */
-	ssleep(10);
+
+	wait_event_interruptible(rdentries_wait, atomic_read(&rdentries_freed));
+
 	rdentry_cache_destroy();
 	rinode_cache_destroy();
 	rfile_cache_destroy();

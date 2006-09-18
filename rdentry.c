@@ -1,10 +1,11 @@
 #include "redir.h"
 
 static kmem_cache_t *rdentry_cache = NULL;
-spinlock_t rdentry_list_lock = SPIN_LOCK_UNLOCKED;
-LIST_HEAD(rdentry_list);
-
+static unsigned long long rdentry_cnt = 0;
+static spinlock_t rdentry_cnt_lock = SPIN_LOCK_UNLOCKED;
 extern struct file_operations rfs_file_ops;
+extern atomic_t rdentries_freed;
+extern wait_queue_head_t rdentries_wait;
 
 static struct rdentry *rdentry_alloc(struct dentry* dentry, struct path *path)
 {
@@ -15,7 +16,6 @@ static struct rdentry *rdentry_alloc(struct dentry* dentry, struct path *path)
 	if (!rdentry)
 		return ERR_PTR(-ENOMEM);
 
-	INIT_LIST_HEAD(&rdentry->rd_list);
 	INIT_LIST_HEAD(&rdentry->rd_rfiles);
 	INIT_LIST_HEAD(&rdentry->rd_rinode_list);
 	INIT_RCU_HEAD(&rdentry->rd_rcu);
@@ -31,6 +31,10 @@ static struct rdentry *rdentry_alloc(struct dentry* dentry, struct path *path)
 	else
 		memset(&rdentry->rd_op_new, 0, 
 				sizeof(struct dentry_operations));
+
+	spin_lock(&rdentry_cnt_lock);
+	rdentry_cnt++;
+	spin_unlock(&rdentry_cnt_lock);
 
 	return rdentry;
 }
@@ -57,6 +61,14 @@ inline void rdentry_put(struct rdentry *rdentry)
 	rinode_put(rdentry->rd_rinode);
 
 	kmem_cache_free(rdentry_cache, rdentry);
+
+	spin_lock(&rdentry_cnt_lock);
+	if (!--rdentry_cnt)
+		atomic_set(&rdentries_freed, 1);
+	spin_unlock(&rdentry_cnt_lock);
+
+	if (atomic_read(&rdentries_freed))
+		wake_up_interruptible(&rdentries_wait);
 }
 
 
@@ -111,9 +123,6 @@ struct rdentry *rdentry_add(struct dentry *dentry, struct path *path)
 	} else {
 		rcu_assign_pointer(dentry->d_op, &rdentry_new->rd_op_new);
 		rdentry = rdentry_get(rdentry_new);
-		spin_lock(&rdentry_list_lock);
-		list_add_tail(&rdentry->rd_list, &rdentry_list);
-		spin_unlock(&rdentry_list_lock);
 	}
 
 	if (!inode || rdentry->rd_rinode) {
@@ -166,7 +175,7 @@ static inline void rdentry_del_rcu(struct rcu_head *head)
 	rdentry_put(rdentry);
 }
 
-struct rdentry *rdentry_del(struct dentry *dentry)
+void rdentry_del(struct dentry *dentry)
 {
 	struct rdentry *rdentry = NULL;
 	struct rinode *rinode = NULL;
@@ -177,7 +186,7 @@ struct rdentry *rdentry_del(struct dentry *dentry)
 	rdentry = rdentry_find(dentry);
 	if (!rdentry) {
 		spin_unlock(&dentry->d_lock);
-		return NULL;
+		return;
 	}
 
 	rcu_assign_pointer(dentry->d_op, rdentry->rd_op_old);
@@ -196,7 +205,7 @@ struct rdentry *rdentry_del(struct dentry *dentry)
 
 	call_rcu(&rdentry->rd_rcu, rdentry_del_rcu);
 
-	return rdentry;
+	rdentry_put(rdentry);
 }
 
 inline struct path *rdentry_get_path(struct rdentry *rdentry)
@@ -323,7 +332,6 @@ void rfs_d_release(struct dentry *dentry)
 {
 	struct rdentry *rdentry = rdentry_find(dentry);
 	struct path *path = rdentry_get_path(rdentry);
-	struct rdentry *rdentry_rem;
 
 
 	if (!rdentry) {
@@ -336,13 +344,8 @@ void rfs_d_release(struct dentry *dentry)
 		rdentry->rd_op_old->d_release(dentry);
 
 
-	rdentry_rem = rdentry_del(dentry);
-	if (rdentry_rem) {
-		spin_lock(&rdentry_list_lock);
-		list_del_init(&rdentry_rem->rd_list);
-		spin_unlock(&rdentry_list_lock);
-		rdentry_put(rdentry_rem);
-	}
+	rdentry_del(dentry);
+
 	rdentry_put(rdentry);
 	path_put(path);
 }

@@ -3,6 +3,7 @@
 static kmem_cache_t *rfile_cache = NULL;
 
 struct file_operations rfs_file_ops = {
+	.owner = THIS_MODULE,
 	.open = rfs_open
 };
 
@@ -58,6 +59,9 @@ inline struct rfile *rfile_get(struct rfile* rfile)
 
 inline void rfile_put(struct rfile *rfile)
 {
+	struct rdentry *rdentry;
+
+
 	if (!rfile || IS_ERR(rfile))
 		return;
 
@@ -66,8 +70,9 @@ inline void rfile_put(struct rfile *rfile)
 		return;
 
 	path_put(rfile->rf_path);
-	rdentry_put(rfile->rf_rdentry);
+	rdentry = rfile->rf_rdentry;
 	kmem_cache_free(rfile_cache, rfile);
+	rdentry_put(rdentry);
 }
 
 inline struct rfile* rfile_find(struct file *file)
@@ -155,6 +160,7 @@ void rfile_del(struct file *file)
 int rfs_open(struct inode *inode, struct file *file)
 {
 	struct rinode *rinode = rinode_find(inode);
+	const struct file_operations *fop = file->f_op;
 	struct rfile *rfile = NULL;
 	int rv = 0;
 
@@ -163,6 +169,7 @@ int rfs_open(struct inode *inode, struct file *file)
 		rcu_assign_pointer(file->f_op, inode->i_fop);
 		if (file->f_op && file->f_op->open)
 			rv = file->f_op->open(inode, file);
+		fops_put(fop);
 		return rv;
 	}
 
@@ -177,6 +184,7 @@ int rfs_open(struct inode *inode, struct file *file)
 	rinode_put(rinode);
 	rfile_put(rfile);
 
+	fops_put(fop);
 	return rv;
 }
 
