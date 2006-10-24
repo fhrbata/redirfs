@@ -299,7 +299,7 @@ union redirfs_op_args_t {
 	struct {
 		struct kiocb			*kiocb;
 		char __user			*buffer;
-		size_t				cound;
+		size_t				count;
 		loff_t				pos;
 	} f_aio_read;						/**< not implemented yet */
 
@@ -361,6 +361,9 @@ union redirfs_op_args_t {
 
 	struct {
 		struct file			*file;		/**< file object */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
+		fl_owner_t          id;     /**< pointer to struct files_struct */
+#endif
 	} f_flush;						/**< flush function arguments */
 
 	struct {

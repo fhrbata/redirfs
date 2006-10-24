@@ -798,20 +798,33 @@ exit:
 	return rv;
 }
 
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
+static int redirfs_reg_flush(struct file *file, fl_owner_t id)
+#else
 static int redirfs_reg_flush(struct file *file)
+#endif
 {
 	struct redirfs_inode_t *rinode;
 	struct redirfs_root_t *root;
 	struct redirfs_args_t args;
 	char buff[PAGE_SIZE];
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
+	int (*flush) (struct file *, fl_owner_t) = NULL;
+#else
 	int (*flush) (struct file *) = NULL;
+#endif
 	int rv;
 
 	rinode = redirfs_ifind(file->f_dentry->d_inode->i_sb, file->f_dentry->d_inode->i_ino);
 	if (!rinode) {
 		if (file->f_op->flush != redirfs_reg_flush)
 			if (file->f_op->flush)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
+				file->f_op->flush(file, id);
+#else
 				file->f_op->flush(file);
+#endif
 			else
 				return 0;
 		else {
@@ -824,6 +837,9 @@ static int redirfs_reg_flush(struct file *file)
 	BUG_ON(!root);
 
 	args.args.f_flush.file = file;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
+	args.args.f_flush.id = id;
+#endif
 	args.info.call = REDIRFS_PRECALL;
 	args.exts.full_path = redirfs_dpath(file->f_dentry, buff, PAGE_SIZE);
 
@@ -839,7 +855,11 @@ static int redirfs_reg_flush(struct file *file)
 	spin_unlock(&root->lock);
 
 	if (flush)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
+		rv = flush(file, id);
+#else
 		rv = flush(file);
+#endif
 	else
 		rv = 0;
 

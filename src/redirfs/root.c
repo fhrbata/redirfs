@@ -500,7 +500,7 @@ void redirfs_set_reg_ops(struct redirfs_root_t *root, struct inode *inode)
 	spin_lock(&root->lock);
 
 	root->orig_ops.reg_iops = inode->i_op;
-	root->orig_ops.reg_fops = inode->i_fop;
+	root->orig_ops.reg_fops = (struct file_operations *)inode->i_fop;
 
 	redirfs_init_iops_arr(root->orig_ops.reg_iops_arr, root->orig_ops.reg_iops); 
 	redirfs_init_fops_arr(root->orig_ops.reg_fops_arr, root->orig_ops.reg_fops); 
@@ -517,7 +517,7 @@ void redirfs_set_dir_ops(struct redirfs_root_t *root, struct inode *inode)
 	spin_lock(&root->lock);
 
 	root->orig_ops.dir_iops = inode->i_op;
-	root->orig_ops.dir_fops = inode->i_fop;
+	root->orig_ops.dir_fops = (struct file_operations *)inode->i_fop;
 
 	redirfs_init_iops_arr(root->orig_ops.dir_iops_arr, root->orig_ops.dir_iops); 
 	redirfs_init_fops_arr(root->orig_ops.dir_fops_arr, root->orig_ops.dir_fops); 
