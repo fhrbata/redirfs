@@ -2,6 +2,10 @@
 
 DECLARE_WAIT_QUEUE_HEAD(rdentries_wait);
 atomic_t rdentries_freed;
+DECLARE_WAIT_QUEUE_HEAD(rinodes_wait);
+atomic_t rinodes_freed;
+DECLARE_WAIT_QUEUE_HEAD(rfiles_wait);
+atomic_t rfiles_freed;
 
 extern spinlock_t rdentry_list_lock;
 extern struct list_head rdentry_list;
@@ -246,6 +250,9 @@ static int __init rfs_init(void)
 
 
 	atomic_set(&rdentries_freed, 0);
+	atomic_set(&rinodes_freed, 0);
+	atomic_set(&rfiles_freed, 0);
+
 	path = path_alloc();
 	if (!path)
 		return -1;
@@ -280,9 +287,12 @@ static void __exit rfs_exit(void)
 	path_put(path);
 
 	wait_event_interruptible(rdentries_wait, atomic_read(&rdentries_freed));
-
 	rdentry_cache_destroy();
+
+	wait_event_interruptible(rinodes_wait, atomic_read(&rinodes_freed));
 	rinode_cache_destroy();
+
+	wait_event_interruptible(rinodes_wait, atomic_read(&rfiles_freed));
 	rfile_cache_destroy();
 }
 

@@ -358,6 +358,8 @@ void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 
 
 	if (!rdentry) {
+		rinode_put(rinode);
+
 		if (dentry->d_op && dentry->d_op->d_iput)
 			dentry->d_op->d_iput(dentry, inode);
 		else

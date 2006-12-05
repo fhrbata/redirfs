@@ -1,6 +1,10 @@
 #include "redir.h"
 
 static kmem_cache_t *rinode_cache = NULL;
+static unsigned long long rinode_cnt = 0;
+static spinlock_t rinode_cnt_lock = SPIN_LOCK_UNLOCKED;
+extern atomic_t rinodes_freed;
+extern wait_queue_head_t rinodes_wait;
 
 struct rinode *rinode_alloc(struct inode *inode, struct path *path)
 {
@@ -16,7 +20,7 @@ struct rinode *rinode_alloc(struct inode *inode, struct path *path)
 	rinode->ri_inode = inode;
 	rinode->ri_op_old = inode->i_op;
 	rinode->ri_fop_old = (struct file_operations *)inode->i_fop;
-	rinode->ri_aop_old = inode->i_mapping->a_ops;
+	rinode->ri_aop_old = (struct address_space_operations *)inode->i_mapping->a_ops;
 	rinode->ri_path = path_get(path);
 	atomic_set(&rinode->ri_count, 1);
 	atomic_set(&rinode->ri_nlink, 1);
@@ -34,6 +38,10 @@ struct rinode *rinode_alloc(struct inode *inode, struct path *path)
 	else
 		memset(&rinode->ri_aop_new, 0,
 				sizeof(struct address_space_operations));
+
+	spin_lock(&rinode_cnt_lock);
+	rinode_cnt++;
+	spin_unlock(&rinode_cnt_lock);
 
 	return rinode;
 }
@@ -57,6 +65,14 @@ inline void rinode_put(struct rinode *rinode)
 	path_put(rinode->ri_path);
 	BUG_ON(!list_empty(&rinode->ri_rdentries));
 	kmem_cache_free(rinode_cache, rinode);
+
+	spin_lock(&rinode_cnt_lock);
+	if (!--rinode_cnt)
+		atomic_set(&rinodes_freed, 1);
+	spin_unlock(&rinode_cnt_lock);
+
+	if (atomic_read(&rinodes_freed))
+		wake_up_interruptible(&rinodes_wait);
 }
 
 inline struct rinode *rinode_find(struct inode *inode)
@@ -233,7 +249,7 @@ int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 			rv = generic_permission(inode, submask, NULL);
 		return rv;
 	}
-
+	
 	if (rinode->ri_op_old && rinode->ri_op_old->permission)
 		rv = rinode->ri_op_old->permission(inode, mask, nd);
 	else

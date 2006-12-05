@@ -1,6 +1,10 @@
 #include "redir.h"
 
 static kmem_cache_t *rfile_cache = NULL;
+static unsigned long long rfile_cnt = 0;
+static spinlock_t rfile_cnt_lock = SPIN_LOCK_UNLOCKED;
+extern atomic_t rfiles_freed;
+extern wait_queue_head_t rfiles_wait;
 
 struct file_operations rfs_file_ops = {
 	.owner = THIS_MODULE,
@@ -47,6 +51,10 @@ static struct rfile *rfile_alloc(struct file *file)
 
 	rinode_put(rinode);
 
+	spin_lock(&rfile_cnt_lock);
+	rfile_cnt++;
+	spin_unlock(&rfile_cnt_lock);
+
 	return rfile;
 }
 
@@ -59,9 +67,6 @@ inline struct rfile *rfile_get(struct rfile* rfile)
 
 inline void rfile_put(struct rfile *rfile)
 {
-	struct rdentry *rdentry;
-
-
 	if (!rfile || IS_ERR(rfile))
 		return;
 
@@ -70,9 +75,16 @@ inline void rfile_put(struct rfile *rfile)
 		return;
 
 	path_put(rfile->rf_path);
-	rdentry = rfile->rf_rdentry;
+	rdentry_put(rfile->rf_rdentry);
 	kmem_cache_free(rfile_cache, rfile);
-	rdentry_put(rdentry);
+
+	spin_lock(&rfile_cnt_lock);
+	if (!--rfile_cnt)
+		atomic_set(&rfiles_freed, 1);
+	spin_unlock(&rfile_cnt_lock);
+
+	if (atomic_read(&rfiles_freed))
+		wake_up_interruptible(&rfiles_wait);
 }
 
 inline struct rfile* rfile_find(struct file *file)
