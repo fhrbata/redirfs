@@ -20,11 +20,12 @@ static struct rfile *rfile_alloc(struct file *file)
 	
 	rfile = kmem_cache_alloc(rfile_cache, GFP_KERNEL);
 	if (!rfile)
-		return ERR_PTR(-ENOMEM);
+		return ERR_PTR(RFS_ERR_NOMEM);
 	
 	INIT_LIST_HEAD(&rfile->rf_rdentry_list);
 	INIT_RCU_HEAD(&rfile->rf_rcu);
 	rfile->rf_path = NULL;
+	rfile->rf_chain = NULL;
 	rfile->rf_file = file;
 	rfile->rf_rdentry = NULL;
 	atomic_set(&rfile->rf_count, 1);
@@ -110,13 +111,12 @@ struct rfile *rfile_add(struct file *file)
 {
 	struct rfile *rfile_new;
 	struct rdentry *rdentry;
+	struct rdentry *rdentry_tmp;
 
 
 	rfile_new = rfile_alloc(file);
 	if (IS_ERR(rfile_new))
 		return rfile_new;
-
-	spin_lock(&file->f_dentry->d_lock);
 
 	rdentry = rdentry_find(file->f_dentry);
 
@@ -127,17 +127,25 @@ struct rfile *rfile_add(struct file *file)
 		return NULL;
 	}
 
-	rfile_new->rf_rdentry = rdentry;
-	rfile_new->rf_path = path_get(rdentry->rd_path);
+	spin_lock(&rdentry->rd_lock);
 
-	rcu_assign_pointer(file->f_op, &rfile_new->rf_op_new);
+	rdentry_tmp = rdentry_find(file->f_dentry);
 
-	list_add_tail(&rfile_new->rf_rdentry_list, &rdentry->rd_rfiles);
-	rfile_get(rfile_new);
+	if (rdentry_tmp) {
+		rfile_new->rf_rdentry = rdentry;
+		rfile_new->rf_path = path_get(rdentry->rd_path);
+		rfile_new->rf_chain = chain_get(rdentry->rd_chain);
 
-	rfile_set_ops(rfile_new, rdentry->rd_path);
+		rcu_assign_pointer(file->f_op, &rfile_new->rf_op_new);
 
-	spin_unlock(&file->f_dentry->d_lock);
+		list_add_tail(&rfile_new->rf_rdentry_list, &rdentry->rd_rfiles);
+		rfile_get(rfile_new);
+
+		rfile_set_ops(rfile_new, rdentry->rd_path);
+	}
+
+	spin_unlock(&rdentry->rd_lock);
+	rdentry_put(rdentry_tmp);
 
 	return rfile_get(rfile_new);
 }
@@ -215,9 +223,13 @@ int rfs_release(struct inode *inode, struct file *file)
 	if (rfile->rf_op_old && rfile->rf_op_old->release)
 		rv = rfile->rf_op_old->release(inode, file);
 
-	spin_lock(&file->f_dentry->d_lock);
+
+	spin_lock(&rfile->rf_rdentry->rd_lock);
+
 	rfile_del(file);
-	spin_unlock(&file->f_dentry->d_lock);
+
+	spin_unlock(&rfile->rf_rdentry->rd_lock);
+
 	rfile_put(rfile);
 
 	return rv;

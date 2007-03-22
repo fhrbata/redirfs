@@ -7,23 +7,26 @@ extern struct file_operations rfs_file_ops;
 extern atomic_t rdentries_freed;
 extern wait_queue_head_t rdentries_wait;
 
-static struct rdentry *rdentry_alloc(struct dentry* dentry, struct path *path)
+struct rdentry *rdentry_alloc(struct dentry* dentry)
 {
 	struct rdentry *rdentry = NULL;
 
 
 	rdentry = kmem_cache_alloc(rdentry_cache, SLAB_KERNEL);
 	if (!rdentry)
-		return ERR_PTR(-ENOMEM);
+		return ERR_PTR(RFS_ERR_NOMEM);
 
 	INIT_LIST_HEAD(&rdentry->rd_rfiles);
 	INIT_LIST_HEAD(&rdentry->rd_rinode_list);
 	INIT_RCU_HEAD(&rdentry->rd_rcu);
 	rdentry->rd_op_old = dentry->d_op;
 	rdentry->rd_dentry = dentry;
-	rdentry->rd_path = path_get(path);
+	rdentry->rd_path = NULL;
 	rdentry->rd_rinode = NULL;
+	rdentry->rd_chain = NULL;
+	rdentry->rd_root = 0;
 	atomic_set(&rdentry->rd_count, 1);
+	spin_lock_init(&rdentry->rd_lock);
 
 	if (dentry->d_op)
 		memcpy(&rdentry->rd_op_new, dentry->d_op, 
@@ -58,6 +61,7 @@ inline void rdentry_put(struct rdentry *rdentry)
 	BUG_ON(!list_empty(&rdentry->rd_rfiles));
 
 	path_put(rdentry->rd_path);
+	chain_put(rdentry->rd_chain);
 	rinode_put(rdentry->rd_rinode);
 
 	kmem_cache_free(rdentry_cache, rdentry);
@@ -91,7 +95,7 @@ inline struct rdentry *rdentry_find(struct dentry *dentry)
 	return rdentry;
 }
 
-struct rdentry *rdentry_add(struct dentry *dentry, struct path *path)
+struct rdentry *rdentry_add(struct dentry *dentry)
 {
 	struct rdentry *rdentry = NULL;
 	struct rdentry *rdentry_new = NULL;
@@ -100,12 +104,12 @@ struct rdentry *rdentry_add(struct dentry *dentry, struct path *path)
 	struct inode *inode = dentry->d_inode;
 
 
-	rdentry_new = rdentry_alloc(dentry, path);
+	rdentry_new = rdentry_alloc(dentry);
 	if (IS_ERR(rdentry_new))
 			return rdentry_new;
 
 	if (inode) {
-		rinode_new = rinode_alloc(inode, path);
+		rinode_new = rinode_alloc(inode);
 		if (IS_ERR(rinode_new)) {
 			rdentry_put(rdentry_new);
 			return ERR_PTR(PTR_ERR(rinode_new));
@@ -126,9 +130,6 @@ struct rdentry *rdentry_add(struct dentry *dentry, struct path *path)
 	}
 
 	if (!inode || rdentry->rd_rinode) {
-		if (rdentry_new)
-			rdentry_set_ops(rdentry, path);
-
 		spin_unlock(&dentry->d_lock);
 		rinode_put(rinode_new);
 		return rdentry;
@@ -153,12 +154,6 @@ struct rdentry *rdentry_add(struct dentry *dentry, struct path *path)
 	rdentry->rd_rinode = rinode;
 	list_add_tail(&rdentry->rd_rinode_list, &rinode->ri_rdentries);
 	rdentry_get(rdentry);
-
-	if (rinode_new)
-		rinode_set_ops(rinode, path);
-
-	if (rdentry_new)
-		rdentry_set_ops(rdentry, path);
 
 	spin_unlock(&inode->i_lock);
 	spin_unlock(&dentry->d_lock);
@@ -216,11 +211,26 @@ inline struct path *rdentry_get_path(struct rdentry *rdentry)
 	if (!rdentry)
 		return NULL;
 
-	spin_lock(&rdentry->rd_dentry->d_lock);
+	spin_lock(&rdentry->rd_lock);
 	path = path_get(rdentry->rd_path);
-	spin_unlock(&rdentry->rd_dentry->d_lock);
+	spin_unlock(&rdentry->rd_lock);
 
 	return path;
+}
+
+inline struct chain *rdentry_get_chain(struct rdentry *rdentry)
+{
+	struct chain *chain;
+
+	
+	if (!rdentry)
+		return NULL;
+
+	spin_lock(&rdentry->rd_lock);
+	chain = chain_get(rdentry->rd_chain);
+	spin_unlock(&rdentry->rd_lock);
+
+	return chain;
 }
 
 int rfs_d_revalidate(struct dentry *dentry, struct nameidata *nd)
@@ -379,39 +389,97 @@ void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 	path_put(path);
 }
 
+void rdentry_set_none_ops(struct rdentry *rdentry, struct path *path)
+{
+	if (atomic_read(&path->p_ops_cnt[RFS_NONE_DOP_D_REVALIDATE]))
+		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
+	else
+		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old->d_revalidate;
+
+
+	if (atomic_read(&path->p_ops_cnt[RFS_NONE_DOP_D_HASH]))
+		rdentry->rd_op_new.d_hash = rfs_d_hash;
+	else
+		rdentry->rd_op_new.d_hash = rdentry->rd_op_old->d_hash;
+
+	if (atomic_read(&path->p_ops_cnt[RFS_NONE_DOP_D_COMPARE]))
+		rdentry->rd_op_new.d_compare = rfs_d_compare;
+	else
+		rdentry->rd_op_new.d_compare= rdentry->rd_op_old->d_compare;
+
+	if (atomic_read(&path->p_ops_cnt[RFS_NONE_DOP_D_DELETE]))
+		rdentry->rd_op_new.d_delete= rfs_d_delete;
+	else
+		rdentry->rd_op_new.d_delete= rdentry->rd_op_old->d_delete;
+}
+
+void rdentry_set_reg_ops(struct rdentry *rdentry, struct path *path)
+{
+	if (atomic_read(&path->p_ops_cnt[RFS_REG_DOP_D_REVALIDATE]))
+		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
+	else
+		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old->d_revalidate;
+
+
+	if (atomic_read(&path->p_ops_cnt[RFS_REG_DOP_D_HASH]))
+		rdentry->rd_op_new.d_hash = rfs_d_hash;
+	else
+		rdentry->rd_op_new.d_hash = rdentry->rd_op_old->d_hash;
+
+	if (atomic_read(&path->p_ops_cnt[RFS_REG_DOP_D_COMPARE]))
+		rdentry->rd_op_new.d_compare = rfs_d_compare;
+	else
+		rdentry->rd_op_new.d_compare= rdentry->rd_op_old->d_compare;
+
+	if (atomic_read(&path->p_ops_cnt[RFS_REG_DOP_D_DELETE]))
+		rdentry->rd_op_new.d_delete= rfs_d_delete;
+	else
+		rdentry->rd_op_new.d_delete= rdentry->rd_op_old->d_delete;
+}
+
+void rdentry_set_dir_ops(struct rdentry *rdentry, struct path *path)
+{
+	if (atomic_read(&path->p_ops_cnt[RFS_DIR_DOP_D_REVALIDATE]))
+		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
+	else
+		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old->d_revalidate;
+
+
+	if (atomic_read(&path->p_ops_cnt[RFS_DIR_DOP_D_HASH]))
+		rdentry->rd_op_new.d_hash = rfs_d_hash;
+	else
+		rdentry->rd_op_new.d_hash = rdentry->rd_op_old->d_hash;
+
+	if (atomic_read(&path->p_ops_cnt[RFS_DIR_DOP_D_COMPARE]))
+		rdentry->rd_op_new.d_compare = rfs_d_compare;
+	else
+		rdentry->rd_op_new.d_compare= rdentry->rd_op_old->d_compare;
+
+	if (atomic_read(&path->p_ops_cnt[RFS_DIR_DOP_D_DELETE]))
+		rdentry->rd_op_new.d_delete= rfs_d_delete;
+	else
+		rdentry->rd_op_new.d_delete= rdentry->rd_op_old->d_delete;
+}
+
 void rdentry_set_ops(struct rdentry *rdentry, struct path *path)
 {
+	umode_t mode;
 
-	spin_lock(&path->p_lock);
+	if (!rdentry->rd_rinode->ri_inode) {
+		rdentry_set_none_ops(rdentry, path);
+		return;
+	}
+
+	mode = rdentry->rd_rinode->ri_inode->i_mode;
+
+	if (S_ISREG(mode))
+		rdentry_set_reg_ops(rdentry, path);
+
+	else if (S_ISDIR(mode))
+		rdentry_set_dir_ops(rdentry, path);
+
 	rdentry->rd_op_new.d_release = rfs_d_release;
 	rdentry->rd_op_new.d_iput = rfs_d_iput;
-
-	/*
-	if (path->p_ops_cnt[RFS_DIR_IOP_LOOKUP])
-		new.d_revalidate = rfs_d_revalidate;
-
-	if (path->p_ops_cnt[RFS_DOP_REVALIDATE])
-		new.d_revalidate = rfs_d_revalidate;
-	else 
-		new.d_revalidate = old->d_revalidate;
-
-	if (path->p_ops_cnt[RFS_DOP_HASH])
-		new.d_hash = rfs_d_hash;
-	else 
-		new.d_hash= old->d_hash;
-
-	if (path->p_ops_cnt[RFS_DOP_COMPARE])
-		new.d_compare = rfs_d_compare;
-	else 
-		new.d_compare= old->d_compare;
-
-	if (path->p_ops_cnt[RFS_DOP_DELETE])
-		new.d_delete = rfs_d_delete;
-	else 
-		new.d_delete= old->d_delete;
-	*/
-
-	spin_unlock(&path->p_lock);
 }
 
 int rdentry_cache_create(void)

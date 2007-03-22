@@ -10,45 +10,193 @@ atomic_t rfiles_freed;
 extern spinlock_t rdentry_list_lock;
 extern struct list_head rdentry_list;
 
-static inline int rfs_replace_ops_cb(struct dentry *dentry, void *data)
+int rfs_replace_ops(struct path *path_old, struct path *path_new, struct path *path_par)
 {
-	struct path *path = (struct path *)data;
-	struct rdentry *rdentry = rdentry_add(dentry, path);
+	struct rdentry *rdentry;
+	struct rinode *rinode;
+	struct chain *chain;
+	struct path *path;
+	struct ops *ops;
 
+	rdentry = rdentry_add(dentry);
+	if (IS_ERR(rdentry))
+		return PTR_ERR(rdentry);
+
+	ops = ops_alloc();
+	if (IS_ERR(ops)) {
+		rdentry_put(rdentry);
+		return PTR_ERR(ops);
+	}
+
+	if (path_old->p_flags & RFS_PATH_SINGLE)
+		chain = path_new->p_inchain_local;
+	else 
+		chain = path_new->p_inchain;
+
+	if (path_old == path_new)
+		rdentry->rd_root = 1;
+	else 
+		rdentry->rd_root = 0;
+
+	chain_get_ops(chain, ops->o_ops);
+
+	rdentry_set_ops(rdentry, ops);
+
+	spin_lock(&rdentry->rd_lock);
+	
+	path_put(rdentry->rd_path);
+	chain_put(rdentry->rd_chain);
+	rdentry->rd_path = path_get(path_new);
+	rdentry->rd_chain = chain_get(chain);
+
+	list_for_each_entry(rfile, &rdentry->rd_rfiles, rf_rdentry_list) {
+		rfile_set_ops(rfile, ops);
+
+		spin_lock(&rfile->rf_lock);
+
+		path_put(rfile->rf_path);
+		chain_put(rfile->rf_chain);
+		rfile->rf_path = path_get(path_new);
+		rfile->rf_chain = chain_get(chain);
+
+		spin_unlock(&rfile->rf_lock);
+	}
+
+	spin_unlock(&rdentry->rd_lock);
+
+	rinode = rdentry->rd_rinode;
+
+	if (rinode) {
+		rinode_set_ops(rinode, ops);
+		spin_lock(&rinode->ri_lock);
+
+		path_put(rinode->ri_path);
+		chain_put(rinode->ri_chain);
+		rinode->ri_path = path_get(path_new);
+		rinode->ri_chain = chain_get(chain);
+		if (path_parent) {
+			path_put(rinode->ri_path_set);
+			chain_put(rinode->ri_chain_set);
+			ops_put(rinode->ri_ops_set);
+			rinode->ri_path_set = path_get(path_par);
+			rinode->ri_chain_set = chain_get(path_par->p_inchain);
+			rinode->ri_ops_set = ops_get(path_par->p_ops);
+		}
+
+		spin_unlock(&rinode->ri_lock);
+	}
+
+	rdentry_put(rdentry);
+	ops_put(ops);
+
+	return 0;
+}
+
+int rfs_replace_ops_cb(struct dentry *dentry, void *data)
+{
+	struct path *path;
+	struct rdentry *rdentry;
+	struct rinode *rinode;
+	struct rfile *rfile;
+
+	path = (struct path *)data;
+	rdentry = rdentry_add(dentry);
 
 	if (IS_ERR(rdentry))
 		return PTR_ERR(rdentry);
+
+	if (dentry == path->p_dentry) {
+		rdentry->rd_root = 1;
+
+	} else if (rdentry->rd_root && list_empty(rdentry->rd_path->p_rem)) {
+		if (!(rdentry->rd_path & RFS_PATH_SUBTREE)) {
+			rdentry_put(rdentry);
+			return 0;
+		}
+
+		rdentry_put(rdentry);
+		return 1;
+	}	
+
+	rdentry_set_ops(rdentry, path->p_ops);
+
+	rdentry->rd_root = 0;
+
+	spin_lock(&rdentry->rd_lock);
+	
+	path_put(rdentry->rd_path);
+	chain_put(rdentry->rd_chain);
+	rdentry->rd_path = path_get(path);
+	rdentry->rd_chain = chain_get(path->p_inchain);
+
+	list_for_each_entry(rfile, &rdentry->rd_rfiles, rf_rdentry_list) {
+		rfile_set_ops(rfile, path->p_ops);
+
+		spin_lock(&rfile->rf_lock);
+
+		path_put(rfile->rf_path);
+		chain_put(rfile->rf_chain);
+		rfile->rf_path = path_get(path);
+		rfile->rf_chain = chain_get(path->p_inchain);
+
+		spin_unlock(&rfile->rf_lock);
+	}
+
+	spin_unlock(&rdentry->rd_lock);
+
+	rinode = rdentry->rd_rinode;
+	if (!rinode)
+		return 0;
+
+	rinode_set_ops(rinode, path->p_ops);
+
+	spin_lock(&rinode->ri_lock);
+
+	path_put(rinode->ri_path_set);
+	chain_put(rinode->ri_chain_set);
+	ops_put(rinode->ri_ops_set);
+	path_put(rinode->ri_path);
+	chain_put(rinode->ri_chain);
+
+	rinode->ri_path_set = path_get(path);
+	rinode->ri_chain_set = chain_get(path->p_inchain);;
+	rinode->ri_ops_set = ops_get(path->p_ops);
+	rinode->ri_path = path_get(path);
+	rinode->ri_chain = chain_get(path->p_inchain);
+
+	spin_unlock(&rinode->ri_lock);
 
 	rdentry_put(rdentry);
 
 	return 0;
 }
 
-static int rfs_restore_ops_cb(struct dentry *dentry, void *data)
+int rfs_restore_ops_cb(struct dentry *dentry, void *data)
 {
 	struct rfile *rfile;
 	struct rfile *tmp;
-	struct rdentry *rdentry = rdentry_find(dentry);
+	struct rdentry *rdentry;
 
+	rdentry = rdentry_find(dentry);
 
 	if (!rdentry)
 		return 0;
 	
 	rdentry_del(dentry);
 
-	spin_lock(&dentry->d_lock);
-	list_for_each_entry_safe(rfile, tmp, &rdentry->rd_rfiles,
-			rf_rdentry_list) {
+	spin_lock(&rdentry->rd_lock);
+	list_for_each_entry_safe(rfile, tmp, &rdentry->rd_rfiles, rf_rdentry_list) {
 		rfile_del(rfile->rf_file);
 	}
-	spin_unlock(&dentry->d_lock);
+	spin_unlock(&dentry->rd_lock);
+
 
 	rdentry_put(rdentry);
 
 	return 0; 
 }
 
-static int rfs_set_path(struct dentry *dentry, void *data)
+int rfs_set_ops_cb(struct dentry *dentry, void *data)
 {
 	struct path *path = (struct path *)data;
 	struct rdentry *rdentry = rdentry_find(dentry);
@@ -57,51 +205,19 @@ static int rfs_set_path(struct dentry *dentry, void *data)
 
 	if (!rdentry)
 		return 0;
-
-	spin_lock(&dentry->d_lock);
-
-	path_put(rdentry->rd_path);
-	rdentry->rd_path = path_get(path);
-	
-	if (rdentry->rd_rinode) {
-		path_put(rdentry->rd_rinode->ri_path);
-		rdentry->rd_rinode->ri_path = path_get(path);
-	}
- 
-	list_for_each_entry(rfile, &rdentry->rd_rfiles, rf_rdentry_list) {
-		path_put(rfile->rf_path);
-		rfile->rf_path = path_get(path);
-	}
-
-	spin_unlock(&dentry->d_lock);
-
-	rdentry_put(rdentry);
-
-	return 0;
-}
-
-static int rfs_set_ops(struct dentry *dentry, void *data)
-{
-	struct path *path = (struct path *)data;
-	struct rdentry *rdentry = rdentry_find(dentry);
-	struct rfile *rfile = NULL;
-
-
-	if (!rdentry)
-		return 0;
-
-	spin_lock(&dentry->d_lock);
 
 	rdentry_set_ops(rdentry, path);
 
 	if (rdentry->rd_rinode)
 		rinode_set_ops(rdentry->rd_rinode, path);
 
+	spin_lock(&rdentry->rd_lock);
+
 	list_for_each_entry(rfile, &rdentry->rd_rfiles, rf_rdentry_list) {
 		rfile_set_ops(rfile, path);
 	}
 
-	spin_unlock(&dentry->d_lock);
+	spin_unlock(&rdentry->rd_lock);
 
 	rdentry_put(rdentry);
 
@@ -129,6 +245,7 @@ int rfs_walk_dcache(struct dentry *root,
 	struct inode *inode;
 	struct inode *itmp;
 	struct list_head *head;
+	int res;
 
 
 	dir = kmalloc(sizeof(struct entry), GFP_KERNEL);
@@ -144,8 +261,13 @@ int rfs_walk_dcache(struct dentry *root,
 	while (!list_empty(&dirs)) {
 		dir = list_entry(dirs.next, struct entry, e_list);
 
-		if (dcb(dir->e_dentry, dcb_data))
+		res = dcb(dir->e_dentry, dcb_data);
+
+		if (res < 0)
 			goto err;
+
+		if (res > 0)
+			goto next_dir;
 
 		inode = dir->e_dentry->d_inode;
 		if (!inode)

@@ -14,15 +14,61 @@
 #include <linux/namei.h>
 #include <linux/delay.h>
 #include <linux/wait.h>
+#include "redirfs.h"
 
 struct rdentry;
 struct rinode;
 
+struct filter {
+	const char *f_name;
+	int f_priority;
+	enum rfs_op_retv (*f_pre_cbs)(void *, struct rfs_op_args)[RFS_OP_NR];
+	enum rfs_op_retv (*f_post_cbs)(void *, struct rfs_op_args)[RFS_OP_NR];
+	spinlock_t f_lock;
+	atomic_t f_count;
+	atomic_t f_active;
+};
+
+struct ops {
+	spinlock_t o_lock;
+	unsigned long long o_count;
+	int *o_ops;
+};
+
+struct chain {
+	spinlock_t c_lock;
+	unsigned long long c_count;
+	struct filter *c_flts;
+	int c_flts_nr;
+};
+
+struct chain *chain_alloc(int size);
+struct chain *chain_get(struct chain *chain);
+void chain_put(struct chain *chain);
+int chain_find_flt(struct chain *chain, struct filter *flt);
+struct chain *chain_add_flt(struct chain *chain, struct filter *flt);
+struct chain *chain_rem_flt(struct chain *chain, struct filter *flt);
+void chain_get_ops(struct chain *chain, int *ops);
+struct chain *chain_copy(struct chain *src);
+int chain_cmp(struct chain *chain1, struct chain *chain2);
+
+
 struct path {
-	struct list_head p_rdentry;
-	struct list_head p_rinode;
-	atomic_t p_count;
+	char *p_path;
+	int p_len;
+	int p_flags;
+	struct dentry *p_dentry;
+	unsigned long long p_count;
 	spinlock_t p_lock;
+	struct path *p_parent;
+	struct list_head p_subpath;
+	struct list_head p_sibpath;
+	struct list_head p_rem;
+	struct chain *p_inchian;
+	struct chain *p_exchain;
+	struct chain *p_inchain_local;
+	struct chain *p_exchain_local;
+	struct ops *p_ops;
 };
 
 int path_del(struct path *path);
@@ -37,10 +83,12 @@ struct rfile {
 	struct rdentry *rf_rdentry;
 	struct rcu_head rf_rcu;
 	struct path *rf_path;
+	struct chain *rf_chain;
 	struct file *rf_file;
 	struct file_operations *rf_op_old;
 	struct file_operations rf_op_new;
 	atomic_t rf_count;
+	spinlock_t rf_lock;
 };
 
 int rfile_cache_create(void);
@@ -63,17 +111,23 @@ struct rdentry {
 	struct dentry_operations *rd_op_old;
 	struct dentry_operations rd_op_new;
 	struct path *rd_path;
+	struct chain *rd_chain;
 	struct rinode *rd_rinode;
+	spinlock_t rd_lock;
 	atomic_t rd_count;
+	int rd_root;
 };
 
 int rdentry_cache_create(void);
 void rdentry_cache_destroy(void);
-struct rdentry *rdentry_add(struct dentry *dentry, struct path *path);
-void rdentry_del(struct dentry *dentry);
+struct rdentry *rdentry_alloc(struct dentry* dentry);
 struct rdentry *rdentry_get(struct rdentry *rdentry);
 void rdentry_put(struct rdentry *rdentry);
 struct rdentry *rdentry_find(struct dentry *dentry);
+struct rdentry *rdentry_add(struct dentry *dentry, struct path *path);
+void rdentry_del(struct dentry *dentry);
+struct path *rdentry_get_path(struct rdentry *rdentry);
+struct chain *rdentry_get_chain(struct rdentry *rdentry);
 void rdentry_set_ops(struct rdentry *rdentry, struct path *path);
 void rfs_d_release(struct dentry *dentry);
 
@@ -88,21 +142,31 @@ struct rinode {
 	struct address_space_operations ri_aop_new;
 	struct inode_operations ri_op_new;
 	struct path *ri_path;
+	struct chain *ri_chain;
+	struct path *ri_path_set;
+	struct chain *ri_chain_set;
+	int *ri_ops_set;
+	spinlock_t ri_lock;
 	atomic_t ri_count;
 	atomic_t ri_nlink;
 };
 
 int rinode_cache_create(void);
 void rinode_cache_destroy(void);
-struct rinode *rinode_alloc(struct inode *inode, struct path *path);
-void rinode_del(struct inode *inode);
+struct rinode *rinode_alloc(struct inode *inode);
 struct rinode *rinode_get(struct rinode *rinode);
 void rinode_put(struct rinode *rinode);
 struct rinode *rinode_find(struct inode *inode);
+void rinode_del(struct inode *inode);
+struct path *rinode_get_path(struct rinode *rinode);
+struct chain *rinode_get_chain(struct rinode *rinode);
 void rinode_set_ops(struct rinode *rinode, struct path *path);
-struct dentry *rfs_lookup(struct inode *inode,
-			  struct dentry *dentry,
-			  struct nameidata *nd);
+struct dentry *rfs_lookup(struct inode *inode, struct dentry *dentry, struct nameidata *nd);
 
+
+int rfs_replace_ops_cb(struct dentry *dentry, void *data);
+int rfs_restore_ops_cb(struct dentry *dentry, void *data);
+int rfs_set_path_cb(struct dentry *dentry, void *data);
+int rfs_set_ops_cb(struct dentry *dentry, void *data);
 
 #endif /* _RFS_REDIR_H */
