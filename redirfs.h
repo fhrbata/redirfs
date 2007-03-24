@@ -173,10 +173,8 @@ typedef void* rfs_context;
 
 #define RFS_PATH_SINGLE		1	
 #define RFS_PATH_SUBTREE	2
-#define RFS_PATH_FIXED		4
-#define RFS_PATH_FLOAT		8
-#define RFS_PATH_INCLUDE	16
-#define RFS_PATH_EXCLUDE	32
+#define RFS_PATH_INCLUDE	4	
+#define RFS_PATH_EXCLUDE	8
 
 struct rfs_path_info {
 	const char *path;
@@ -201,8 +199,5 @@ enum rfs_err rfs_register_filter(rfs_filter *filter, struct rfs_filter_info *fil
 enum rfs_err rfs_unregister_filter(rfs_filter filter);
 enum rfs_err rfs_set_operations(rfs_filter filter, struct rfs_op_info *op_info);
 enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info);
-
-enum rfs_err rfs_include_path(rfs_filter filter, struct rfs_path_info *path_info);
-enum rfs_err rfs_exclude_path(rfs_filter filter, struct rfs_path_info *path_info);
 
 #endif

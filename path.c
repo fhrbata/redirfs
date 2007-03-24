@@ -61,6 +61,7 @@ struct path *path_alloc(const char *path_name)
 	path_buf = kmalloc(path_len + 1, GFP_KERNEL);
 
 	if (!path || !path_buf) {
+		path_release(&nd);
 		kfree(path);
 		kfree(path_buf);
 		return ERR_PTR(RFS_ERR_NOMEM);
@@ -81,6 +82,8 @@ struct path *path_alloc(const char *path_name)
 	INIT_LIST_HEAD(&path->p_sibpath);
 	INIT_LIST_HEAD(&path->p_subpath);
 	INIT_LIST_HEAD(&path->p_rem);
+
+	path_release(&nd);
 
 	return path;
 }
@@ -296,6 +299,7 @@ enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 	struct chain *inchain = NULL;
 	struct chain *exchain = NULL;
 	char *path_name = NULL;
+	struct nameidata nd;
 	int retv = RFS_ERR_OK;
 	int path_len;
 
@@ -307,6 +311,18 @@ enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 
 	if (!(path_info->flags & (RFS_PATH_INCLUDE | RFS_PATH_EXCLUDE)))
 		return RFS_ERR_INVAL;
+
+	if (path_lookup(path_info->path, LOOKUP_FOLLOW, &nd))
+		return RFS_ERR_NOENT;
+
+	if (path_info->flags & RFS_PATH_SUBTREE) {
+		if (!S_ISDIR(nd.dentry->d_inode->i_mode)) {
+			path_release(&nd);
+			return ERR_PTR(RFS_ERR_NOTDIR);
+		}
+	}
+
+	path_release(&nd);
 
 	path_len = strlen(path_info->path) + 1;
 	path_name = kmalloc(path_len, GFP_KERNEL);
@@ -327,14 +343,21 @@ enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 
 	if (path) {
 		if (path_info->flags & RFS_PATH_SINGLE) {
-			if (parent && !(path->p_flags & RFS_PATH_SINGLE)) {
-				inchain = chain_copy(parent->p_inchain);
+			if (!(path->p_flags & RFS_PATH_SINGLE)) {
+				if (path->p_flags & RFS_PATH_SUBTREE) {
+					inchain = chain_copy(path->p_inchain);
+					exchain = chain_copy(path->p_exchain);
+
+				} else if (parent) {
+					inchain = chain_copy(parent->p_inchain);
+					exchain = chain_copy(parent->p_exchain);
+				}
+
 				if (IS_ERR(inchain)) {
 					retv = PTR_ERR(inchain);
 					goto exit;
 				}
 
-				exchain = chain_copy(parent->p_exchain);
 				if (IS_ERR(exchain)) {
 					retv = PTR_ERR(exchain);
 					goto exit;
@@ -342,9 +365,8 @@ enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 
 				path->p_inchain_local = chain_get(inchain);
 				path->p_exchain_local = chain_get(exchain);
+				path->p_flags |= RFS_PATH_SINGLE;
 			}
-
-			path->p_flags |= RFS_PATH_SINGLE;
 
 		} else { 
 			if (parent && !(path->p_flags & RFS_PATH_SUBTREE)) {
@@ -359,11 +381,11 @@ enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 					retv = PTR_ERR(exchain);
 					goto exit;
 				}
+
 				path->p_inchain = chain_get(inchain);
 				path->p_exchain = chain_get(exchain);
+				path->p_flags |= RFS_PATH_SUBTREE;
 			}
-
-			path->p_flags |= RFS_PATH_SUBTREE;
 		}
 	}
 
@@ -425,6 +447,7 @@ enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 			retv = path_walk(path, flt_rem_cb, flt);
 
 	list_for_each_entry_safe(loop, tmp, &path_rem_list, p_rem) {
+		list_del(&loop->p_rem);
 		path_rem(loop);
 	}
 
