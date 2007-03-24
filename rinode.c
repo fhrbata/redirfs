@@ -312,32 +312,32 @@ int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 	return rv;
 }
 
-void rinode_set_reg_ops(struct rinode *rinode, struct path *path)
+void rinode_set_reg_ops(struct rinode *rinode, int *ops)
 {
-	if (atomic_read(&path->p_ops_cnt[RFS_REG_IOP_LOOKUP]))
+	if (ops[RFS_REG_IOP_LOOKUP])
 		rinode->ri_op_new.lookup = rfs_lookup;
 	else
 		rinode->ri_op_new.lookup = rinode->ri_op_old->lookup;
 
-	if (atomic_read(&path->p_ops_cnt[RFS_REG_IOP_MKDIR]))
+	if (ops[RFS_REG_IOP_MKDIR])
 		rinode->ri_op_new.mkdir = rfs_mkdir;
 	else
 		rinode->ri_op_new.mkdir = rinode->ri_op_old->mkdir;
 
-	if (atomic_read(&path->p_ops_cnt[RFS_REG_IOP_CREATE]))
+	if (ops[RFS_REG_IOP_CREATE])
 		rinode->ri_op_new.create = rfs_create;
 	else
 		rinode->ri_op_new.create = rinode->ri_op_old->create;
 
-	if (atomic_read(&path->p_ops_cnt[RFS_REG_IOP_PERMISSION]))
+	if (ops[RFS_REG_IOP_PERMISSION])
 		rinode->ri_op_new.permission = rfs_permission;
 	else
 		rinode->ri_op_new.permission = rinode->ri_op_old->permission;
 }
 
-void rinode_set_dir_ops(struct rinode *rinode, struct path *path)
+void rinode_set_dir_ops(struct rinode *rinode, int *ops)
 {
-	if (atomic_read(&path->p_ops[RFS_DIR_IOP_PERMISSION]))
+	if (ops[RFS_DIR_IOP_PERMISSION])
 		rinode->ri_op_new.permission = rfs_permission;
 	else
 		rinode->ri_op_new.permission = rinode->ri_op_old->permission;
@@ -347,15 +347,15 @@ void rinode_set_dir_ops(struct rinode *rinode, struct path *path)
 	rinode->ri_op_new.create = rfs_create;
 }
 
-void rinode_set_ops(struct rinode *rinode, struct path *path)
+void rinode_set_ops(struct rinode *rinode, struct ops *ops)
 {
 	umode_t mode = rinode->ri_inode->i_mode;
 
 	if (S_ISREG(mode))
-		rinode_set_reg_ops(rinode, path);
+		rinode_set_reg_ops(rinode, ops->o_ops);
 
 	else if (S_ISDIR(mode))
-		rinode_set_dir_ops(rinode, path);
+		rinode_set_dir_ops(rinode, ops->o_ops);
 }
 
 int rinode_cache_create(void)

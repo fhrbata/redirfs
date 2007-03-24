@@ -90,15 +90,14 @@ int rfs_unregister_filter(void *filter)
 	return 0;
 }
 
-int rfs_set_operations(void *filter, struct rfs_op_info ops_info[])
+enum rfs_err rfs_set_operations(void *filter, struct rfs_op_info ops_info[])
 {
 	struct filter *flt = (struct filter *)filter;
 	int i = 0;
+	int retv;
 
-	spin_lock(&flt->f_lock);
-
-	memset(flt->f_pre_cbs, 0, sizeof(flt->f_pre_cbs));
-	memset(flt->f_post_cbs, 0, sizeof(flt->f_post_cbs));
+	if (!flt)
+		return RFS_ERR_INVAL;
 
 	while (ops_info[i].op_id != RFS_OP_END) {
 		flt->f_pre_cbs[ops_info[i].op_id] = ops_info[i].pre_cb;
@@ -106,9 +105,11 @@ int rfs_set_operations(void *filter, struct rfs_op_info ops_info[])
 		i++;
 	}
 
-	spin_unlock(&flt->f_lock);
+	mutex_lock(&path_list_mutex);
+	retv = path_walk(NULL, flt_set_ops_cb, flt);
+	mutex_unlock(&path_list_mutex);
 
-	return 0;
+	return retv;
 }
 
 int flt_add_local(struct path *path, struct filter *flt)
@@ -261,7 +262,7 @@ int flt_rem_local(struct path *path, void *data)
 		return RFS_ERR_OK;
 
 	if (!remove)
-		retv = rfs_replace_ops(path, path_go, path_cmp);
+		retv = rfs_replace_ops(path, path_go);
 	else 
 		retv = rfs_restore_ops_cb(path->p_dentry, path)
 
@@ -477,3 +478,33 @@ int flt_rem_cb(struct path *path, void *data)
 
 	return RFS_ERR_OK;
 }
+
+int flt_set_ops_cb(struct path *path, void *data)
+{
+	struct filter *flt;
+	struct chain *chain;
+	struct ops *ops;
+	int err;
+
+	flt = (struct filter *)data;
+
+	if (chain_find_flt(path->p_inchain_local, flt) != -1) {
+		err = rfs_set_ops(path->p_dentry, path);
+		if (err)
+			return err;
+	}
+
+	if (chain_find_flt(path->p_inchain, flt) != -1) {
+		ops = ops_alloc();
+		if (IS_ERR(ops))
+			return PTR_ERR(ops);
+		chain_get_ops(path->p_inchain, ops->o_ops);
+		ops_put(path->p_ops);
+		path->p_ops = ops;
+
+		return rfs_walk_dcache(path->p_dentry, rfs_set_ops_cb, path, NULL, NULL);
+	}
+
+	return RFS_ERR_OK;
+}
+

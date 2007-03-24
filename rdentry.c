@@ -389,94 +389,91 @@ void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 	path_put(path);
 }
 
-void rdentry_set_none_ops(struct rdentry *rdentry, struct path *path)
+void rdentry_set_none_ops(struct rdentry *rdentry, int *ops)
 {
-	if (atomic_read(&path->p_ops_cnt[RFS_NONE_DOP_D_REVALIDATE]))
+	if (ops[RFS_NONE_DOP_D_REVALIDATE])
 		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
 	else
 		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old->d_revalidate;
 
-
-	if (atomic_read(&path->p_ops_cnt[RFS_NONE_DOP_D_HASH]))
+	if (ops[RFS_NONE_DOP_D_HASH])
 		rdentry->rd_op_new.d_hash = rfs_d_hash;
 	else
 		rdentry->rd_op_new.d_hash = rdentry->rd_op_old->d_hash;
 
-	if (atomic_read(&path->p_ops_cnt[RFS_NONE_DOP_D_COMPARE]))
+	if (ops[RFS_NONE_DOP_D_COMPARE])
 		rdentry->rd_op_new.d_compare = rfs_d_compare;
 	else
 		rdentry->rd_op_new.d_compare= rdentry->rd_op_old->d_compare;
 
-	if (atomic_read(&path->p_ops_cnt[RFS_NONE_DOP_D_DELETE]))
+	if (ops[RFS_NONE_DOP_D_DELETE])
 		rdentry->rd_op_new.d_delete= rfs_d_delete;
 	else
 		rdentry->rd_op_new.d_delete= rdentry->rd_op_old->d_delete;
 }
 
-void rdentry_set_reg_ops(struct rdentry *rdentry, struct path *path)
+void rdentry_set_reg_ops(struct rdentry *rdentry, int *ops)
 {
-	if (atomic_read(&path->p_ops_cnt[RFS_REG_DOP_D_REVALIDATE]))
+	if (ops[RFS_REG_DOP_D_REVALIDATE])
 		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
 	else
 		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old->d_revalidate;
 
-
-	if (atomic_read(&path->p_ops_cnt[RFS_REG_DOP_D_HASH]))
+	if (ops[RFS_REG_DOP_D_HASH])
 		rdentry->rd_op_new.d_hash = rfs_d_hash;
 	else
 		rdentry->rd_op_new.d_hash = rdentry->rd_op_old->d_hash;
 
-	if (atomic_read(&path->p_ops_cnt[RFS_REG_DOP_D_COMPARE]))
+	if (ops[RFS_REG_DOP_D_COMPARE])
 		rdentry->rd_op_new.d_compare = rfs_d_compare;
 	else
 		rdentry->rd_op_new.d_compare= rdentry->rd_op_old->d_compare;
 
-	if (atomic_read(&path->p_ops_cnt[RFS_REG_DOP_D_DELETE]))
+	if (ops[RFS_REG_DOP_D_DELETE])
 		rdentry->rd_op_new.d_delete= rfs_d_delete;
 	else
 		rdentry->rd_op_new.d_delete= rdentry->rd_op_old->d_delete;
 }
 
-void rdentry_set_dir_ops(struct rdentry *rdentry, struct path *path)
+void rdentry_set_dir_ops(struct rdentry *rdentry, int *ops)
 {
-	if (atomic_read(&path->p_ops_cnt[RFS_DIR_DOP_D_REVALIDATE]))
+	if (ops[RFS_DIR_DOP_D_REVALIDATE])
 		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
 	else
 		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old->d_revalidate;
 
-
-	if (atomic_read(&path->p_ops_cnt[RFS_DIR_DOP_D_HASH]))
+	if (ops[RFS_DIR_DOP_D_HASH])
 		rdentry->rd_op_new.d_hash = rfs_d_hash;
 	else
 		rdentry->rd_op_new.d_hash = rdentry->rd_op_old->d_hash;
 
-	if (atomic_read(&path->p_ops_cnt[RFS_DIR_DOP_D_COMPARE]))
+	if (ops[RFS_DIR_DOP_D_COMPARE])
 		rdentry->rd_op_new.d_compare = rfs_d_compare;
 	else
 		rdentry->rd_op_new.d_compare= rdentry->rd_op_old->d_compare;
 
-	if (atomic_read(&path->p_ops_cnt[RFS_DIR_DOP_D_DELETE]))
+	if (ops[RFS_DIR_DOP_D_DELETE])
 		rdentry->rd_op_new.d_delete= rfs_d_delete;
 	else
 		rdentry->rd_op_new.d_delete= rdentry->rd_op_old->d_delete;
 }
 
-void rdentry_set_ops(struct rdentry *rdentry, struct path *path)
+void rdentry_set_ops(struct rdentry *rdentry, struct ops *ops)
 {
 	umode_t mode;
 
-	if (!rdentry->rd_rinode->ri_inode) {
-		rdentry_set_none_ops(rdentry, path);
+	if (!rdentry->rd_rinode || !rdentry->rd_rinode->ri_inode) {
+		rdentry_set_none_ops(rdentry, ops->ops);
 		return;
 	}
 
 	mode = rdentry->rd_rinode->ri_inode->i_mode;
 
 	if (S_ISREG(mode))
-		rdentry_set_reg_ops(rdentry, path);
+		rdentry_set_reg_ops(rdentry, ops->o_ops);
 
 	else if (S_ISDIR(mode))
-		rdentry_set_dir_ops(rdentry, path);
+		rdentry_set_dir_ops(rdentry, ops->o_ops);
 
 	rdentry->rd_op_new.d_release = rfs_d_release;
 	rdentry->rd_op_new.d_iput = rfs_d_iput;

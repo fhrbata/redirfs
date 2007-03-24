@@ -235,14 +235,10 @@ int rfs_release(struct inode *inode, struct file *file)
 	return rv;
 }
 
-void rfile_set_ops(struct rfile *rfile, struct path *path)
+void rfile_set_ops(struct rfile *rfile, struct ops *ops)
 {
-	spin_lock(&path->p_lock);
-
 	rfile->rf_op_new.open = rfs_open;
 	rfile->rf_op_new.release = rfs_release;
-
-	spin_unlock(&path->p_lock);
 }
 
 int rfile_cache_create(void)

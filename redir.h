@@ -22,8 +22,8 @@ struct rinode;
 struct filter {
 	const char *f_name;
 	int f_priority;
-	enum rfs_op_retv (*f_pre_cbs)(void *, struct rfs_op_args)[RFS_OP_NR];
-	enum rfs_op_retv (*f_post_cbs)(void *, struct rfs_op_args)[RFS_OP_NR];
+	enum rfs_op_retv (*f_pre_cbs)(context, struct rfs_op_args)[RFS_OP_END];
+	enum rfs_op_retv (*f_post_cbs)(context, struct rfs_op_args)[RFS_OP_END];
 	spinlock_t f_lock;
 	atomic_t f_count;
 	atomic_t f_active;
