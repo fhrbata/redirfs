@@ -195,17 +195,19 @@ int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 
 int rfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
 {
-	struct rinode *parent = rinode_find(dir);
-	struct rinode *rinode;
-	struct path *path = rinode_get_path(parent);
+	struct rinode *parent;
+	struct path *path;
 	struct rdentry *rdentry;
+	struct rinode *rinode;
 	struct path *path_set;
 	struct chain *chain_set;
 	struct ops *ops_set;
 	struct path *path;
 	struct chain *chain;
-	int rv = -EACCES;
+	struct rfs_args args;
+	int rv;
 
+	parent = rinode_find(dir);
 	if (!parent) {
 		if (dir->i_op && dir->i_op->create)
 			rv = dir->i_op->create(dir, dentry, mode, nd);
@@ -220,8 +222,30 @@ int rfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameid
 	chain = chain_get(parent->ri_chain);
 	spin_unlock(&parent->ri_lock);
 
+	args.args.i_create.dir = dir;
+	args.args.i_create.dentry = dentry;
+	args.args.i_create.mode = mode;
+	args.args.i_create.nd = nd;
+	if (S_ISREG(mode))
+		args.info.id = RFS_REG_IOP_CREATE;
+	else if (S_ISDIR(mode))
+		args.info.id = RFS_DIR_IOP_CREATE;
+
+	rv = rfs_precall_flts(chain, NULL, &args);
+
+	if (rv == REDIRFS_RETV_STOP) {
+		rv = args.retv.rv_int;
+		goto exit;
+	}
+
 	if (parent->ri_op_old && parent->ri_op_old->create)
 		rv = parent->ri_op_old->create(dir, dentry, mode, nd);
+
+	rv = rfs_postcall_flts(chain, NULL, &args);
+	if (rv == REDIRFS_RETV_STOP) {
+		rv = args.retv.rv_int;
+		goto exit;
+	}
 
 	if (!chain_set)
 		goto exit;
@@ -234,7 +258,7 @@ int rfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameid
 
 	rdentry->rd_path = path_get(path_set);
 	rdentry->rd_chain = chain_get(chain_set);
-	rdentry_set_ops();
+	rdentry_set_ops(rdentry, ops_set);
 
 	rinode = rdentry->rd_rinode;
 	if (rinode) {
@@ -243,7 +267,7 @@ int rfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameid
 		rinode->ri_ops_set = ops_get(ops_set);
 		rinode->ri_path = path_get(path_set);
 		rinode->ri_chain = chain_get(chain_set);
-		rinode_set_ops();
+		rinode_set_ops(rinode, ops_set);
 	}
 
 exit:

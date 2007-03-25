@@ -52,13 +52,13 @@ enum rfs_op_id {
 };
 
 enum rfs_op_type {
-	RFS_PRECALL;
-	RFS_POSTCALL;
+	RFS_PRECALL,
+	RFS_POSTCALL
 };
 
 enum rfs_retv {
-	RFS_OP_RETV_STOP,
-	RFS_OP_RETV_CONTINUE
+	RFS_STOP,
+	RFS_CONTINUE
 };
 
 union rfs_op_args {
@@ -159,10 +159,10 @@ struct rfs_path_info {
 };
 
 struct rfs_args {
-	union rfs_op_args;
-	union rfs_op_retv;
-	struct rfs_op_info;
-	struct rfs_op_exts;
+	union rfs_op_args args;
+	union rfs_op_retv retv;
+	struct rfs_op_info info;
+	struct rfs_op_exts exts;
 };
 
 struct rfs_filter_info {

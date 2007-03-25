@@ -10,6 +10,52 @@ atomic_t rfiles_freed;
 extern spinlock_t rdentry_list_lock;
 extern struct list_head rdentry_list;
 
+int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_args *args)
+{
+	enum rfs_op_retv (*ops)(context, struct rfs_op_args);
+	enum rfs_retv (*op)(rfs_context, struct rfs_args);
+	int retv;
+	int i;
+
+	args->info.type = RFS_PRECALL;
+	ops = chain->c_flts[i]->f_pre_cbs;
+
+	for (i = 0; i < chain->c_flts_nr; i++) {
+
+		op = ops[args->info.id];
+		if (op) {
+			retv = op(context, args);
+			if (retv == RFS_STOP)
+				break;
+		}
+	}
+
+	return retv;
+}
+
+int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_args *args)
+{
+	enum rfs_op_retv (*ops)(context, struct rfs_op_args);
+	enum rfs_retv (*op)(rfs_context, struct rfs_args);
+	int retv;
+	int i;
+
+	args->info.type = RFS_POSTCALL;
+	ops = chain->c_flts[i]->f_post_cbs;
+
+	for (i = chain->c_flts_nr; i; i--) {
+
+		op = ops[args->info.id];
+		if (op) {
+			retv = op(context, args);
+			if (retv == RFS_STOP)
+				break;
+		}
+	}
+
+	return retv;
+}
+
 int rfs_replace_ops(struct path *path_old, struct path *path_new)
 {
 	struct rdentry *rdentry;
