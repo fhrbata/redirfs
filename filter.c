@@ -20,8 +20,8 @@ inline void flt_put(struct filter *flt)
 	if (!atomic_dec_and_test(&flt->f_count))
 		return;
 
-	kfree(flt->f_name);
-	kfree(flt);
+	atomic_set(&flt->f_del, 1);
+	wake_up_interruptible(&flt->f_wait);
 }
 
 struct filter *flt_alloc(struct rfs_filter_info *flt_info)
@@ -37,15 +37,16 @@ struct filter *flt_alloc(struct rfs_filter_info *flt_info)
 	if (!flt || !flt_name) {
 		kfree(flt);
 		kfree(flt_name);
-		return ERR_PTR(-ENOMEM);
+		return ERR_PTR(RFS_ERR_NOMEM);
 	}
 
 	INIT_LIST_HEAD(&flt->f_list);
 	strncpy(flt_name, flt_info->name, flt_name_len);
 	flt->f_name = flt_name;
 	flt->f_priority = flt_info->priority;
-	spin_lock_init(&flt->f_lock);
 	atomic_set(&flt->f_count, 1);
+	atomic_set(&flt->f_del, 0);
+	init_waitqueue_head(flt->f_wait);
 
 	if (flt_info->active)
 		atomic_set(&flt->f_active, 1);
@@ -55,39 +56,101 @@ struct filter *flt_alloc(struct rfs_filter_info *flt_info)
 	return flt;
 }
 
-int rfs_register_filter(void **filter, struct rfs_filter_info *filter_info)
+enum rfs_err rfs_register_filter(void **filter, struct rfs_filter_info *filter_info)
 {
-	struct filter *pos = NULL;
-	struct filter *flt = flt_alloc(filter_info);
+	struct filter *pos;;
+	struct filter *flt;
 
+	if (!*filter || !filter_info)
+		return RFS_ERR_INVAL;
+
+	flt = flt_alloc(filter_info);
 	if (IS_ERR(flt))
 		return PTR_ERR(flt);
 
 	spin_lock(&flt_list_lock);
 
 	list_for_each_entry(pos, &flt_list, f_list) {
-		if (pos->f_priority == flt->f_priority)
-			goto exists;
+		if (pos->f_priority == flt_info->priority) {
+			spin_unlock(&flt_list_lock);
+			flt_put(flt);
+			return RFS_ERR_EXIST;
+		}
 	}
 
-	flt_get(flt);
 	list_add_tail(&flt->f_list, &flt_list);
 
 	spin_unlock(&flt_list_lock);
 
 	*filter = flt;
 
-	return 0;
-
-exists:
-	flt_put(flt);
-	*filter = NULL;
-	return -EEXIST;
+	return RFS_ERR_OK;
 }
 
-int rfs_unregister_filter(void *filter)
+enum rfs_err rfs_unregister_filter(void *filter)
 {
-	return 0;
+	struct filter *flt;
+	struct filter *pos;
+	int found = 0;
+	int retv;
+
+	if (!filter)
+		return RFS_ERR_INVAL;
+
+	flt = (struct filter *)filter;
+
+	spin_lock(&flt_list_lock);
+
+	list_for_each_entry(pos, &flt_list, f_list) {
+		if (pos == flt) {
+			found = 1;
+			break;
+		}
+	}
+
+	if (!found) {
+		spin_unlock(&flt_list_lock);
+		return RFS_ERR_NOENT;
+	}
+
+	list_del(&flt->f_list);
+	flt_put(flt);
+
+	spin_unlock(&flt_list_lock);
+
+	mutex_lock(&path_list_mutex);
+	retv = path_walk(NULL, flt_rem_cb, flt);
+	mutex_unlock(&path_list_mutex);
+
+	wait_event_interruptible(flt->f_wait, atomic_read(&flt->f_del));
+
+	kfree(flt->f_name);
+	kfree(flt);
+
+	if (retv) 
+		return retv;
+
+	return RFS_ERR_OK;
+}
+
+enum rfs_err rfs_activate_filter(rfs_filter filter)
+{
+	if (!filter)
+		return RFS_ERR_INVAL;
+
+	atomic_set(&flt->f_active, 1);
+
+	return RFS_ERR_OK;
+}
+
+enum rfs_err rfs_deactivate_filter(rfs_filter filter)
+{
+	if (!filter)
+		return RFS_ERR_INVAL;
+
+	atomic_set(&flt->f_active, 0);
+
+	return RFS_ERR_OK;
 }
 
 enum rfs_err rfs_set_operations(void *filter, struct rfs_op_info ops_info[])

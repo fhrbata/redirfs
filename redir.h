@@ -24,9 +24,10 @@ struct filter {
 	int f_priority;
 	enum rfs_op_retv (*f_pre_cbs)(context, struct rfs_op_args)[RFS_OP_END];
 	enum rfs_op_retv (*f_post_cbs)(context, struct rfs_op_args)[RFS_OP_END];
-	spinlock_t f_lock;
 	atomic_t f_count;
 	atomic_t f_active;
+	atomic_t f_del;
+	wait_queue_head_t *f_wait;
 };
 
 struct ops {
