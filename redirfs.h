@@ -51,9 +51,98 @@ enum rfs_op_id {
 	RFS_OP_END
 };
 
-enum rfs_op_retv {
+enum rfs_op_type {
+	RFS_PRECALL;
+	RFS_POSTCALL;
+};
+
+enum rfs_retv {
 	RFS_OP_RETV_STOP,
 	RFS_OP_RETV_CONTINUE
+};
+
+union rfs_op_args {
+	struct {
+		struct dentry *dentry;
+		struct nameidata *nd;
+	} d_revalidate;	
+
+	struct {
+		struct dentry *dentry;
+		struct qstr *name;
+	} d_hash;
+
+	struct {
+		struct dentry *dentry;
+		struct qstr *str1;
+		struct qstr *str2;
+	} d_compare;
+
+	struct {
+		struct dentry *dentry;
+	} d_delete;
+
+	struct {
+		struct dentry *dentry;
+	} d_release;
+
+	struct {
+		struct dentry *dentry;
+		struct inode *inode;
+	} d_iput;	
+
+	struct {
+		struct inode *dir;
+		struct dentry *dentry;
+		int mode;
+		struct nameidata *nd;
+	} i_create;
+
+	struct {
+		struct inode *dir;
+		struct dentry *dentry;
+		struct nameidata *nd;
+	} i_lookup;
+
+	struct {
+		struct inode *dir;
+		struct dentry *dentry;
+		int mode;
+	} i_mkdir;
+
+	struct {
+		struct inode *inode;
+		int mode;
+		struct nameidata *nd;
+	} i_permission;	
+
+	struct {
+		struct inode *inode;
+		struct file *file;
+	} f_open;
+
+	struct {
+		struct inode *inode;
+		struct file *file;
+	} f_release;
+};
+
+union rfs_op_retv {
+	int		rv_int;
+	ssize_t		rv_ssize;
+	unsigned int	rv_uint;
+	unsigned long	rv_ulong;
+	loff_t		rv_loff;
+	struct dentry	*rv_dentry;
+};
+
+struct rfs_op_exts {
+	const char* path;
+};
+
+struct rfs_op_info {
+	enum rfs_op_id id;
+	enum rfs_op_type type;
 };
 
 typedef void* rfs_filter;
@@ -69,7 +158,11 @@ struct rfs_path_info {
 	int flags;
 };
 
-struct rfs_op_args {
+struct rfs_args {
+	union rfs_op_args;
+	union rfs_op_retv;
+	struct rfs_op_info;
+	struct rfs_op_exts;
 };
 
 struct rfs_filter_info {
@@ -80,15 +173,15 @@ struct rfs_filter_info {
 
 struct rfs_op_info {
 	enum rfs_op_id op_id;
-	enum rfs_op_retv (*pre_cb)(rfs_context, struct rfs_op_args);
-	enum rfs_op_retv (*post_cb)(rfs_context, struct rfs_op_args);
+	enum rfs_retv (*pre_cb)(rfs_context, struct rfs_args);
+	enum rfs_retv (*post_cb)(rfs_context, struct rfs_args);
 };
 
 enum rfs_err rfs_register_filter(rfs_filter *filter, struct rfs_filter_info *filter_info);
+enum rfs_err rfs_set_operations(rfs_filter filter, struct rfs_op_info *op_info);
+enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info);
 enum rfs_err rfs_unregister_filter(rfs_filter filter);
 enum rfs_err rfs_activate_filter(rfs_filter filter);
 enum rfs_err rfs_deactivate_filter(rfs_filter filter);
-enum rfs_err rfs_set_operations(rfs_filter filter, struct rfs_op_info *op_info);
-enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info);
 
 #endif
