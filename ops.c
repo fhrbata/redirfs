@@ -1,12 +1,12 @@
 #include "redir.h"
 
-struct ops *ops_alloc()
+struct ops *ops_alloc(void)
 {
 	struct ops *ops;
 	int *arr;
 
 	ops = kmalloc(sizeof(struct ops), GFP_KERNEL);
-	arr = kmalloc(sizeof(int) * RFS_OP_NR, GFP_KERNEL);
+	arr = kmalloc(sizeof(int) * RFS_OP_END, GFP_KERNEL);
 
 	if (!ops || !arr) {
 		kfree(ops);
@@ -14,7 +14,7 @@ struct ops *ops_alloc()
 		return ERR_PTR(RFS_ERR_NOMEM);
 	}
 
-	memset(arr, 0, sizeof(int) * RFS_OP_NR);
+	memset(arr, 0, sizeof(int) * RFS_OP_END);
 	ops->o_ops = arr;
 	ops->o_count = 1;
 	spin_lock_init(&ops->o_lock);
@@ -40,7 +40,7 @@ void ops_put(struct ops *ops)
 	int del = 0;
 
 	if (!ops || IS_ERR(ops))
-		return NULL;
+		return;
 
 	spin_lock(&ops->o_lock);
 	BUG_ON(!ops->o_count);

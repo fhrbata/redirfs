@@ -112,6 +112,7 @@ struct rfile *rfile_add(struct file *file)
 	struct rfile *rfile_new;
 	struct rdentry *rdentry;
 	struct rdentry *rdentry_tmp;
+	struct ops *ops = NULL;
 
 
 	rfile_new = rfile_alloc(file);
@@ -132,20 +133,25 @@ struct rfile *rfile_add(struct file *file)
 	rdentry_tmp = rdentry_find(file->f_dentry);
 
 	if (rdentry_tmp) {
-		rfile_new->rf_rdentry = rdentry;
-		rfile_new->rf_path = path_get(rdentry->rd_path);
-		rfile_new->rf_chain = chain_get(rdentry->rd_chain);
+		spin_lock(&rdentry->rd_rinode->ri_lock);
+		rfile_new->rf_rdentry = rdentry_get(rdentry);
+		rfile_new->rf_path = path_get(rdentry->rd_rinode->ri_path_set);
+		rfile_new->rf_chain = chain_get(rdentry->rd_rinode->ri_chain_set);
+		ops = ops_get(rdentry->rd_rinode->ri_ops_set);
+		spin_unlock(&rdentry->rd_rinode->ri_lock);
 
 		rcu_assign_pointer(file->f_op, &rfile_new->rf_op_new);
 
 		list_add_tail(&rfile_new->rf_rdentry_list, &rdentry->rd_rfiles);
 		rfile_get(rfile_new);
 
-		rfile_set_ops(rfile_new, rdentry->rd_path);
+		rfile_set_ops(rfile_new, ops);
 	}
 
 	spin_unlock(&rdentry->rd_lock);
 	rdentry_put(rdentry_tmp);
+	rdentry_put(rdentry);
+	ops_put(ops);
 
 	return rfile_get(rfile_new);
 }
@@ -207,9 +213,9 @@ int rfs_open(struct inode *inode, struct file *file)
 	args.args.f_open.file = file;
 
 	if (S_ISREG(inode->i_mode))
-		args.info.id = RFS_REG_FOP_OPEN;
+		args.type.id = RFS_REG_FOP_OPEN;
 	else if (S_ISDIR(inode->i_mode))
-		args.info.id = RFS_DIR_FOP_OPEN;
+		args.type.id = RFS_DIR_FOP_OPEN;
 
 	if (!rfs_precall_flts(chain, NULL, &args)) {
 		if (rinode->ri_fop_old && rinode->ri_fop_old->open)
@@ -259,9 +265,9 @@ int rfs_release(struct inode *inode, struct file *file)
 	args.args.f_open.file = file;
 
 	if (S_ISREG(inode->i_mode))
-		args.info.id = RFS_REG_FOP_OPEN;
+		args.type.id = RFS_REG_FOP_OPEN;
 	else if (S_ISDIR(inode->i_mode))
-		args.info.id = RFS_DIR_FOP_OPEN;
+		args.type.id = RFS_DIR_FOP_OPEN;
 
 	if (!rfs_precall_flts(chain, NULL, &args)) {
 		if (rfile->rf_op_old && rfile->rf_op_old->release)

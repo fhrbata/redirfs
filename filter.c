@@ -2,16 +2,17 @@
 
 static spinlock_t flt_list_lock = SPIN_LOCK_UNLOCKED;
 static LIST_HEAD(flt_list);
-extern path_rem_list;
+extern struct list_head path_rem_list;
+extern struct mutex path_list_mutex;
 
-inline struct filter *flt_get(struct filter *flt)
+struct filter *flt_get(struct filter *flt)
 {
 	BUG_ON(!atomic_read(&flt->f_count));
 	atomic_inc(&flt->f_count);
 	return flt;
 }
 
-inline void flt_put(struct filter *flt)
+void flt_put(struct filter *flt)
 {
 	if (!flt || IS_ERR(flt))
 		return;
@@ -46,7 +47,7 @@ struct filter *flt_alloc(struct rfs_filter_info *flt_info)
 	flt->f_priority = flt_info->priority;
 	atomic_set(&flt->f_count, 1);
 	atomic_set(&flt->f_del, 0);
-	init_waitqueue_head(flt->f_wait);
+	init_waitqueue_head(&flt->f_wait);
 
 	if (flt_info->active)
 		atomic_set(&flt->f_active, 1);
@@ -58,7 +59,7 @@ struct filter *flt_alloc(struct rfs_filter_info *flt_info)
 
 enum rfs_err rfs_register_filter(void **filter, struct rfs_filter_info *filter_info)
 {
-	struct filter *pos;;
+	struct filter *pos;
 	struct filter *flt;
 
 	if (!*filter || !filter_info)
@@ -71,7 +72,7 @@ enum rfs_err rfs_register_filter(void **filter, struct rfs_filter_info *filter_i
 	spin_lock(&flt_list_lock);
 
 	list_for_each_entry(pos, &flt_list, f_list) {
-		if (pos->f_priority == flt_info->priority) {
+		if (pos->f_priority == filter_info->priority) {
 			spin_unlock(&flt_list_lock);
 			flt_put(flt);
 			return RFS_ERR_EXIST;
@@ -119,7 +120,7 @@ enum rfs_err rfs_unregister_filter(void *filter)
 	spin_unlock(&flt_list_lock);
 
 	mutex_lock(&path_list_mutex);
-	retv = path_walk(NULL, flt_rem_cb, flt);
+	retv = rfs_path_walk(NULL, flt_rem_cb, flt);
 	mutex_unlock(&path_list_mutex);
 
 	wait_event_interruptible(flt->f_wait, atomic_read(&flt->f_del));
@@ -135,7 +136,10 @@ enum rfs_err rfs_unregister_filter(void *filter)
 
 enum rfs_err rfs_activate_filter(rfs_filter filter)
 {
-	if (!filter)
+	struct filter *flt;
+
+	flt = (struct filter *)filter;
+	if (!flt)
 		return RFS_ERR_INVAL;
 
 	atomic_set(&flt->f_active, 1);
@@ -145,7 +149,10 @@ enum rfs_err rfs_activate_filter(rfs_filter filter)
 
 enum rfs_err rfs_deactivate_filter(rfs_filter filter)
 {
-	if (!filter)
+	struct filter *flt;
+
+	flt = (struct filter *)filter;
+	if (!flt)
 		return RFS_ERR_INVAL;
 
 	atomic_set(&flt->f_active, 0);
@@ -169,7 +176,7 @@ enum rfs_err rfs_set_operations(void *filter, struct rfs_op_info ops_info[])
 	}
 
 	mutex_lock(&path_list_mutex);
-	retv = path_walk(NULL, flt_set_ops_cb, flt);
+	retv = rfs_path_walk(NULL, flt_set_ops_cb, flt);
 	mutex_unlock(&path_list_mutex);
 
 	return retv;
@@ -234,7 +241,7 @@ int flt_add_local(struct path *path, struct filter *flt)
 	if (!inchain_local && (path->p_flags & RFS_PATH_SINGLE))
 		return RFS_ERR_OK;
 
-	retv = rfs_replace_ops(path, path_go, path_cmp);
+	retv = rfs_replace_ops(path, path_go);
 
 	if (retv)
 		return retv;
@@ -242,15 +249,15 @@ int flt_add_local(struct path *path, struct filter *flt)
 	return RFS_ERR_OK;
 }
 
-int flt_rem_local(struct path *path, void *data)
+int flt_rem_local(struct path *path, struct filter *flt)
 {
 	struct chain *inchain_local = NULL;
 	struct chain *exchain_local = NULL;
 	struct path *path_go = path;
 	struct path *path_cmp = path;
 	int aux = 0;
-	int *ops;
 	int retv;
+	int remove = 0;
 
 	while (path_cmp) {
 		if (!(path_cmp->p_flags & RFS_PATH_SUBTREE))
@@ -288,9 +295,9 @@ int flt_rem_local(struct path *path, void *data)
 	}
 
 	if (!aux && chain_find_flt(path->p_exchain_local, flt) != -1) {
-		exchain = chain_rem_flt(path->p_exchain_local, flt);
-		if (IS_ERR(exchain))
-			return PTR_ERR(exchain);
+		exchain_local = chain_rem_flt(path->p_exchain_local, flt);
+		if (IS_ERR(exchain_local))
+			return PTR_ERR(exchain_local);
 
 		chain_put(path->p_exchain_local);
 		path->p_exchain = exchain_local;
@@ -327,7 +334,7 @@ int flt_rem_local(struct path *path, void *data)
 	if (!remove)
 		retv = rfs_replace_ops(path, path_go);
 	else 
-		retv = rfs_restore_ops_cb(path->p_dentry, path)
+		retv = rfs_restore_ops_cb(path->p_dentry, path);
 
 	if (retv)
 		return retv;
@@ -433,9 +440,9 @@ int flt_rem_cb(struct path *path, void *data)
 	struct chain *exchain = NULL;
 	struct path *path_go = path;
 	struct path *path_cmp = path->p_parent;
+	struct ops *ops;
 	int remove = 0;
-	int aux;
-	int *ops;
+	int aux = 0;
 	int retv;
 
 	flt = (struct filter *)data;
@@ -511,7 +518,7 @@ int flt_rem_cb(struct path *path, void *data)
 		path->p_flags &= ~RFS_PATH_SUBTREE;
 		ops_put(path->p_ops);
 
-		if (!(path-p_flags & RFS_PATH_SINGLE))
+		if (!(path->p_flags & RFS_PATH_SINGLE))
 			list_add_tail(&path->p_rem, &path_rem_list);
 
 		if (!path_cmp)
@@ -527,7 +534,7 @@ int flt_rem_cb(struct path *path, void *data)
 			if (IS_ERR(ops))
 				return PTR_ERR(ops);
 
-			chain_get_ops(path_go->p_inchain, ops);
+			chain_get_ops(path_go->p_inchain, ops->o_ops);
 			ops_put(path_go->p_ops);
 			path_go->p_ops = ops;
 		}
@@ -545,7 +552,6 @@ int flt_rem_cb(struct path *path, void *data)
 int flt_set_ops_cb(struct path *path, void *data)
 {
 	struct filter *flt;
-	struct chain *chain;
 	struct ops *ops;
 	int err;
 

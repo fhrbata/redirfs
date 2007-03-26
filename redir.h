@@ -18,17 +18,29 @@
 
 struct rdentry;
 struct rinode;
+struct path;
 
 struct filter {
+	struct list_head f_list;
 	const char *f_name;
 	int f_priority;
-	enum rfs_op_retv (*f_pre_cbs)(context, struct rfs_op_args)[RFS_OP_END];
-	enum rfs_op_retv (*f_post_cbs)(context, struct rfs_op_args)[RFS_OP_END];
+	enum rfs_retv (*f_pre_cbs[RFS_OP_END])(rfs_context, struct rfs_args *);
+	enum rfs_retv (*f_post_cbs[RFS_OP_END])(rfs_context, struct rfs_args *);
 	atomic_t f_count;
 	atomic_t f_active;
 	atomic_t f_del;
-	wait_queue_head_t *f_wait;
+	wait_queue_head_t f_wait;
 };
+
+int flt_add_local(struct path *path, struct filter *flt);
+int flt_rem_local(struct path *path, struct filter *flt);
+int flt_add_cb(struct path *path, void *data);
+int flt_rem_cb(struct path *path, void *data);
+struct filter *flt_get(struct filter *flt);
+void flt_put(struct filter *flt);
+struct filter *flt_alloc(struct rfs_filter_info *flt_info);
+int flt_set_ops_cb(struct path *path, void *data);
+
 
 struct ops {
 	spinlock_t o_lock;
@@ -36,10 +48,15 @@ struct ops {
 	int *o_ops;
 };
 
+struct ops *ops_alloc(void);
+struct ops *ops_get(struct ops *ops);
+void ops_put(struct ops *ops);
+
+
 struct chain {
 	spinlock_t c_lock;
 	unsigned long long c_count;
-	struct filter *c_flts;
+	struct filter **c_flts;
 	int c_flts_nr;
 };
 
@@ -65,7 +82,7 @@ struct path {
 	struct list_head p_subpath;
 	struct list_head p_sibpath;
 	struct list_head p_rem;
-	struct chain *p_inchian;
+	struct chain *p_inchain;
 	struct chain *p_exchain;
 	struct chain *p_inchain_local;
 	struct chain *p_exchain_local;
@@ -73,11 +90,12 @@ struct path {
 };
 
 int path_del(struct path *path);
-struct path *path_alloc(void);
+struct path *path_alloc(const char *path_name);
 struct path *path_get(struct path *path);
 void path_put(struct path *path);
 void path_add_rdentry(struct path *path, struct rdentry *rdentry);
 void path_del_rdentry(struct path *path, struct rdentry *rdentry);
+int rfs_path_walk(struct path *path, int walkcb(struct path*, void*), void *datacb);
 
 struct rfile {
 	struct list_head rf_rdentry_list;
@@ -99,7 +117,7 @@ void rfile_del(struct file *file);
 struct rfile *rfile_get(struct rfile* rfile);
 void rfile_put(struct rfile *rfile);
 struct rfile* rfile_find(struct file *file);
-void rfile_set_ops(struct rfile *rfile, struct path *path);
+void rfile_set_ops(struct rfile *rfile, struct ops *ops);
 int rfs_open(struct inode *inode, struct file *file);
 
 
@@ -125,9 +143,9 @@ struct rdentry *rdentry_alloc(struct dentry* dentry);
 struct rdentry *rdentry_get(struct rdentry *rdentry);
 void rdentry_put(struct rdentry *rdentry);
 struct rdentry *rdentry_find(struct dentry *dentry);
-struct rdentry *rdentry_add(struct dentry *dentry, struct path *path);
+struct rdentry *rdentry_add(struct dentry *dentry);
 void rdentry_del(struct dentry *dentry);
-void rdentry_set_ops(struct rdentry *rdentry, struct path *path);
+void rdentry_set_ops(struct rdentry *rdentry, struct ops *ops);
 void rfs_d_release(struct dentry *dentry);
 
 
@@ -144,7 +162,7 @@ struct rinode {
 	struct chain *ri_chain;
 	struct path *ri_path_set;
 	struct chain *ri_chain_set;
-	int *ri_ops_set;
+	struct ops *ri_ops_set;
 	spinlock_t ri_lock;
 	atomic_t ri_count;
 	atomic_t ri_nlink;
@@ -157,13 +175,21 @@ struct rinode *rinode_get(struct rinode *rinode);
 void rinode_put(struct rinode *rinode);
 struct rinode *rinode_find(struct inode *inode);
 void rinode_del(struct inode *inode);
-void rinode_set_ops(struct rinode *rinode, struct path *path);
+void rinode_set_ops(struct rinode *rinode, struct ops *ops);
 struct dentry *rfs_lookup(struct inode *inode, struct dentry *dentry, struct nameidata *nd);
 
+struct context {
+};
 
+int rfs_replace_ops(struct path *path_old, struct path *path_new);
 int rfs_replace_ops_cb(struct dentry *dentry, void *data);
 int rfs_restore_ops_cb(struct dentry *dentry, void *data);
 int rfs_set_path_cb(struct dentry *dentry, void *data);
+int rfs_set_ops(struct dentry *dentry, struct path *path);
 int rfs_set_ops_cb(struct dentry *dentry, void *data);
+int rfs_walk_dcache(struct dentry *root, int (*)(struct dentry *, void *), void *, int (*)(struct dentry *, void *), void *);
+int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_args *args);
+int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_args *args);
 
 #endif /* _RFS_REDIR_H */
+

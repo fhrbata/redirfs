@@ -12,17 +12,16 @@ extern struct list_head rdentry_list;
 
 int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_args *args)
 {
-	enum rfs_retv (*ops)(context, struct rfs_args);
-	enum rfs_retv (*op)(context, struct rfs_args);
+	enum rfs_retv (**ops)(rfs_context, struct rfs_args *);
+	enum rfs_retv (*op)(rfs_context, struct rfs_args *);
 	int retv;
 	int i;
 
-	args->info.type = RFS_PRECALL;
-	ops = chain->c_flts[i]->f_pre_cbs;
+	args->type.call = RFS_PRECALL;
 
 	for (i = 0; i < chain->c_flts_nr; i++) {
-
-		op = ops[args->info.id];
+		ops = chain->c_flts[i]->f_pre_cbs;
+		op = ops[args->type.id];
 		if (op) {
 			retv = op(context, args);
 			if (retv == RFS_STOP)
@@ -35,17 +34,16 @@ int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_ar
 
 int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_args *args)
 {
-	enum rfs_retv (*ops)(context, struct rfs_args);
-	enum rfs_retv (*op)(context, struct rfs_args);
+	enum rfs_retv (**ops)(rfs_context, struct rfs_args *);
+	enum rfs_retv (*op)(rfs_context, struct rfs_args *);
 	int retv;
 	int i;
 
-	args->info.type = RFS_POSTCALL;
-	ops = chain->c_flts[i]->f_post_cbs;
+	args->type.call = RFS_POSTCALL;
 
 	for (i = chain->c_flts_nr; i; i--) {
-
-		op = ops[args->info.id];
+		ops = chain->c_flts[i]->f_post_cbs;
+		op = ops[args->type.id];
 		if (op) {
 			retv = op(context, args);
 			if (retv == RFS_STOP)
@@ -60,11 +58,11 @@ int rfs_replace_ops(struct path *path_old, struct path *path_new)
 {
 	struct rdentry *rdentry;
 	struct rinode *rinode;
+	struct rfile *rfile;
 	struct chain *chain;
-	struct path *path;
 	struct ops *ops;
 
-	rdentry = rdentry_add(dentry);
+	rdentry = rdentry_add(path_old->p_dentry);
 	if (IS_ERR(rdentry))
 		return PTR_ERR(rdentry);
 
@@ -165,8 +163,8 @@ int rfs_replace_ops_cb(struct dentry *dentry, void *data)
 			return 0;
 		}
 
-	} else if (rdentry->rd_root && list_empty(rdentry->rd_path->p_rem)) {
-		if (!(rdentry->rd_path & RFS_PATH_SUBTREE)) {
+	} else if (rdentry->rd_root && list_empty(&rdentry->rd_path->p_rem)) {
+		if (!(rdentry->rd_path->p_flags & RFS_PATH_SUBTREE)) {
 			rdentry_put(rdentry);
 			return 0;
 		}
@@ -250,7 +248,7 @@ int rfs_restore_ops_cb(struct dentry *dentry, void *data)
 	list_for_each_entry_safe(rfile, tmp, &rdentry->rd_rfiles, rf_rdentry_list) {
 		rfile_del(rfile->rf_file);
 	}
-	spin_unlock(&dentry->rd_lock);
+	spin_unlock(&rdentry->rd_lock);
 
 
 	rdentry_put(rdentry);
@@ -262,6 +260,7 @@ int rfs_set_ops(struct dentry *dentry, struct path *path)
 {
 	struct rdentry *rdentry;
 	struct rinode *rinode;
+	struct rfile *rfile;
 	struct ops *ops;
 
 	ops = ops_alloc();
@@ -278,7 +277,7 @@ int rfs_set_ops(struct dentry *dentry, struct path *path)
 	spin_lock(&rdentry->rd_lock);
 
 	list_for_each_entry(rfile, &rdentry->rd_rfiles, rf_rdentry_list) {
-		rfile_set_ops(rfile, path->ops);
+		rfile_set_ops(rfile, ops);
 	}
 
 	spin_unlock(&rdentry->rd_lock);
@@ -320,7 +319,7 @@ int rfs_set_ops_cb(struct dentry *dentry, void *data)
 			}
 
 		} else {
-			if (!(rdentry->rd_path & RFS_PATH_SUBTREE)) {
+			if (!(rdentry->rd_path->p_flags & RFS_PATH_SUBTREE)) {
 				rdentry_put(rdentry);
 				return 0;
 			}

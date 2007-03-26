@@ -230,11 +230,11 @@ int rfs_d_revalidate(struct dentry *dentry, struct nameidata *nd)
 	inode = dentry->d_inode;
 	if (inode) {
 		if (S_ISREG(inode->i_mode))
-			args.info.id = RFS_REG_DOP_D_REVALIDATE;
+			args.type.id = RFS_REG_DOP_D_REVALIDATE;
 		else if (S_ISDIR(inode->i_mode))
-			args.info.id = RFS_DIR_DOP_D_REVALIDATE;
+			args.type.id = RFS_DIR_DOP_D_REVALIDATE;
 	} else
-		args.info.id = RFS_NONE_DOP_D_REVALIDATE;
+		args.type.id = RFS_NONE_DOP_D_REVALIDATE;
 
 	if (!rfs_precall_flts(chain, NULL, &args)) {
 		if (rdentry->rd_op_old && rdentry->rd_op_old->d_revalidate)
@@ -282,11 +282,11 @@ int rfs_d_hash(struct dentry *dentry, struct qstr *name)
 	inode = dentry->d_inode;
 	if (inode) {
 		if (S_ISREG(inode->i_mode))
-			args.info.id = RFS_REG_DOP_D_HASH;
+			args.type.id = RFS_REG_DOP_D_HASH;
 		else if (S_ISDIR(inode->i_mode))
-			args.info.id = RFS_DIR_DOP_D_HASH;
+			args.type.id = RFS_DIR_DOP_D_HASH;
 	} else
-		args.info.id = RFS_NONE_DOP_D_HASH;
+		args.type.id = RFS_NONE_DOP_D_HASH;
 
 	if (!rfs_precall_flts(chain, NULL, &args)) {
 		if (rdentry->rd_op_old && rdentry->rd_op_old->d_hash)
@@ -345,11 +345,11 @@ int rfs_d_compare(struct dentry *dentry, struct qstr *name1, struct qstr *name2)
 	inode = dentry->d_inode;
 	if (inode) {
 		if (S_ISREG(inode->i_mode))
-			args.info.id = RFS_REG_DOP_D_COMPARE;
+			args.type.id = RFS_REG_DOP_D_COMPARE;
 		else if (S_ISDIR(inode->i_mode))
-			args.info.id = RFS_DIR_DOP_D_COMPARE;
+			args.type.id = RFS_DIR_DOP_D_COMPARE;
 	} else
-		args.info.id = RFS_NONE_DOP_D_COMPARE;
+		args.type.id = RFS_NONE_DOP_D_COMPARE;
 
 	if (!rfs_precall_flts(chain, NULL, &args)) {
 
@@ -382,7 +382,7 @@ int rfs_d_delete(struct dentry *dentry)
 	struct rfs_args args;
 	int rv = 0;
 
-	rdentry = rdentry_find(rdentry);
+	rdentry = rdentry_find(dentry);
 	if (!rdentry) {
 		if (dentry->d_op && dentry->d_op->d_delete)
 			return dentry->d_op->d_delete(dentry);
@@ -398,11 +398,11 @@ int rfs_d_delete(struct dentry *dentry)
 	inode = dentry->d_inode;
 	if (inode) {
 		if (S_ISREG(inode->i_mode))
-			args.info.id = RFS_REG_DOP_D_DELETE;
+			args.type.id = RFS_REG_DOP_D_DELETE;
 		else if (S_ISDIR(inode->i_mode))
-			args.info.id = RFS_DIR_DOP_D_DELETE;
+			args.type.id = RFS_DIR_DOP_D_DELETE;
 	} else
-		args.info.id = RFS_NONE_DOP_D_DELETE;
+		args.type.id = RFS_NONE_DOP_D_DELETE;
 
 	if (!rfs_precall_flts(chain, NULL, &args)) {
 
@@ -449,11 +449,11 @@ void rfs_d_release(struct dentry *dentry)
 	inode = dentry->d_inode;
 	if (inode) {
 		if (S_ISREG(inode->i_mode))
-			args.info.id = RFS_REG_DOP_D_RELEASE;
+			args.type.id = RFS_REG_DOP_D_RELEASE;
 		else if (S_ISDIR(inode->i_mode))
-			args.info.id = RFS_DIR_DOP_D_RELEASE;
+			args.type.id = RFS_DIR_DOP_D_RELEASE;
 	} else
-		args.info.id = RFS_NONE_DOP_D_RELEASE;
+		args.type.id = RFS_NONE_DOP_D_RELEASE;
 
 	if (!rfs_precall_flts(chain, NULL, &args)) {
 
@@ -495,11 +495,11 @@ void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 
 	if (inode) {
 		if (S_ISREG(inode->i_mode))
-			args.info.id = RFS_REG_DOP_D_IPUT;
+			args.type.id = RFS_REG_DOP_D_IPUT;
 		else if (S_ISDIR(inode->i_mode))
-			args.info.id = RFS_DIR_DOP_D_IPUT;
+			args.type.id = RFS_DIR_DOP_D_IPUT;
 	} else
-		args.info.id = RFS_NONE_DOP_D_IPUT;
+		args.type.id = RFS_NONE_DOP_D_IPUT;
 
 	if (!rfs_precall_flts(chain, NULL, &args)) {
 
@@ -591,7 +591,7 @@ void rdentry_set_ops(struct rdentry *rdentry, struct ops *ops)
 	umode_t mode;
 
 	if (!rdentry->rd_rinode || !rdentry->rd_rinode->ri_inode) {
-		rdentry_set_none_ops(rdentry, ops->ops);
+		rdentry_set_none_ops(rdentry, ops->o_ops);
 		return;
 	}
 

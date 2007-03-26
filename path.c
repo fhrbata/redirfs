@@ -7,7 +7,7 @@ DEFINE_MUTEX(path_list_mutex);
 int path_normalize(const char *path, char *buf, int len)
 {
 	int path_len;
-	char *s;
+	const char *s;
 	char *d;
 
 	if (!path)
@@ -16,7 +16,7 @@ int path_normalize(const char *path, char *buf, int len)
 	s = path;
 	d = buf;
 	path_len = strlen(path);
-	if (path_len => len)
+	if (path_len >= len)
 		return RFS_ERR_NAMETOOLONG;
 
 	if (*s != '/')
@@ -45,17 +45,16 @@ struct path *path_alloc(const char *path_name)
 {
 	struct nameidata nd;
 	struct path *path;
-	int err = 0;
 	char *path_buf;
 	int path_len;
 
 	if (!path_name)
 		return ERR_PTR(RFS_ERR_INVAL);
 
-	if (path_lookup(buf, LOOKUP_FOLLOW, &nd))
+	if (path_lookup(path_name, LOOKUP_FOLLOW, &nd))
 		return ERR_PTR(RFS_ERR_NOENT);
 
-	path_len = strlen(buf);
+	path_len = strlen(path_name);
 
 	path = kmalloc(sizeof(struct path), GFP_KERNEL);
 	path_buf = kmalloc(path_len + 1, GFP_KERNEL);
@@ -67,7 +66,7 @@ struct path *path_alloc(const char *path_name)
 		return ERR_PTR(RFS_ERR_NOMEM);
 	}
 	
-	strncpy(path_buf, buf, path_len);
+	strncpy(path_buf, path_name, path_len);
 
 	path->p_inchain = NULL;
 	path->p_exchain = NULL;
@@ -88,7 +87,7 @@ struct path *path_alloc(const char *path_name)
 	return path;
 }
 
-inline struct path *path_get(struct path *path)
+struct path *path_get(struct path *path)
 {
 	if (!path)
 		return NULL;
@@ -101,7 +100,7 @@ inline struct path *path_get(struct path *path)
 	return path;
 }
 
-inline void path_put(struct path *path)
+void path_put(struct path *path)
 {
 	int del = 0;
 
@@ -146,7 +145,7 @@ struct path *path_find(const char *path_name, int parent)
 		}
 
 		if (!strncmp(loop->p_path, path_name, loop->p_len)) {
-			if (parent && (parent->p_flags & RFS_PATH_SUBTREE)) 
+			if (parent && (loop->p_flags & RFS_PATH_SUBTREE)) 
 				found = loop;
 
 			else if (path_len == loop->p_len) {
@@ -155,7 +154,7 @@ struct path *path_find(const char *path_name, int parent)
 				break;
 			}
 
-			act = end = loop->p_subpath;
+			act = end = &loop->p_subpath;
 		}
 
 		act = act->next;
@@ -244,7 +243,7 @@ void path_rem(struct path *path)
 	path_put(path);
 }
 
-int path_walk(struct path *path, int walkcb(struct path*, void*), void *datacb)
+int rfs_path_walk(struct path *path, int walkcb(struct path*, void*), void *datacb)
 {
 	struct list_head *act;
 	struct list_head *end;
@@ -261,7 +260,7 @@ int path_walk(struct path *path, int walkcb(struct path*, void*), void *datacb)
 	act = par = end->next;
 
 	if (path) {
-		stop = waklcb(path, datacb);
+		stop = walkcb(path, datacb);
 		if (stop)
 			return stop;
 	}
@@ -318,7 +317,7 @@ enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 	if (path_info->flags & RFS_PATH_SUBTREE) {
 		if (!S_ISDIR(nd.dentry->d_inode->i_mode)) {
 			path_release(&nd);
-			return ERR_PTR(RFS_ERR_NOTDIR);
+			return RFS_ERR_NOTDIR;
 		}
 	}
 
@@ -390,13 +389,14 @@ enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 	}
 
 	if (!path && parent) {
-		if (path_info->flags & RFS_PATH_INCLUDE)
-			if (chain_find(parent->p_inchain, flt) != -1)
+		if (path_info->flags & RFS_PATH_INCLUDE) {
+			if (chain_find_flt(parent->p_inchain, flt) != -1)
 				path = path_get(parent);
 
-		 else 
-			if (chain_find(parent->p_exchain, flt) != -1)
+		} else {
+			if (chain_find_flt(parent->p_exchain, flt) != -1)
 				path = path_get(parent);
+		}
 	}
 
 	if (!path) {
@@ -442,9 +442,9 @@ enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 			retv = flt_rem_local(path, flt);
 	else 
 		if (path_info->flags & RFS_PATH_INCLUDE)
-			retv = path_walk(path, flt_add_cb, flt);
+			retv = rfs_path_walk(path, flt_add_cb, flt);
 		else
-			retv = path_walk(path, flt_rem_cb, flt);
+			retv = rfs_path_walk(path, flt_rem_cb, flt);
 
 	list_for_each_entry_safe(loop, tmp, &path_rem_list, p_rem) {
 		list_del(&loop->p_rem);

@@ -3,13 +3,13 @@
 struct chain *chain_alloc(int size)
 {
 	struct chain *chain;
-	struct filter *flts;
+	struct filter **flts;
 
 	chain = kmalloc(sizeof(struct chain), GFP_KERNEL);
 	flts = kmalloc(sizeof(struct filter*) * size, GFP_KERNEL);
 	if (!chain || !flts) {
 		kfree(chain);
-		kfree(flts)
+		kfree(flts);
 		return ERR_PTR(RFS_ERR_NOMEM);
 	}
 
@@ -45,14 +45,14 @@ void chain_put(struct chain *chain)
 	spin_lock(&chain->c_lock);
 	BUG_ON(!chain->c_count);
 	chain->c_count--;
-	if (!chain->p_count)
+	if (!chain->c_count)
 		del = 1;
 	spin_unlock(&chain->c_lock);
 
 	if (!del)
 		return;
 
-	for (i = 0; i < chain->c_flts_nr; i++) {
+	for (i = 0; i < chain->c_flts_nr; i++)
 		flt_put(chain->c_flts[i]);
 
 	kfree(chain->c_flts);
@@ -78,7 +78,8 @@ struct chain *chain_add_flt(struct chain *chain, struct filter *flt)
 {
 	struct chain *chain_new;
 	int size;
-	int i, j = 0;
+	int i = 0;
+	int j = 0;
 
 	if (!chain) 
 		size = 1;
@@ -119,7 +120,7 @@ struct chain *chain_rem_flt(struct chain *chain, struct filter *flt)
 	if (IS_ERR(chain_new))
 		return chain_new;
 
-	for (i = 0, j = 0, i < chain->c_flts_nr, i++) {
+	for (i = 0, j = 0; i < chain->c_flts_nr; i++) {
 		if (chain->c_flts[i] != flt)
 			chain_new->c_flts[j++] = flt_get(chain->c_flts[i]);
 	}
@@ -132,10 +133,10 @@ void chain_get_ops(struct chain *chain, int *ops)
 	int i, j;
 
 	for (i = 0; i < chain->c_flts_nr; i++) {
-		for (j = 0; j < RFS_OP_NR; j++) {
-			if (chain->flts[i]->f_pre_cbs[j])
+		for (j = 0; j < RFS_OP_END; j++) {
+			if (chain->c_flts[i]->f_pre_cbs[j])
 				ops[j]++;
-			if (chain->flts[i]->f_post_cbs[j])
+			if (chain->c_flts[i]->f_post_cbs[j])
 				ops[j]++;
 		}
 	}

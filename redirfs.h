@@ -7,7 +7,8 @@ enum rfs_err {
 	RFS_ERR_NOMEM = -ENOMEM,
 	RFS_ERR_NOENT = -ENOENT,
 	RFS_ERR_NAMETOOLONG = -ENAMETOOLONG,
-	RFS_ERR_EXIST = -EEXIST
+	RFS_ERR_EXIST = -EEXIST,
+	RFS_ERR_NOTDIR = -ENOTDIR
 };
 
 enum rfs_op_id {
@@ -48,7 +49,7 @@ enum rfs_op_id {
 	RFS_OP_END
 };
 
-enum rfs_op_type {
+enum rfs_op_call {
 	RFS_PRECALL,
 	RFS_POSTCALL
 };
@@ -137,13 +138,20 @@ struct rfs_op_exts {
 	const char* path;
 };
 
-struct rfs_op_info {
+struct rfs_op_type {
 	enum rfs_op_id id;
-	enum rfs_op_type type;
+	enum rfs_op_call call;
 };
 
 typedef void* rfs_filter;
 typedef void* rfs_context;
+
+struct rfs_args {
+	union rfs_op_args args;
+	union rfs_op_retv retv;
+	struct rfs_op_type type;
+	struct rfs_op_exts exts;
+};
 
 #define RFS_PATH_SINGLE		1	
 #define RFS_PATH_SUBTREE	2
@@ -155,23 +163,16 @@ struct rfs_path_info {
 	int flags;
 };
 
-struct rfs_args {
-	union rfs_op_args args;
-	union rfs_op_retv retv;
-	struct rfs_op_info info;
-	struct rfs_op_exts exts;
+struct rfs_op_info {
+	enum rfs_op_id op_id;
+	enum rfs_retv (*pre_cb)(rfs_context, struct rfs_args *);
+	enum rfs_retv (*post_cb)(rfs_context, struct rfs_args *);
 };
 
 struct rfs_filter_info {
 	const char *name;
 	int priority;
 	int active;
-};
-
-struct rfs_op_info {
-	enum rfs_op_id op_id;
-	enum rfs_retv (*pre_cb)(rfs_context, struct rfs_args);
-	enum rfs_retv (*post_cb)(rfs_context, struct rfs_args);
 };
 
 enum rfs_err rfs_register_filter(rfs_filter *filter, struct rfs_filter_info *filter_info);
