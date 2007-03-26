@@ -493,51 +493,31 @@ err:
 	return -1;
 }
 
-static struct dentry *dentry;
-static struct path* path;
-
 static int __init rfs_init(void)
 {
-	struct nameidata nd;
-
-
 	atomic_set(&rdentries_freed, 0);
 	atomic_set(&rinodes_freed, 0);
 	atomic_set(&rfiles_freed, 0);
 
-	path = path_alloc();
-	if (!path)
-		return -1;
-
 	if (rdentry_cache_create())
 		return -1;
 
-	if (rinode_cache_create())
-		return -1;
-
-	if (rfile_cache_create())
-		return -1;
-
-	if (path_lookup("/home", LOOKUP_FOLLOW, &nd)) {
-		synchronize_rcu();
+	if (rinode_cache_create()) {
 		rdentry_cache_destroy();
 		return -1;
 	}
 
-	dentry = dget(nd.dentry);
+	if (rfile_cache_create()) {
+		rdentry_cache_destroy();
+		rinode_cache_destroy();
+		return -1;
+	}
 
-	rfs_walk_dcache(dentry, rfs_replace_ops_cb, path, NULL, NULL);
-
-	return 0;
+	return 0;	
 }
 
 static void __exit rfs_exit(void)
 {
-	rfs_walk_dcache(dentry, rfs_restore_ops_cb, path, NULL, NULL);
-
-	dput(dentry);
-	path_put(path);
-
 	wait_event_interruptible(rdentries_wait, atomic_read(&rdentries_freed));
 	rdentry_cache_destroy();
 
@@ -550,7 +530,6 @@ static void __exit rfs_exit(void)
 
 module_init(rfs_init);
 module_exit(rfs_exit);
-
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Frantisek Hrbata <franta@redirfs.org>");
