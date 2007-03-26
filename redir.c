@@ -12,8 +12,8 @@ extern struct list_head rdentry_list;
 
 int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_args *args)
 {
-	enum rfs_op_retv (*ops)(context, struct rfs_op_args);
-	enum rfs_retv (*op)(rfs_context, struct rfs_args);
+	enum rfs_retv (*ops)(context, struct rfs_args);
+	enum rfs_retv (*op)(context, struct rfs_args);
 	int retv;
 	int i;
 
@@ -26,17 +26,17 @@ int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_ar
 		if (op) {
 			retv = op(context, args);
 			if (retv == RFS_STOP)
-				break;
+				return -1;
 		}
 	}
 
-	return retv;
+	return 0;
 }
 
 int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_args *args)
 {
-	enum rfs_op_retv (*ops)(context, struct rfs_op_args);
-	enum rfs_retv (*op)(rfs_context, struct rfs_args);
+	enum rfs_retv (*ops)(context, struct rfs_args);
+	enum rfs_retv (*op)(context, struct rfs_args);
 	int retv;
 	int i;
 
@@ -49,11 +49,11 @@ int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_a
 		if (op) {
 			retv = op(context, args);
 			if (retv == RFS_STOP)
-				break;
+				return -1;
 		}
 	}
 
-	return retv;
+	return 0;
 }
 
 int rfs_replace_ops(struct path *path_old, struct path *path_new)

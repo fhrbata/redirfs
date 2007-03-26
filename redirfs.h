@@ -32,9 +32,6 @@ enum rfs_op_id {
 	RFS_DIR_DOP_D_RELEASE,
 	RFS_DIR_DOP_D_IPUT,
 
-	RFS_REG_IOP_CREATE,
-	RFS_REG_IOP_LOOKUP,
-	RFS_REG_IOP_MKDIR,
 	RFS_REG_IOP_PERMISSION,
 
 	RFS_DIR_IOP_CREATE,
@@ -74,8 +71,8 @@ union rfs_op_args {
 
 	struct {
 		struct dentry *dentry;
-		struct qstr *str1;
-		struct qstr *str2;
+		struct qstr *name1;
+		struct qstr *name2;
 	} d_compare;
 
 	struct {
@@ -112,7 +109,7 @@ union rfs_op_args {
 
 	struct {
 		struct inode *inode;
-		int mode;
+		int mask;
 		struct nameidata *nd;
 	} i_permission;	
 

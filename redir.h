@@ -127,8 +127,6 @@ void rdentry_put(struct rdentry *rdentry);
 struct rdentry *rdentry_find(struct dentry *dentry);
 struct rdentry *rdentry_add(struct dentry *dentry, struct path *path);
 void rdentry_del(struct dentry *dentry);
-struct path *rdentry_get_path(struct rdentry *rdentry);
-struct chain *rdentry_get_chain(struct rdentry *rdentry);
 void rdentry_set_ops(struct rdentry *rdentry, struct path *path);
 void rfs_d_release(struct dentry *dentry);
 
@@ -159,8 +157,6 @@ struct rinode *rinode_get(struct rinode *rinode);
 void rinode_put(struct rinode *rinode);
 struct rinode *rinode_find(struct inode *inode);
 void rinode_del(struct inode *inode);
-struct path *rinode_get_path(struct rinode *rinode);
-struct chain *rinode_get_chain(struct rinode *rinode);
 void rinode_set_ops(struct rinode *rinode, struct path *path);
 struct dentry *rfs_lookup(struct inode *inode, struct dentry *dentry, struct nameidata *nd);
 

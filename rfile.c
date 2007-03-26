@@ -179,11 +179,16 @@ void rfile_del(struct file *file)
 
 int rfs_open(struct inode *inode, struct file *file)
 {
-	struct rinode *rinode = rinode_find(inode);
-	const struct file_operations *fop = file->f_op;
+	struct rinode *rinode = NULL;
+	const struct file_operations *fop = NULL;
 	struct rfile *rfile = NULL;
+	struct path *path = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
 	int rv = 0;
 
+	fop = file->f_op;
+	rinode = rinode_find(inode);
 
 	if (!rinode) {
 		rcu_assign_pointer(file->f_op, inode->i_fop);
@@ -193,8 +198,29 @@ int rfs_open(struct inode *inode, struct file *file)
 		return rv;
 	}
 
-	if (rinode->ri_fop_old && rinode->ri_fop_old->open)
-		rv = rinode->ri_fop_old->open(inode, file);
+	spin_lock(&rinode->ri_lock);
+	path = path_get(rinode->ri_path);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.f_open.inode = inode;
+	args.args.f_open.file = file;
+
+	if (S_ISREG(inode->i_mode))
+		args.info.id = RFS_REG_FOP_OPEN;
+	else if (S_ISDIR(inode->i_mode))
+		args.info.id = RFS_DIR_FOP_OPEN;
+
+	if (!rfs_precall_flts(chain, NULL, &args)) {
+		if (rinode->ri_fop_old && rinode->ri_fop_old->open)
+			rv = rinode->ri_fop_old->open(inode, file);
+
+		args.retv.rv_int = rv;
+
+		if (!rfs_postcall_flts(chain, NULL, &args))
+			rv = args.retv.rv_int;
+	} else
+		rv = args.retv.rv_int;
 
 	if (!rv) {
 		rfile = rfile_add(file);
@@ -203,34 +229,59 @@ int rfs_open(struct inode *inode, struct file *file)
 
 	rinode_put(rinode);
 	rfile_put(rfile);
-
+	path_put(path);
+	chain_put(chain);
 	fops_put(fop);
+
 	return rv;
 }
 
 int rfs_release(struct inode *inode, struct file *file)
 {
-	struct rfile *rfile = rfile_find(file);
+	struct rfile *rfile = NULL;
+	struct path *path = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
 	int rv = 0;
 
-
+	rfile = rfile_find(file);
 	if (!rfile) {
 		if (file->f_op && file->f_op->release)
-			rv = file->f_op->release(inode, file);
-		return rv;
+			return file->f_op->release(inode, file);
 	}
 
-	if (rfile->rf_op_old && rfile->rf_op_old->release)
-		rv = rfile->rf_op_old->release(inode, file);
+	spin_lock(&rfile->rf_lock);
+	path = path_get(rfile->rf_path);
+	chain = chain_get(rfile->rf_chain);
+	spin_unlock(&rfile->rf_lock);
 
+	args.args.f_open.inode = inode;
+	args.args.f_open.file = file;
+
+	if (S_ISREG(inode->i_mode))
+		args.info.id = RFS_REG_FOP_OPEN;
+	else if (S_ISDIR(inode->i_mode))
+		args.info.id = RFS_DIR_FOP_OPEN;
+
+	if (!rfs_precall_flts(chain, NULL, &args)) {
+		if (rfile->rf_op_old && rfile->rf_op_old->release)
+			rv = rfile->rf_op_old->release(inode, file);
+
+		args.retv.rv_int = rv;
+
+		if (!rfs_postcall_flts(chain, NULL, &args))
+			rv = args.retv.rv_int;
+
+	} else
+		rv = args.retv.rv_int;
 
 	spin_lock(&rfile->rf_rdentry->rd_lock);
-
 	rfile_del(file);
-
 	spin_unlock(&rfile->rf_rdentry->rd_lock);
 
 	rfile_put(rfile);
+	path_put(path);
+	chain_put(chain);
 
 	return rv;
 }
