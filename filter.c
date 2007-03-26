@@ -571,3 +571,9 @@ int flt_set_ops_cb(struct path *path, void *data)
 	return RFS_ERR_OK;
 }
 
+EXPORT_SYMBOL(rfs_register_filter);
+EXPORT_SYMBOL(rfs_unregister_filter);
+EXPORT_SYMBOL(rfs_activate_filter);
+EXPORT_SYMBOL(rfs_deactivate_filter);
+EXPORT_SYMBOL(rfs_set_operations);
+

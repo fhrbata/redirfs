@@ -461,3 +461,5 @@ exit:
 
 	return retv;
 }
+
+EXPORT_SYMBOL(rfs_set_path);
