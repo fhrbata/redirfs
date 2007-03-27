@@ -1,8 +1,8 @@
 #include "redir.h"
 
 static kmem_cache_t *rdentry_cache = NULL;
-static unsigned long long rdentry_cnt = 0;
-static spinlock_t rdentry_cnt_lock = SPIN_LOCK_UNLOCKED;
+unsigned long long rdentry_cnt = 0;
+spinlock_t rdentry_cnt_lock = SPIN_LOCK_UNLOCKED;
 extern struct file_operations rfs_file_ops;
 extern atomic_t rdentries_freed;
 extern wait_queue_head_t rdentries_wait;

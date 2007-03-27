@@ -6,6 +6,12 @@ DECLARE_WAIT_QUEUE_HEAD(rinodes_wait);
 atomic_t rinodes_freed;
 DECLARE_WAIT_QUEUE_HEAD(rfiles_wait);
 atomic_t rfiles_freed;
+extern unsigned long long rdentry_cnt;
+extern spinlock_t rdentry_cnt_lock;
+extern unsigned long long rinode_cnt;
+extern spinlock_t rinode_cnt_lock;
+extern unsigned long long rfile_cnt;
+extern spinlock_t rfile_cnt_lock;
 
 int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_args *args)
 {
@@ -514,13 +520,28 @@ static int __init rfs_init(void)
 
 static void __exit rfs_exit(void)
 {
+	spin_lock(&rdentry_cnt_lock);
+	if (!rdentry_cnt)
+		atomic_set(&rdentries_freed, 1);
+	spin_unlock(&rdentry_cnt_lock);
+
 	wait_event_interruptible(rdentries_wait, atomic_read(&rdentries_freed));
 	rdentry_cache_destroy();
+
+	spin_lock(&rinode_cnt_lock);
+	if (!rinode_cnt)
+		atomic_set(&rinodes_freed, 1);
+	spin_unlock(&rinode_cnt_lock);
 
 	wait_event_interruptible(rinodes_wait, atomic_read(&rinodes_freed));
 	rinode_cache_destroy();
 
-	wait_event_interruptible(rinodes_wait, atomic_read(&rfiles_freed));
+	spin_lock(&rfile_cnt_lock);
+	if (!rfile_cnt)
+		atomic_set(&rfiles_freed, 1);
+	spin_unlock(&rfile_cnt_lock);
+
+	wait_event_interruptible(rfiles_wait, atomic_read(&rfiles_freed));
 	rfile_cache_destroy();
 }
 

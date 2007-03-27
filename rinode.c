@@ -1,8 +1,8 @@
 #include "redir.h"
 
 static kmem_cache_t *rinode_cache = NULL;
-static unsigned long long rinode_cnt = 0;
-static spinlock_t rinode_cnt_lock = SPIN_LOCK_UNLOCKED;
+unsigned long long rinode_cnt = 0;
+spinlock_t rinode_cnt_lock = SPIN_LOCK_UNLOCKED;
 extern atomic_t rinodes_freed;
 extern wait_queue_head_t rinodes_wait;
 

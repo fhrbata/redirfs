@@ -1,8 +1,8 @@
 #include "redir.h"
 
 static kmem_cache_t *rfile_cache = NULL;
-static unsigned long long rfile_cnt = 0;
-static spinlock_t rfile_cnt_lock = SPIN_LOCK_UNLOCKED;
+unsigned long long rfile_cnt = 0;
+spinlock_t rfile_cnt_lock = SPIN_LOCK_UNLOCKED;
 extern atomic_t rfiles_freed;
 extern wait_queue_head_t rfiles_wait;
 
