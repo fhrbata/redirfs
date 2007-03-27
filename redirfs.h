@@ -1,6 +1,11 @@
 #if !defined(_REDIRFS_H)
 #define _REDIRFS_H
 
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/fs.h>
+#include <linux/namei.h>
+
 enum rfs_err {
 	RFS_ERR_OK = 0,
 	RFS_ERR_INVAL = -EINVAL,
