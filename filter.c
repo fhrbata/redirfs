@@ -30,6 +30,7 @@ struct filter *flt_alloc(struct rfs_filter_info *flt_info)
 	struct filter *flt = NULL;
 	char *flt_name = NULL;
 	int flt_name_len = 0;
+	enum rfs_retv (*op)(rfs_context, struct rfs_args *);
 
 	flt_name_len = strlen(flt_info->name);
 	flt = kmalloc(sizeof(struct filter), GFP_KERNEL);
@@ -48,7 +49,9 @@ struct filter *flt_alloc(struct rfs_filter_info *flt_info)
 	atomic_set(&flt->f_count, 1);
 	atomic_set(&flt->f_del, 0);
 	init_waitqueue_head(&flt->f_wait);
-
+	memset(&flt->f_pre_cbs, 0, sizeof(op) * RFS_OP_END);
+	memset(&flt->f_post_cbs, 0, sizeof(op) * RFS_OP_END);
+	
 	if (flt_info->active)
 		atomic_set(&flt->f_active, 1);
 	else
@@ -62,7 +65,7 @@ enum rfs_err rfs_register_filter(void **filter, struct rfs_filter_info *filter_i
 	struct filter *pos;
 	struct filter *flt;
 
-	if (!*filter || !filter_info)
+	if (!filter || !filter_info)
 		return RFS_ERR_INVAL;
 
 	flt = flt_alloc(filter_info);

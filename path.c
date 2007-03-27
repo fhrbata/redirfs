@@ -22,7 +22,8 @@ int path_normalize(const char *path, char *buf, int len)
 	if (*s != '/')
 		return RFS_ERR_INVAL;
 
-	while (*s++ == '/');
+	while (*s == '/')
+		s++;
 	*d++ = '/';
 
 	while (*s) {

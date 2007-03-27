@@ -431,7 +431,7 @@ void rinode_set_reg_ops(struct rinode *rinode, int *ops)
 	if (ops[RFS_REG_IOP_PERMISSION])
 		rinode->ri_op_new.permission = rfs_permission;
 	else
-		rinode->ri_op_new.permission = rinode->ri_op_old->permission;
+		rinode->ri_op_new.permission = rinode->ri_op_old ? rinode->ri_op_old->permission : NULL;
 }
 
 void rinode_set_dir_ops(struct rinode *rinode, int *ops)
@@ -439,7 +439,7 @@ void rinode_set_dir_ops(struct rinode *rinode, int *ops)
 	if (ops[RFS_DIR_IOP_PERMISSION])
 		rinode->ri_op_new.permission = rfs_permission;
 	else
-		rinode->ri_op_new.permission = rinode->ri_op_old->permission;
+		rinode->ri_op_new.permission = rinode->ri_op_old ? rinode->ri_op_old->permission : NULL;
 
 	rinode->ri_op_new.lookup = rfs_lookup;
 	rinode->ri_op_new.mkdir = rfs_mkdir;

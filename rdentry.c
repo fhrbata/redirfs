@@ -522,22 +522,22 @@ void rdentry_set_none_ops(struct rdentry *rdentry, int *ops)
 	if (ops[RFS_NONE_DOP_D_REVALIDATE])
 		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
 	else
-		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old->d_revalidate;
+		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old ? rdentry->rd_op_old->d_revalidate : NULL;
 
 	if (ops[RFS_NONE_DOP_D_HASH])
 		rdentry->rd_op_new.d_hash = rfs_d_hash;
 	else
-		rdentry->rd_op_new.d_hash = rdentry->rd_op_old->d_hash;
+		rdentry->rd_op_new.d_hash = rdentry->rd_op_old ? rdentry->rd_op_old->d_hash : NULL;
 
 	if (ops[RFS_NONE_DOP_D_COMPARE])
 		rdentry->rd_op_new.d_compare = rfs_d_compare;
 	else
-		rdentry->rd_op_new.d_compare= rdentry->rd_op_old->d_compare;
+		rdentry->rd_op_new.d_compare = rdentry->rd_op_old ? rdentry->rd_op_old->d_compare : NULL;
 
 	if (ops[RFS_NONE_DOP_D_DELETE])
-		rdentry->rd_op_new.d_delete= rfs_d_delete;
+		rdentry->rd_op_new.d_delete = rfs_d_delete;
 	else
-		rdentry->rd_op_new.d_delete= rdentry->rd_op_old->d_delete;
+		rdentry->rd_op_new.d_delete = rdentry->rd_op_old ? rdentry->rd_op_old->d_delete : NULL;
 }
 
 void rdentry_set_reg_ops(struct rdentry *rdentry, int *ops)
@@ -545,22 +545,22 @@ void rdentry_set_reg_ops(struct rdentry *rdentry, int *ops)
 	if (ops[RFS_REG_DOP_D_REVALIDATE])
 		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
 	else
-		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old->d_revalidate;
+		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old ? rdentry->rd_op_old->d_revalidate : NULL;
 
 	if (ops[RFS_REG_DOP_D_HASH])
 		rdentry->rd_op_new.d_hash = rfs_d_hash;
 	else
-		rdentry->rd_op_new.d_hash = rdentry->rd_op_old->d_hash;
+		rdentry->rd_op_new.d_hash = rdentry->rd_op_old ? rdentry->rd_op_old->d_hash : NULL;
 
 	if (ops[RFS_REG_DOP_D_COMPARE])
 		rdentry->rd_op_new.d_compare = rfs_d_compare;
 	else
-		rdentry->rd_op_new.d_compare= rdentry->rd_op_old->d_compare;
+		rdentry->rd_op_new.d_compare = rdentry->rd_op_old ? rdentry->rd_op_old->d_compare : NULL;
 
 	if (ops[RFS_REG_DOP_D_DELETE])
-		rdentry->rd_op_new.d_delete= rfs_d_delete;
+		rdentry->rd_op_new.d_delete = rfs_d_delete;
 	else
-		rdentry->rd_op_new.d_delete= rdentry->rd_op_old->d_delete;
+		rdentry->rd_op_new.d_delete = rdentry->rd_op_old ? rdentry->rd_op_old->d_delete : NULL;
 }
 
 void rdentry_set_dir_ops(struct rdentry *rdentry, int *ops)
@@ -568,22 +568,22 @@ void rdentry_set_dir_ops(struct rdentry *rdentry, int *ops)
 	if (ops[RFS_DIR_DOP_D_REVALIDATE])
 		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
 	else
-		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old->d_revalidate;
+		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old ? rdentry->rd_op_old->d_revalidate : NULL;
 
 	if (ops[RFS_DIR_DOP_D_HASH])
 		rdentry->rd_op_new.d_hash = rfs_d_hash;
 	else
-		rdentry->rd_op_new.d_hash = rdentry->rd_op_old->d_hash;
+		rdentry->rd_op_new.d_hash = rdentry->rd_op_old ? rdentry->rd_op_old->d_hash : NULL;
 
 	if (ops[RFS_DIR_DOP_D_COMPARE])
 		rdentry->rd_op_new.d_compare = rfs_d_compare;
 	else
-		rdentry->rd_op_new.d_compare= rdentry->rd_op_old->d_compare;
+		rdentry->rd_op_new.d_compare = rdentry->rd_op_old ? rdentry->rd_op_old->d_compare : NULL;
 
 	if (ops[RFS_DIR_DOP_D_DELETE])
-		rdentry->rd_op_new.d_delete= rfs_d_delete;
+		rdentry->rd_op_new.d_delete = rfs_d_delete;
 	else
-		rdentry->rd_op_new.d_delete= rdentry->rd_op_old->d_delete;
+		rdentry->rd_op_new.d_delete = rdentry->rd_op_old ? rdentry->rd_op_old->d_delete : NULL;
 }
 
 void rdentry_set_ops(struct rdentry *rdentry, struct ops *ops)
