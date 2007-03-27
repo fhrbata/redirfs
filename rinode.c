@@ -440,7 +440,6 @@ void rinode_set_dir_ops(struct rinode *rinode, int *ops)
 	else
 		rinode->ri_op_new.permission = rinode->ri_op_old ? rinode->ri_op_old->permission : NULL;
 
-	rinode->ri_op_new.lookup = rfs_lookup;
 	rinode->ri_op_new.mkdir = rfs_mkdir;
 	rinode->ri_op_new.create = rfs_create;
 }
@@ -454,6 +453,8 @@ void rinode_set_ops(struct rinode *rinode, struct ops *ops)
 
 	else if (S_ISDIR(mode))
 		rinode_set_dir_ops(rinode, ops->o_ops);
+
+	rinode->ri_op_new.lookup = rfs_lookup;
 }
 
 int rinode_cache_create(void)
