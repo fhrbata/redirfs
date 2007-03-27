@@ -44,7 +44,7 @@ int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_a
 
 	args->type.call = RFS_POSTCALL;
 
-	for (i = chain->c_flts_nr; i; i--) {
+	for (i = chain->c_flts_nr - 1; i >= 0; i--) {
 		ops = chain->c_flts[i]->f_post_cbs;
 		op = ops[args->type.id];
 		if (op) {
@@ -210,8 +210,8 @@ int rfs_replace_ops_cb(struct dentry *dentry, void *data)
 
 	path_put(rinode->ri_path);
 	chain_put(rinode->ri_chain);
-	rinode->ri_path_set = path_get(path);
-	rinode->ri_chain_set = chain_get(path->p_inchain);;
+	rinode->ri_path = path_get(path);
+	rinode->ri_chain = chain_get(path->p_inchain);;
 
 	spin_unlock(&rinode->ri_lock);
 

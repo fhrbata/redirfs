@@ -125,7 +125,6 @@ struct rfile *rfile_add(struct file *file)
 	if (!rdentry) {
 		rcu_assign_pointer(file->f_op, rfile_new->rf_op_old);
 		rfile_put(rfile_new);
-		spin_unlock(&file->f_dentry->d_lock);
 		return NULL;
 	}
 
@@ -133,6 +132,10 @@ struct rfile *rfile_add(struct file *file)
 
 	rdentry_tmp = rdentry_find(file->f_dentry);
 
+	/* TODO 2007-03-27
+	 * - rfile has to take chain and path from rdentry not from rinode's sets
+	 * - where to take operations when path is single
+	 */
 	if (rdentry_tmp) {
 		spin_lock(&rdentry->rd_rinode->ri_lock);
 		rfile_new->rf_rdentry = rdentry_get(rdentry);

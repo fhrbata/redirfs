@@ -155,8 +155,7 @@ int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	parent = rinode_find(dir);
 	if (!parent) {
 		if (dir->i_op && dir->i_op->mkdir)
-			rv = dir->i_op->mkdir(dir, dentry, mode);
-		return rv;
+			 return dir->i_op->mkdir(dir, dentry, mode);
 	}
 
 	spin_lock(&parent->ri_lock);
@@ -168,8 +167,8 @@ int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	spin_unlock(&parent->ri_lock);
 
 	args.args.i_mkdir.dir = dir;
-	args.args.i_create.dentry = dentry;
-	args.args.i_create.mode = mode;
+	args.args.i_mkdir.dentry = dentry;
+	args.args.i_mkdir.mode = mode;
 	args.type.id = RFS_DIR_IOP_MKDIR;
 
 	if (!rfs_precall_flts(chain, NULL, &args)) {
