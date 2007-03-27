@@ -7,9 +7,6 @@ atomic_t rinodes_freed;
 DECLARE_WAIT_QUEUE_HEAD(rfiles_wait);
 atomic_t rfiles_freed;
 
-extern spinlock_t rdentry_list_lock;
-extern struct list_head rdentry_list;
-
 int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_args *args)
 {
 	enum rfs_retv (**ops)(rfs_context, struct rfs_args *);
