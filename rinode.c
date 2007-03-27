@@ -23,6 +23,9 @@ struct rinode *rinode_alloc(struct inode *inode)
 	rinode->ri_aop_old = (struct address_space_operations *)inode->i_mapping->a_ops;
 	rinode->ri_path = NULL;
 	rinode->ri_chain = NULL;
+	rinode->ri_path_set = NULL;
+	rinode->ri_chain_set = NULL;
+	rinode->ri_ops_set = NULL;
 	atomic_set(&rinode->ri_count, 1);
 	atomic_set(&rinode->ri_nlink, 1);
 	spin_lock_init(&rinode->ri_lock);

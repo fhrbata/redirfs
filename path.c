@@ -77,6 +77,8 @@ struct path *path_alloc(const char *path_name)
 	path->p_len = path_len;
 	path->p_parent = NULL;
 	path->p_count = 1;
+	path->p_flags = 0;
+	path->p_ops = NULL;
 	spin_lock_init(&path->p_lock);
 	INIT_LIST_HEAD(&path->p_sibpath);
 	INIT_LIST_HEAD(&path->p_subpath);

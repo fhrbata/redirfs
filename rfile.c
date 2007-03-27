@@ -29,6 +29,7 @@ static struct rfile *rfile_alloc(struct file *file)
 	rfile->rf_file = file;
 	rfile->rf_rdentry = NULL;
 	atomic_set(&rfile->rf_count, 1);
+	spin_lock_init(&rfile->rf_lock);
 	
 
 	if (file->f_op->open == rfs_open) {

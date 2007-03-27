@@ -122,7 +122,6 @@ int rfs_open(struct inode *inode, struct file *file);
 
 
 struct rdentry {
-	struct list_head rd_list;
 	struct list_head rd_rinode_list;
 	struct list_head rd_rfiles;
 	struct rcu_head rd_rcu;
