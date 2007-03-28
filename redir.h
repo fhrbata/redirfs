@@ -96,6 +96,7 @@ void path_put(struct path *path);
 void path_add_rdentry(struct path *path, struct rdentry *rdentry);
 void path_del_rdentry(struct path *path, struct rdentry *rdentry);
 int rfs_path_walk(struct path *path, int walkcb(struct path*, void*), void *datacb);
+void path_rem(struct path *path);
 
 struct rfile {
 	struct list_head rf_rdentry_list;

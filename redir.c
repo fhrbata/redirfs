@@ -201,8 +201,10 @@ int rfs_replace_ops_cb(struct dentry *dentry, void *data)
 
 	spin_unlock(&rdentry->rd_lock);
 
-	if (!rinode)
+	if (!rinode) {
+		rdentry_put(rdentry);
 		return 0;
+	}
 
 	rinode_set_ops(rinode, path->p_ops);
 
@@ -425,6 +427,7 @@ int rfs_walk_dcache(struct dentry *root,
 				spin_unlock(&dentry->d_lock);
 				continue;
 			}
+
 			atomic_inc(&dentry->d_count);
 			spin_unlock(&dentry->d_lock);
 

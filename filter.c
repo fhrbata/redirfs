@@ -93,6 +93,8 @@ enum rfs_err rfs_register_filter(void **filter, struct rfs_filter_info *filter_i
 
 enum rfs_err rfs_unregister_filter(void *filter)
 {
+	struct path *loop;
+	struct path *tmp;
 	struct filter *flt;
 	struct filter *pos;
 	int found = 0;
@@ -124,6 +126,12 @@ enum rfs_err rfs_unregister_filter(void *filter)
 
 	mutex_lock(&path_list_mutex);
 	retv = rfs_path_walk(NULL, flt_rem_cb, flt);
+
+	list_for_each_entry_safe(loop, tmp, &path_rem_list, p_rem) {
+		list_del(&loop->p_rem);
+		path_rem(loop);
+	}
+
 	mutex_unlock(&path_list_mutex);
 
 	wait_event_interruptible(flt->f_wait, atomic_read(&flt->f_del));
