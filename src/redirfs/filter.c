@@ -1,412 +1,597 @@
-#include <linux/module.h>
-#include "filter.h"
-#include "root.h"
-#include "debug.h"
+#include "redir.h"
 
-static spinlock_t redirfs_flt_list_lock = SPIN_LOCK_UNLOCKED;
-static LIST_HEAD(redirfs_flt_list);
+static spinlock_t flt_list_lock = SPIN_LOCK_UNLOCKED;
+static LIST_HEAD(flt_list);
+extern struct list_head path_rem_list;
+extern struct mutex path_list_mutex;
 
-static struct redirfs_flt_t *redirfs_alloc_flt(const char *name, int priority,
-		unsigned long flags)
+struct filter *flt_get(struct filter *flt)
 {
-	struct redirfs_flt_t *flt;
-	char *flt_name;
-	size_t flt_name_len;
-	
+	BUG_ON(!atomic_read(&flt->f_count));
+	atomic_inc(&flt->f_count);
+	return flt;
+}
 
-	if (!name)
-		return ERR_PTR(REDIRFS_ERR_INVAL);
+void flt_put(struct filter *flt)
+{
+	if (!flt || IS_ERR(flt))
+		return;
 
-	flt_name_len = strlen(name);
-	
-	flt = kmalloc(sizeof(struct redirfs_flt_t), GFP_KERNEL);
+	BUG_ON(!atomic_read(&flt->f_count));
+	if (!atomic_dec_and_test(&flt->f_count))
+		return;
+
+	atomic_set(&flt->f_del, 1);
+	wake_up_interruptible(&flt->f_wait);
+}
+
+struct filter *flt_alloc(struct rfs_filter_info *flt_info)
+{
+	struct filter *flt = NULL;
+	char *flt_name = NULL;
+	int flt_name_len = 0;
+	enum rfs_retv (*op)(rfs_context, struct rfs_args *);
+
+	flt_name_len = strlen(flt_info->name);
+	flt = kmalloc(sizeof(struct filter), GFP_KERNEL);
 	flt_name = kmalloc(flt_name_len + 1, GFP_KERNEL);
 
 	if (!flt || !flt_name) {
+		kfree(flt);
 		kfree(flt_name);
-		kfree(flt);
-		return ERR_PTR(REDIRFS_ERR_NOMEM);
+		return ERR_PTR(RFS_ERR_NOMEM);
 	}
-	
-	atomic_set(&flt->active, 0);
-	atomic_set(&flt->ref_cnt, 1);
-	strncpy(flt_name, name, flt_name_len + 1);
-	flt->name = flt_name;
-	flt->priority = priority;
-	flt->flags = flags;
-	spin_lock_init(&flt->lock); 
 
-	redirfs_init_ops(&flt->pre_ops, &flt->vfs_pre_ops);
-	redirfs_init_ops(&flt->post_ops, &flt->vfs_post_ops);
+	INIT_LIST_HEAD(&flt->f_list);
+	strncpy(flt_name, flt_info->name, flt_name_len);
+	flt->f_name = flt_name;
+	flt->f_priority = flt_info->priority;
+	atomic_set(&flt->f_count, 1);
+	atomic_set(&flt->f_del, 0);
+	init_waitqueue_head(&flt->f_wait);
+	memset(&flt->f_pre_cbs, 0, sizeof(op) * RFS_OP_END);
+	memset(&flt->f_post_cbs, 0, sizeof(op) * RFS_OP_END);
+	
+	if (flt_info->active)
+		atomic_set(&flt->f_active, 1);
+	else
+		atomic_set(&flt->f_active, 0);
 
 	return flt;
 }
 
-struct redirfs_flt_t *redirfs_fltget(struct redirfs_flt_t *flt)
+enum rfs_err rfs_register_filter(void **filter, struct rfs_filter_info *filter_info)
 {
-	atomic_inc(&flt->ref_cnt);
-	return flt;
-}
+	struct filter *pos;
+	struct filter *flt;
 
-void redirfs_fltput(struct redirfs_flt_t *flt)
-{
-	if (atomic_dec_and_test(&flt->ref_cnt)) {
-		kfree(flt->name);
-		kfree(flt);
-	}
-}
+	if (!filter || !filter_info)
+		return RFS_ERR_INVAL;
 
-static struct redirfs_flt_t *redirfs_find_flt_turn(int priority)
-{
-	struct redirfs_flt_t *flt = NULL;
-	struct redirfs_flt_t *found = NULL;
-	
+	flt = flt_alloc(filter_info);
+	if (IS_ERR(flt))
+		return PTR_ERR(flt);
 
-	list_for_each_entry(flt, &redirfs_flt_list, flt_list) {
-		if (flt->priority == priority) {
-			found = flt;
+	spin_lock(&flt_list_lock);
+
+	list_for_each_entry(pos, &flt_list, f_list) {
+		if (pos->f_priority == filter_info->priority) {
+			spin_unlock(&flt_list_lock);
+			flt_put(flt);
+			return RFS_ERR_EXIST;
 		}
-			break;
 	}
 
-	return found;
+	list_add_tail(&flt->f_list, &flt_list);
+
+	spin_unlock(&flt_list_lock);
+
+	*filter = flt;
+
+	return RFS_ERR_OK;
 }
 
-redirfs_filter redirfs_register_filter(const char *name, int priority, unsigned long flags)
+enum rfs_err rfs_unregister_filter(void *filter)
 {
-	struct redirfs_flt_t *flt;
-
-	
-	spin_lock(&redirfs_flt_list_lock);
-
-	flt = redirfs_find_flt_turn(priority);
-	if (flt) {
-		spin_unlock(&redirfs_flt_list_lock);
-		return ERR_PTR(REDIRFS_ERR_EXIST);
-	}
-
-	flt = redirfs_alloc_flt(name, priority, flags);
-	if (IS_ERR(flt)) {
-		spin_unlock(&redirfs_flt_list_lock);
-		return flt;
-	}
-
-	list_add(&flt->flt_list, &redirfs_flt_list);
-
-	spin_unlock(&redirfs_flt_list_lock);
-	
-	return redirfs_cover_flt(flt);
-}
-
-int redirfs_unregister_filter(redirfs_filter filter)
-{
-	struct redirfs_flt_t *flt;
-
+	struct path *loop;
+	struct path *tmp;
+	struct filter *flt;
+	struct filter *pos;
+	int found = 0;
+	int retv;
 
 	if (!filter)
-		return REDIRFS_ERR_INVAL;
+		return RFS_ERR_INVAL;
 
-	flt = redirfs_uncover_flt(filter);
+	flt = (struct filter *)filter;
 
-	redirfs_walk_roots(NULL, redirfs_remove_flt, (void *)flt);
-	redirfs_remove_roots();
+	spin_lock(&flt_list_lock);
 
-	spin_lock(&redirfs_flt_list_lock);
-	list_del(&flt->flt_list);
-	spin_unlock(&redirfs_flt_list_lock);
-
-	return 0;
-}
-
-int redirfs_activate_filter(redirfs_filter filter)
-{
-	struct redirfs_flt_t *flt = redirfs_uncover_flt(filter);
-
-
-	if (!flt)
-		return REDIRFS_ERR_INVAL;
-
-	atomic_set(&flt->active, 1);
-
-	return REDIRFS_NO_ERR;
-}
-
-int redirfs_deactivate_filter(redirfs_filter filter)
-{
-	struct redirfs_flt_t *flt = redirfs_uncover_flt(filter);
-
-
-	if (!flt)
-		return REDIRFS_ERR_INVAL;
-
-	atomic_set(&flt->active, 0);
-
-	return REDIRFS_NO_ERR;
-}
-
-void redirfs_flt_arr_init(struct redirfs_flt_arr_t *flt_arr)
-{
-	flt_arr->arr = NULL;
-	flt_arr->cnt = 0;
-	flt_arr->size = 0;
-	spin_lock_init(&flt_arr->lock);
-}
-
-int redirfs_flt_arr_create(struct redirfs_flt_arr_t *flt_arr, int size)
-{
-	flt_arr->arr = kmalloc(sizeof(struct redirfs_flt_t *) * size,
-			GFP_KERNEL);
-
-	if (!flt_arr->arr)
-		return REDIRFS_ERR_NOMEM;
-
-	flt_arr->cnt =  0;
-	flt_arr->size = size;
-	spin_lock_init(&flt_arr->lock);
-
-	return 0;
-}
-
-void redirfs_flt_arr_destroy(struct redirfs_flt_arr_t *flt_arr)
-{
-	int i = 0;
-
-
-	spin_lock(&flt_arr->lock);
-	if (flt_arr->arr) {
-		for (i = 0; i < flt_arr->cnt; i++)
-			redirfs_fltput(flt_arr->arr[i]);
-
-		kfree(flt_arr->arr);
-	}
-	flt_arr->arr = NULL;
-	flt_arr->cnt = 0;
-	flt_arr->size = 0;
-	spin_unlock(&flt_arr->lock);
-}
-
-static int __redirfs_flt_arr_get(struct redirfs_flt_arr_t *flt_arr,
-		struct redirfs_flt_t *flt) 
-{
-	int i = 0;
-	int rv = -1;
-
-	for(i = 0; i < flt_arr->cnt; i++) {
-		if (flt_arr->arr[i] == flt) {
-			rv = i;
+	list_for_each_entry(pos, &flt_list, f_list) {
+		if (pos == flt) {
+			found = 1;
 			break;
 		}
 	}
 
-	return rv;
+	if (!found) {
+		spin_unlock(&flt_list_lock);
+		return RFS_ERR_NOENT;
+	}
+
+	list_del(&flt->f_list);
+	flt_put(flt);
+
+	spin_unlock(&flt_list_lock);
+
+	mutex_lock(&path_list_mutex);
+	retv = rfs_path_walk(NULL, flt_rem_cb, flt);
+
+	list_for_each_entry_safe(loop, tmp, &path_rem_list, p_rem) {
+		list_del(&loop->p_rem);
+		path_rem(loop);
+	}
+
+	mutex_unlock(&path_list_mutex);
+
+	wait_event_interruptible(flt->f_wait, atomic_read(&flt->f_del));
+
+	kfree(flt->f_name);
+	kfree(flt);
+
+	if (retv) 
+		return retv;
+
+	return RFS_ERR_OK;
 }
 
-int redirfs_flt_arr_get(struct redirfs_flt_arr_t *flt_arr,
-		struct redirfs_flt_t *flt)
+enum rfs_err rfs_activate_filter(rfs_filter filter)
 {
-	int rv = -1;
+	struct filter *flt;
 
+	flt = (struct filter *)filter;
+	if (!flt)
+		return RFS_ERR_INVAL;
 
-	spin_lock(&flt_arr->lock);
-	rv = __redirfs_flt_arr_get(flt_arr, flt);
-	spin_unlock(&flt_arr->lock);
+	atomic_set(&flt->f_active, 1);
 
-	return rv;
+	return RFS_ERR_OK;
 }
 
-static int __redirfs_flt_arr_find(struct redirfs_flt_arr_t *flt_arr, 
-		struct redirfs_flt_t *flt)
+enum rfs_err rfs_deactivate_filter(rfs_filter filter)
 {
+	struct filter *flt;
+
+	flt = (struct filter *)filter;
+	if (!flt)
+		return RFS_ERR_INVAL;
+
+	atomic_set(&flt->f_active, 0);
+
+	return RFS_ERR_OK;
+}
+
+enum rfs_err rfs_set_operations(void *filter, struct rfs_op_info ops_info[])
+{
+	struct filter *flt = (struct filter *)filter;
 	int i = 0;
+	int retv;
 
+	if (!flt)
+		return RFS_ERR_INVAL;
 
-	if (!flt_arr->cnt)
-		return i;
-
-	for(i = 0; i < flt_arr->cnt; i++) {
-		if (flt->priority < flt_arr->arr[i]->priority)
-			return i;
+	while (ops_info[i].op_id != RFS_OP_END) {
+		flt->f_pre_cbs[ops_info[i].op_id] = ops_info[i].pre_cb;
+		flt->f_post_cbs[ops_info[i].op_id] = ops_info[i].post_cb;
+		i++;
 	}
 
-	return i;
+	mutex_lock(&path_list_mutex);
+	retv = rfs_path_walk(NULL, flt_set_ops_cb, flt);
+	mutex_unlock(&path_list_mutex);
+
+	return retv;
 }
 
-int redirfs_flt_arr_add_flt(struct redirfs_flt_arr_t *flt_arr,
-		struct redirfs_flt_t *flt)
+int flt_add_local(struct path *path, struct filter *flt)
 {
-	int size = 0;
-	struct redirfs_flt_t **arr = NULL;
-	int pos = 0;
+	struct chain *inchain_local = NULL;
+	struct chain *exchain_local = NULL;
+	struct path *path_go = path;
+	struct path *path_cmp = path;
+	int retv;
 
+	if (chain_find_flt(path->p_inchain_local, flt) == -1) {
+		inchain_local = chain_add_flt(path->p_inchain_local, flt);
+		if (IS_ERR(inchain_local))
+			return PTR_ERR(inchain_local);
 
-	spin_lock(&flt_arr->lock);
+		chain_put(path->p_inchain_local);
+		path->p_inchain_local = inchain_local;
 
-	if (__redirfs_flt_arr_get(flt_arr, flt) >= 0) {
-		spin_unlock(&flt_arr->lock);
-		return 0;
+		if (chain_find_flt(path->p_exchain_local, flt) != -1) {
+			exchain_local = chain_rem_flt(path->p_exchain_local, flt);
+			if (IS_ERR(exchain_local))
+				return PTR_ERR(exchain_local);
+
+			chain_put(path->p_exchain_local);
+			path->p_exchain_local = exchain_local;
+		}
 	}
 
-	if (flt_arr->cnt == flt_arr->size) {
-		size = sizeof(struct redirfs_flt_t *) * 
-			(2 * flt_arr->size);
+	while (path_cmp) {
+		if (!(path_cmp->p_flags & RFS_PATH_SUBTREE))
+			path_cmp = path_cmp->p_parent;
+		
+		else if (!list_empty(&path->p_rem))
+			path_cmp = path_cmp->p_parent;
+		
+		else
+			break;
+	}
 
-		arr = kmalloc(size, GFP_KERNEL);
-		if (!arr) {
-			spin_unlock(&flt_arr->lock);
-			return REDIRFS_ERR_NOMEM;
+	if (path_cmp) {
+		if (!chain_cmp(path_cmp->p_inchain, path->p_inchain_local) &&
+		    !chain_cmp(path_cmp->p_exchain, path->p_exchain_local)) {
+
+			chain_put(path->p_inchain_local);
+			path->p_inchain_local = NULL;
+
+			chain_put(path->p_exchain_local);
+			path->p_exchain_local = NULL;
+
+			path->p_flags &= ~RFS_PATH_SINGLE;
+
+			if (!(path->p_flags & RFS_PATH_SUBTREE))
+				list_add_tail(&path->p_rem, &path_rem_list);
+
+			path_go = path_cmp;
+		}
+	}
+
+	if (!inchain_local && (path->p_flags & RFS_PATH_SINGLE))
+		return RFS_ERR_OK;
+
+	retv = rfs_replace_ops(path, path_go);
+
+	if (retv)
+		return retv;
+
+	return RFS_ERR_OK;
+}
+
+int flt_rem_local(struct path *path, struct filter *flt)
+{
+	struct chain *inchain_local = NULL;
+	struct chain *exchain_local = NULL;
+	struct path *path_go = path;
+	struct path *path_cmp = path;
+	int aux = 0;
+	int retv;
+	int remove = 0;
+
+	while (path_cmp) {
+		if (!(path_cmp->p_flags & RFS_PATH_SUBTREE))
+			path_cmp = path_cmp->p_parent;
+		
+		else if (!list_empty(&path_cmp->p_rem))
+			path_cmp = path_cmp->p_parent;
+		
+		else
+			break;
+	}
+
+	if (path_cmp)
+		aux = chain_find_flt(path_cmp->p_inchain, flt) != -1 || 
+		      chain_find_flt(path_cmp->p_exchain, flt) != -1;
+
+	if (chain_find_flt(path->p_inchain_local, flt) != -1 &&
+	    chain_find_flt(path->p_exchain_local, flt) == -1) {
+
+		inchain_local = chain_rem_flt(path->p_inchain_local, flt);
+		if (IS_ERR(inchain_local))
+			return PTR_ERR(inchain_local);
+
+		chain_put(path->p_inchain_local);
+		path->p_inchain_local = inchain_local;
+
+		if (aux) {
+			exchain_local = chain_add_flt(path->p_exchain_local, flt);
+			if (IS_ERR(exchain_local))
+				return PTR_ERR(exchain_local);
+			
+			chain_put(path->p_exchain_local);
+			path->p_exchain_local = exchain_local;
+		}
+	}
+
+	if (!aux && chain_find_flt(path->p_exchain_local, flt) != -1) {
+		exchain_local = chain_rem_flt(path->p_exchain_local, flt);
+		if (IS_ERR(exchain_local))
+			return PTR_ERR(exchain_local);
+
+		chain_put(path->p_exchain_local);
+		path->p_exchain = exchain_local;
+	}
+
+	if (path_cmp) {
+		if (!chain_cmp(path_cmp->p_inchain, path->p_inchain_local) &&
+		    !chain_cmp(path_cmp->p_exchain, path->p_exchain_local)) {
+
+			chain_put(path->p_inchain_local);
+			path->p_inchain_local = NULL;
+
+			chain_put(path->p_exchain_local);
+			path->p_exchain_local = NULL;
+
+			path_go = path_cmp;
+		}
+	}
+
+	if (!path->p_inchain_local && !path->p_exchain_local) {
+
+		path->p_flags &= ~RFS_PATH_SINGLE;
+
+		if (!(path->p_flags & RFS_PATH_SUBTREE)) 
+			list_add_tail(&path->p_rem, &path_rem_list);
+
+		if (!path_cmp)
+			remove = 1;
+	}
+
+	if (!inchain_local && (path->p_flags & RFS_PATH_SINGLE))
+		return RFS_ERR_OK;
+
+	if (!remove)
+		retv = rfs_replace_ops(path, path_go);
+	else 
+		retv = rfs_restore_ops_cb(path->p_dentry, path);
+
+	if (retv)
+		return retv;
+
+	return RFS_ERR_OK;
+}
+
+int flt_add_cb(struct path *path, void *data)
+{
+	struct filter *flt;
+	struct chain *inchain = NULL;
+	struct chain *exchain = NULL;
+	struct path *path_go = path;
+	struct path *path_cmp = path->p_parent;
+	struct ops *ops;
+	int retv;
+
+	flt = (struct filter *)data;
+
+	if (!(path->p_flags & RFS_PATH_SUBTREE))
+		return flt_add_local(path, flt);
+
+	if (chain_find_flt(path->p_inchain, flt) == -1) {
+		inchain = chain_add_flt(path->p_inchain, flt);
+		if (IS_ERR(inchain))
+			return PTR_ERR(inchain);
+
+		chain_put(path->p_inchain);
+		path->p_inchain = inchain;
+
+		if (chain_find_flt(path->p_exchain, flt) != -1) {
+			exchain = chain_rem_flt(path->p_exchain, flt);
+			if (IS_ERR(exchain))
+				return PTR_ERR(exchain);
+
+			chain_put(path->p_exchain);
+			path->p_exchain = exchain;
+		}
+	}
+
+	if (path->p_flags & RFS_PATH_SINGLE) {
+		retv = flt_add_local(path, flt);
+		if (retv)
+			return retv;
+	}
+
+	while (path_cmp) {
+		if (!(path_cmp->p_flags & RFS_PATH_SUBTREE))
+			path_cmp = path_cmp->p_parent;
+		
+		else if (!list_empty(&path_cmp->p_rem))
+			path_cmp = path_cmp->p_parent;
+		
+		else
+			break;
+	}
+
+	if (path_cmp) {
+		if (!chain_cmp(path_cmp->p_inchain, path->p_inchain) &&
+		    !chain_cmp(path_cmp->p_exchain, path->p_exchain)) {
+
+			chain_put(path->p_inchain);
+			path->p_inchain = NULL;
+
+			chain_put(path->p_exchain);
+			path->p_exchain = NULL;
+
+			ops_put(path->p_ops);
+			path->p_flags &= ~RFS_PATH_SUBTREE;
+
+			if (!(path->p_flags & RFS_PATH_SINGLE))
+				list_add_tail(&path->p_rem, &path_rem_list);
+
+			path_go = path_cmp;
+		}
+	}
+
+	if (!inchain && (path->p_flags & RFS_PATH_SUBTREE))
+		return RFS_ERR_OK;
+
+	if (path->p_flags & RFS_PATH_SUBTREE) {
+		ops = ops_alloc();
+		if (IS_ERR(ops))
+			return PTR_ERR(ops);
+
+		chain_get_ops(path_go->p_inchain, ops->o_ops);
+		ops_put(path_go->p_ops);
+		path_go->p_ops = ops;
+	}
+
+	retv = rfs_walk_dcache(path->p_dentry, rfs_replace_ops_cb, path_go, NULL, NULL);
+
+	if (retv)
+		return retv;
+
+	return RFS_ERR_OK;
+}
+
+int flt_rem_cb(struct path *path, void *data)
+{
+	struct filter *flt;
+	struct chain *inchain = NULL;
+	struct chain *exchain = NULL;
+	struct path *path_go = path;
+	struct path *path_cmp = path->p_parent;
+	struct ops *ops;
+	int remove = 0;
+	int aux = 0;
+	int retv;
+
+	flt = (struct filter *)data;
+
+	if (!(path->p_flags & RFS_PATH_SUBTREE))
+		return flt_rem_local(path, flt);
+
+	while (path_cmp) {
+		if (!(path_cmp->p_flags & RFS_PATH_SUBTREE))
+			path_cmp = path_cmp->p_parent;
+		
+		else if (!list_empty(&path_cmp->p_rem))
+			path_cmp = path_cmp->p_parent;
+		
+		else
+			break;
+	}
+
+	if (path_cmp)
+		aux = chain_find_flt(path_cmp->p_inchain, flt) != -1 || 
+		      chain_find_flt(path_cmp->p_exchain, flt) != -1;
+
+	if (chain_find_flt(path->p_exchain, flt) == -1 &&
+	    chain_find_flt(path->p_inchain, flt) != -1) {
+
+		inchain = chain_rem_flt(path->p_inchain, flt);
+		if (IS_ERR(inchain))
+			return PTR_ERR(inchain);
+
+		chain_put(path->p_inchain);
+		path->p_inchain = inchain;
+
+		if (aux) {
+			exchain = chain_add_flt(path->p_exchain, flt);
+			if (IS_ERR(exchain))
+				return PTR_ERR(exchain);
+
+			chain_put(path->p_exchain);
+			path->p_exchain = exchain;
+		}
+	}
+	
+	if (!aux && chain_find_flt(path->p_exchain, flt) != -1) {
+		exchain = chain_rem_flt(path->p_exchain, flt);
+		if (IS_ERR(exchain))
+			return PTR_ERR(exchain);
+
+		chain_put(path->p_exchain);
+		path->p_exchain = exchain;
+	}
+
+	if (path->p_flags & RFS_PATH_SINGLE) {
+		retv = flt_rem_local(path, flt);
+		if (retv)
+			return retv;
+	}
+
+	if (path_cmp) {
+		if (!chain_cmp(path_cmp->p_inchain, path->p_inchain) &&
+		    !chain_cmp(path_cmp->p_exchain, path->p_exchain)) {
+
+			chain_put(path->p_inchain);
+			path->p_inchain = NULL;
+
+			chain_put(path->p_exchain);
+			path->p_exchain = NULL;
+
+			path_go = path_cmp;
+		}
+	}
+
+	if (!path->p_inchain && !path->p_exchain) {
+		path->p_flags &= ~RFS_PATH_SUBTREE;
+		ops_put(path->p_ops);
+		path->p_ops = NULL;
+
+		if (!(path->p_flags & RFS_PATH_SINGLE))
+			list_add_tail(&path->p_rem, &path_rem_list);
+
+		if (!path_cmp)
+			remove = 1;
+	}
+
+	if (!inchain && (path->p_flags & RFS_PATH_SUBTREE))
+		return RFS_ERR_OK;
+
+	if (!remove) {
+		if (path->p_flags & RFS_PATH_SUBTREE) {
+			ops = ops_alloc();
+			if (IS_ERR(ops))
+				return PTR_ERR(ops);
+
+			chain_get_ops(path_go->p_inchain, ops->o_ops);
+			ops_put(path_go->p_ops);
+			path_go->p_ops = ops;
 		}
 
-		size = sizeof(struct redirfs_flt_t *) * flt_arr->cnt;
-		memcpy(arr, flt_arr->arr, size);
-		kfree(flt_arr->arr);
-		flt_arr->arr = arr;
-		flt_arr->size *= 2;
+		retv = rfs_walk_dcache(path->p_dentry, rfs_replace_ops_cb, path_go, NULL, NULL);
+	} else 
+		retv = rfs_walk_dcache(path->p_dentry, rfs_restore_ops_cb, path, NULL, NULL);
 
-	}
+	if (retv)
+		return retv;
 
-	pos = __redirfs_flt_arr_find(flt_arr, flt);
-
-	size = sizeof(struct redirfs_flt_t *) * (flt_arr->cnt - pos);
-
-	if (size)
-		memmove(&flt_arr->arr[pos+1], &flt_arr->arr[pos],
-				size);
-
-	flt_arr->arr[pos] = redirfs_fltget(flt);
-	flt_arr->cnt++;
-
-	spin_unlock(&flt_arr->lock);
-
-	return 0;
+	return RFS_ERR_OK;
 }
 
-void redirfs_flt_arr_remove_flt(struct redirfs_flt_arr_t *flt_arr,
-		struct redirfs_flt_t *flt)
+int flt_set_ops_cb(struct path *path, void *data)
 {
-	int size = 0;
-	int pos = 0;
+	struct filter *flt;
+	struct ops *ops;
+	int err;
 
+	flt = (struct filter *)data;
 
-	spin_lock(&flt_arr->lock);
-
-	if (__redirfs_flt_arr_get(flt_arr, flt) == -1) {
-		spin_unlock(&flt_arr->lock);
-		return;
+	if (chain_find_flt(path->p_inchain_local, flt) != -1) {
+		err = rfs_set_ops(path->p_dentry, path);
+		if (err)
+			return err;
 	}
 
-	pos = __redirfs_flt_arr_get(flt_arr, flt);
-	if (pos == -1) {
-		spin_unlock(&flt_arr->lock);
-		return;
+	if (chain_find_flt(path->p_inchain, flt) != -1) {
+		ops = ops_alloc();
+		if (IS_ERR(ops))
+			return PTR_ERR(ops);
+		chain_get_ops(path->p_inchain, ops->o_ops);
+		ops_put(path->p_ops);
+		path->p_ops = ops;
+
+		return rfs_walk_dcache(path->p_dentry, rfs_set_ops_cb, path, NULL, NULL);
 	}
 
-	size = sizeof(struct redirfs_flt_t *) * (flt_arr->cnt - (pos + 1));
-
-	if (size)
-		memmove(&flt_arr->arr[pos], &flt_arr->arr[pos+1],
-				size);
-
-	flt_arr->cnt--;
-
-	redirfs_fltput(flt);
-	
-	spin_unlock(&flt_arr->lock);
+	return RFS_ERR_OK;
 }
 
-int redirfs_flt_arr_copy(struct redirfs_flt_arr_t *src,
-		struct redirfs_flt_arr_t *dst)
-{
-	struct redirfs_flt_t **arr;
-	int i = 0;
+EXPORT_SYMBOL(rfs_register_filter);
+EXPORT_SYMBOL(rfs_unregister_filter);
+EXPORT_SYMBOL(rfs_activate_filter);
+EXPORT_SYMBOL(rfs_deactivate_filter);
+EXPORT_SYMBOL(rfs_set_operations);
 
-	
-	spin_lock(&src->lock);
-	spin_lock(&dst->lock);
-
-	arr = kmalloc(sizeof(struct redirfs_flt_t *) * src->size, GFP_KERNEL);
-	if (!arr) {
-		spin_unlock(&dst->lock);
-		spin_unlock(&src->lock);
-		return REDIRFS_ERR_NOMEM;
-	}
-
-	if (dst->arr) {
-		for (i = 0; i < dst->cnt; i++)
-			redirfs_fltput(dst->arr[i]);
-		kfree(dst->arr);
-	}
-
-	memcpy(arr, src->arr, sizeof(struct redirfs_flt_t *) * src->cnt);
-
-	for (i = 0; i < src->cnt; i++)
-		redirfs_fltget(arr[i]);
-
-	dst->arr = arr;
-	dst->cnt = src->cnt;
-	dst->size = src->size;
-
-	spin_unlock(&dst->lock);
-	spin_unlock(&src->lock);
-
-	return 0;
-}
-
-int redirfs_flt_arr_cnt(struct redirfs_flt_arr_t *flt_arr)
-{
-	int cnt;
-
-
-	spin_lock(&flt_arr->lock);
-	cnt = flt_arr->cnt;
-	spin_unlock(&flt_arr->lock);
-
-	return cnt;
-}
-
-int redirfs_flt_arr_cmp(struct redirfs_flt_arr_t *flt_arr1,
-		struct redirfs_flt_arr_t *flt_arr2)
-{
-	int rv = -1;
-
-	
-	spin_lock(&flt_arr1->lock);
-	spin_lock(&flt_arr2->lock);
-	if (flt_arr1->cnt == flt_arr2->cnt) {
-		if (!memcmp(flt_arr1->arr, flt_arr2->arr,
-		    sizeof(struct redirfs_flt_t *) * flt_arr1->cnt))
-			rv = 0;
-	} 
-	spin_unlock(&flt_arr2->lock);
-	spin_unlock(&flt_arr1->lock);
-
-	return rv;
-}
-
-int redirfs_filters_info(char *buf, int size)
-{	
-	struct redirfs_flt_t *flt;
-	int len = 0;
-	char active;
-
-
-	if ((len + 36) > size)
-		goto out;
-	len += sprintf(buf + len, "%-10s\t%-10s\t%-10s\n", "name", "priority", "active");
-
-	spin_lock(&redirfs_flt_list_lock);
-
-	list_for_each_entry(flt, &redirfs_flt_list, flt_list) {
-		if ((len + strlen(flt->name) + 36) > size)
-			goto out;
-		active = atomic_read(&flt->active) ? 'y' : 'n';
-		len += sprintf(buf + len, "%-10s\t%-10d\t%-10c\n", flt->name, flt->priority, active);
-	}
-out:
-	spin_unlock(&redirfs_flt_list_lock);
-	return len;
-}
-
-EXPORT_SYMBOL(redirfs_register_filter);
-EXPORT_SYMBOL(redirfs_unregister_filter);
-EXPORT_SYMBOL(redirfs_activate_filter);
-EXPORT_SYMBOL(redirfs_deactivate_filter);
