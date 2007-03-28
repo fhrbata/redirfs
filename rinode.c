@@ -69,6 +69,9 @@ inline void rinode_put(struct rinode *rinode)
 	
 	path_put(rinode->ri_path);
 	chain_put(rinode->ri_chain);
+	path_put(rinode->ri_path_set);
+	chain_put(rinode->ri_chain_set);
+	ops_put(rinode->ri_ops_set);
 	BUG_ON(!list_empty(&rinode->ri_rdentries));
 	kmem_cache_free(rinode_cache, rinode);
 

@@ -520,6 +520,7 @@ int flt_rem_cb(struct path *path, void *data)
 	if (!path->p_inchain && !path->p_exchain) {
 		path->p_flags &= ~RFS_PATH_SUBTREE;
 		ops_put(path->p_ops);
+		path->p_ops = NULL;
 
 		if (!(path->p_flags & RFS_PATH_SINGLE))
 			list_add_tail(&path->p_rem, &path_rem_list);

@@ -77,6 +77,7 @@ inline void rfile_put(struct rfile *rfile)
 		return;
 
 	path_put(rfile->rf_path);
+	chain_put(rfile->rf_chain);
 	rdentry_put(rfile->rf_rdentry);
 	kmem_cache_free(rfile_cache, rfile);
 
