@@ -52,6 +52,7 @@ static int __init dummyflt_init(void)
 		goto error;
 	}
 
+#error "Please fill the path_info.path variable with the full pathname which you want to use and delete this line!!!"
 	path_info.path = "";
 	path_info.flags = RFS_PATH_INCLUDE | RFS_PATH_SUBTREE;
 
