@@ -44,6 +44,7 @@ struct filter *flt_alloc(struct rfs_filter_info *flt_info)
 
 	INIT_LIST_HEAD(&flt->f_list);
 	strncpy(flt_name, flt_info->name, flt_name_len);
+	flt_name[flt_name_len] = 0;
 	flt->f_name = flt_name;
 	flt->f_priority = flt_info->priority;
 	atomic_set(&flt->f_count, 1);

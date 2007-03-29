@@ -68,6 +68,7 @@ struct path *path_alloc(const char *path_name)
 	}
 	
 	strncpy(path_buf, path_name, path_len);
+	path_buf[path_len] = 0;
 
 	path->p_inchain = NULL;
 	path->p_exchain = NULL;
