@@ -115,6 +115,7 @@ struct rfile *rfile_add(struct file *file)
 	struct rdentry *rdentry;
 	struct rdentry *rdentry_tmp;
 	struct ops *ops = NULL;
+	struct rfile *retv = NULL;
 
 
 	rfile_new = rfile_alloc(file);
@@ -133,17 +134,25 @@ struct rfile *rfile_add(struct file *file)
 
 	rdentry_tmp = rdentry_find(file->f_dentry);
 
-	/* TODO 2007-03-27
-	 * - rfile has to take chain and path from rdentry not from rinode's sets
-	 * - where to take operations when path is single
-	 */
 	if (rdentry_tmp) {
-		spin_lock(&rdentry->rd_rinode->ri_lock);
+
 		rfile_new->rf_rdentry = rdentry_get(rdentry);
-		rfile_new->rf_path = path_get(rdentry->rd_rinode->ri_path_set);
-		rfile_new->rf_chain = chain_get(rdentry->rd_rinode->ri_chain_set);
-		ops = ops_get(rdentry->rd_rinode->ri_ops_set);
-		spin_unlock(&rdentry->rd_rinode->ri_lock);
+		rfile_new->rf_chain = chain_get(rdentry->rd_chain);
+		rfile_new->rf_path = path_get(rdentry->rd_path);
+
+		if (rfile_new->rf_path->p_flags & RFS_PATH_SINGLE) {
+			ops = ops_alloc();
+			if (IS_ERR(ops)) {
+				retv = ERR_PTR(PTR_ERR(ops));
+				goto exit;
+			}
+			chain_get_ops(rfile_new->rf_chain, ops->o_ops);
+
+		} else {
+			spin_lock(&rdentry->rd_rinode->ri_lock);
+			ops = ops_get(rdentry->rd_rinode->ri_ops_set);
+			spin_unlock(&rdentry->rd_rinode->ri_lock);
+		}
 
 		rcu_assign_pointer(file->f_op, &rfile_new->rf_op_new);
 
@@ -153,12 +162,14 @@ struct rfile *rfile_add(struct file *file)
 		rfile_set_ops(rfile_new, ops);
 	}
 
+	retv = rfile_get(rfile_new);
+exit:
 	spin_unlock(&rdentry->rd_lock);
 	rdentry_put(rdentry_tmp);
 	rdentry_put(rdentry);
 	ops_put(ops);
 
-	return rfile_get(rfile_new);
+	return retv;
 }
 
 static void rfile_del_rcu(struct rcu_head *head)
