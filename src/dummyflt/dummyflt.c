@@ -1,4 +1,4 @@
-#include "../redirfs.h"
+#include "../redirfs/redirfs.h"
 
 static rfs_filter dummyflt;
 static struct rfs_path_info path_info;
@@ -18,14 +18,20 @@ static struct rfs_op_info op_info[] = {
 
 enum rfs_retv dummyflt_permission(rfs_context context, struct rfs_args *args)
 {
-	printk(KERN_ALERT "dummyflt: permission: call: %s, file: %s\n", (args->type.call == RFS_PRECALL) ? "precall" : "postcall", S_ISDIR(args->args.i_permission.inode->i_mode) ? "dir" : "reg");
+	printk(KERN_ALERT "dummyflt: permission: dentry: %s, call: %s, file: %s\n",
+		args->args.i_permission.nd ? (char *)args->args.i_permission.nd->dentry->d_name.name : "",
+		(args->type.call == RFS_PRECALL) ? "precall" : "postcall",
+		S_ISDIR(args->args.i_permission.inode->i_mode) ? "dir" : "reg");
 
 	return RFS_CONTINUE;
 }
 
 enum rfs_retv dummyflt_open(rfs_context context, struct rfs_args *args)
 {
-	printk(KERN_ALERT "dummyflt: open: call: %s, file: %s\n", (args->type.call == RFS_PRECALL) ? "precall" : "postcall", S_ISDIR(args->args.f_open.inode->i_mode) ? "dir" : "reg");
+	printk(KERN_ALERT "dummyflt: open: dentry: %s, call: %s, file: %s\n",
+		args->args.f_open.file->f_dentry->d_name.name, 
+		(args->type.call == RFS_PRECALL) ? "precall" : "postcall",
+		S_ISDIR(args->args.f_open.inode->i_mode) ? "dir" : "reg");
 
 	return RFS_CONTINUE;
 }
