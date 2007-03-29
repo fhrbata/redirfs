@@ -504,15 +504,22 @@ static int __init rfs_init(void)
 	atomic_set(&rinodes_freed, 0);
 	atomic_set(&rfiles_freed, 0);
 
-	if (rdentry_cache_create())
+	if (rfs_proc_init())
 		return -1;
 
+	if (rdentry_cache_create()) {
+		rfs_proc_destroy();
+		return -1;
+	}
+
 	if (rinode_cache_create()) {
+		rfs_proc_destroy();
 		rdentry_cache_destroy();
 		return -1;
 	}
 
 	if (rfile_cache_create()) {
+		rfs_proc_destroy();
 		rdentry_cache_destroy();
 		rinode_cache_destroy();
 		return -1;
@@ -546,6 +553,8 @@ static void __exit rfs_exit(void)
 
 	wait_event_interruptible(rfiles_wait, atomic_read(&rfiles_freed));
 	rfile_cache_destroy();
+
+	rfs_proc_destroy();
 }
 
 module_init(rfs_init);

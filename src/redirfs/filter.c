@@ -589,6 +589,32 @@ int flt_set_ops_cb(struct path *path, void *data)
 	return RFS_ERR_OK;
 }
 
+
+int flt_proc_info(char *buf, int size)
+{
+	struct filter *flt;
+	int len = 0;
+	char active;
+
+
+	if ((len + 36) > size)
+		goto out;
+	len += sprintf(buf + len, "%-10s\t%-10s\t%-10s\n", "name", "priority", "active");
+
+	spin_lock(&flt_list_lock);
+
+	list_for_each_entry(flt, &flt_list, f_list) {
+		if ((len + strlen(flt->f_name) + 36) > size)
+			goto out;
+		active = atomic_read(&flt->f_active) ? 'y' : 'n';
+		len += sprintf(buf + len, "%-10s\t%-10d\t%-10c\n", flt->f_name, flt->f_priority, active);
+	}
+out:
+	spin_unlock(&flt_list_lock);
+	return len;
+}
+
+
 EXPORT_SYMBOL(rfs_register_filter);
 EXPORT_SYMBOL(rfs_unregister_filter);
 EXPORT_SYMBOL(rfs_activate_filter);

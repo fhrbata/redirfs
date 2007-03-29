@@ -40,6 +40,7 @@ struct filter *flt_get(struct filter *flt);
 void flt_put(struct filter *flt);
 struct filter *flt_alloc(struct rfs_filter_info *flt_info);
 int flt_set_ops_cb(struct path *path, void *data);
+int flt_proc_info(char *buf, int size);
 
 
 struct ops {
@@ -97,6 +98,7 @@ void path_add_rdentry(struct path *path, struct rdentry *rdentry);
 void path_del_rdentry(struct path *path, struct rdentry *rdentry);
 int rfs_path_walk(struct path *path, int walkcb(struct path*, void*), void *datacb);
 void path_rem(struct path *path);
+int path_proc_info(char *buf, int size);
 
 struct rfile {
 	struct list_head rf_rdentry_list;
@@ -190,6 +192,9 @@ int rfs_set_ops_cb(struct dentry *dentry, void *data);
 int rfs_walk_dcache(struct dentry *root, int (*)(struct dentry *, void *), void *, int (*)(struct dentry *, void *), void *);
 int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_args *args);
 int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_args *args);
+
+int rfs_proc_init(void);
+void rfs_proc_destroy(void);
 
 #endif /* _RFS_REDIR_H */
 

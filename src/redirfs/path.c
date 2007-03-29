@@ -465,4 +465,86 @@ exit:
 	return retv;
 }
 
+struct path_proc_data {
+	char *buf;
+	int size;
+	int len;
+
+};
+
+static int path_proc_info_cb(struct path *path, void *data)
+{
+	struct path_proc_data *info = NULL;
+	struct filter *flt = NULL;
+	char active;
+	int i = 0;
+
+
+	info = (struct path_proc_data *)data;
+
+	if ((info->len + strlen(path->p_path) + 1) > info->size)
+		return -1;
+
+	info->len += sprintf(info->buf + info->len, "%s", path->p_path);
+
+	if (path->p_inchain) {
+		for (i = 0; i < path->p_inchain->c_flts_nr; i++) {
+			flt = path->p_inchain->c_flts[i];
+			if ((info->len + strlen(flt->f_name) + 16) > info->size)
+				return -1;
+
+			active = atomic_read(&flt->f_active) ? 'y' : 'n';
+			info->len += sprintf(info->buf + info->len, " -> %s(g,+,%c,%d)", flt->f_name, active, flt->f_priority);
+		}
+	}
+
+	if (path->p_exchain) {
+		for (i = 0; i < path->p_exchain->c_flts_nr; i++) {
+			flt = path->p_exchain->c_flts[i];
+			if ((info->len + strlen(flt->f_name) + 16) > info->size)
+				return -1;
+
+			active = atomic_read(&flt->f_active) ? 'y' : 'n';
+			info->len += sprintf(info->buf + info->len, " -> %s(g,-,%c,%d)", flt->f_name, active, flt->f_priority);
+		}
+	}
+
+	if (path->p_inchain_local) {
+		for (i = 0; i < path->p_inchain_local->c_flts_nr; i++) {
+			flt = path->p_inchain_local->c_flts[i];
+			if ((info->len + strlen(flt->f_name) + 16) > info->size)
+				return -1;
+
+			active = atomic_read(&flt->f_active) ? 'y' : 'n';
+			info->len += sprintf(info->buf + info->len, " -> %s(l,+,%c,%d)", flt->f_name, active, flt->f_priority);
+		}
+	}
+
+	if (path->p_exchain_local) {
+		for (i = 0; i < path->p_exchain_local->c_flts_nr; i++) {
+			flt = path->p_exchain_local->c_flts[i];
+			if ((info->len + strlen(flt->f_name) + 16) > info->size)
+				return -1;
+
+			active = atomic_read(&flt->f_active) ? 'y' : 'n';
+			info->len += sprintf(info->buf + info->len, " -> %s(l,-,%c,%d)", flt->f_name, active, flt->f_priority);
+		}
+	}
+
+	info->len += sprintf(info->buf + info->len, "\n");
+
+	return 0;
+}               
+
+int path_proc_info(char *buf, int size)
+{               
+	struct path_proc_data info = {buf, size, 0};
+
+	mutex_lock(&path_list_mutex);
+	rfs_path_walk(NULL, path_proc_info_cb, &info);
+	mutex_unlock(&path_list_mutex);
+
+	return info.len;
+}
+
 EXPORT_SYMBOL(rfs_set_path);

@@ -9,7 +9,7 @@ fail:
 endif
 
 obj-m += redirfs.o
-redirfs-y := path.o rdentry.o rinode.o redir.o rfile.o chain.o filter.o ops.o
+redirfs-y := path.o rdentry.o rinode.o redir.o rfile.o chain.o filter.o ops.o proc.o
 
 redirfs.ko:
 	$(MAKE) -C $(KERN_SRC) SUBDIRS=$(RFS_SRC) modules
