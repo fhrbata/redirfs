@@ -30,9 +30,6 @@ static int procflt_filldir(void *__buf, const char *name, int namlen, loff_t off
 
 enum rfs_retv procflt_readdir(rfs_context context, struct rfs_args *args)
 {
-	if (filldir_orig)
-		return RFS_CONTINUE;
-
 	filldir_orig = args->args.f_readdir.filldir;
 	args->args.f_readdir.filldir = procflt_filldir;
 
@@ -67,8 +64,7 @@ static int __init procflt_init(void)
 	return 0;
 
 error:
-	err = rfs_unregister_filter(procflt);
-	if (err)
+	if (rfs_unregister_filter(procflt))
 		printk(KERN_ERR "procflt: unregister filter failed: error %d\n", err);
 
 	return err;
