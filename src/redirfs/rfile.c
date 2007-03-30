@@ -348,6 +348,11 @@ ssize_t rfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 			return file->f_op->read(file, buf, count, pos);
 	}
 
+	spin_lock(&rfile->rf_lock);
+	path = path_get(rfile->rf_path);
+	chain = chain_get(rfile->rf_chain);
+	spin_unlock(&rfile->rf_lock);
+
 	args.args.f_read.file = file;
 	args.args.f_read.buf = buf;
 	args.args.f_read.count = count;
@@ -385,6 +390,11 @@ ssize_t rfs_write(struct file *file, const char __user *buf, size_t count, loff_
 		if (file->f_op && file->f_op->write)
 			return file->f_op->write(file, buf, count, pos);
 	}
+
+	spin_lock(&rfile->rf_lock);
+	path = path_get(rfile->rf_path);
+	chain = chain_get(rfile->rf_chain);
+	spin_unlock(&rfile->rf_lock);
 
 	args.args.f_write.file = file;
 	args.args.f_write.buf = buf;

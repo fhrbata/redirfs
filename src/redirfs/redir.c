@@ -29,7 +29,7 @@ int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_ar
 		if (op) {
 			retv = op(context, args);
 			if (retv == RFS_STOP) {
-				*cnt = i;
+				*cnt = i + 1;
 				return -1;
 			}
 		}
@@ -47,7 +47,7 @@ int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_a
 
 	args->type.call = RFS_POSTCALL;
 
-	for (i = *cnt; i >= 0; i--) {
+	for (i = *cnt - 1; i >= 0; i--) {
 		ops = chain->c_flts[i]->f_post_cbs;
 		op = ops[args->type.id];
 		if (op) {
