@@ -178,7 +178,7 @@ int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 
 		if (parent->ri_op_old && parent->ri_op_old->mkdir)
-			rv = parent->ri_op_old->mkdir(dir, dentry, mode);
+			rv = parent->ri_op_old->mkdir(args.args.i_mkdir.dir, args.args.i_mkdir.dentry, args.args.i_mkdir.mode);
 
 		args.retv.rv_int = rv;
 	}
@@ -270,7 +270,7 @@ int rfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameid
 	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 
 		if (parent->ri_op_old && parent->ri_op_old->create)
-			rv = parent->ri_op_old->create(dir, dentry, mode, nd);
+			rv = parent->ri_op_old->create(args.args.i_create.dir, args.args.i_create.dentry, args.args.i_create.mode, args.args.i_create.nd);
 
 		args.retv.rv_int = rv;
 	}
@@ -361,7 +361,7 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct namei
 	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 
 		if (parent->ri_op_old && parent->ri_op_old->lookup)
-			rv = parent->ri_op_old->lookup(dir, dentry, nd);
+			rv = parent->ri_op_old->lookup(args.args.i_lookup.dir, args.args.i_lookup.dentry, args.args.i_lookup.nd);
 
 		args.retv.rv_dentry = rv;
 	}
@@ -446,9 +446,11 @@ int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 
 	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 		if (rinode->ri_op_old && rinode->ri_op_old->permission)
-			rv = rinode->ri_op_old->permission(inode, mask, nd);
-		else
-			rv = generic_permission(inode, submask, NULL);
+			rv = rinode->ri_op_old->permission(args.args.i_permission.inode, args.args.i_permission.mask, args.args.i_permission.nd);
+		else {
+			submask = args.args.i_permission.mask & ~MAY_APPEND;
+			rv = generic_permission(args.args.i_permission.inode, submask, NULL);
+		}
 
 		args.retv.rv_int = rv;
 	}

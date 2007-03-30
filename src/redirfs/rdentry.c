@@ -239,7 +239,7 @@ int rfs_d_revalidate(struct dentry *dentry, struct nameidata *nd)
 
 	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 		if (rdentry->rd_op_old && rdentry->rd_op_old->d_revalidate)
-			rv = rdentry->rd_op_old->d_revalidate(dentry, nd);
+			rv = rdentry->rd_op_old->d_revalidate(args.args.d_revalidate.dentry, args.args.d_revalidate.nd);
 
 		args.retv.rv_int = rv;
 	}
@@ -291,7 +291,7 @@ int rfs_d_hash(struct dentry *dentry, struct qstr *name)
 
 	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 		if (rdentry->rd_op_old && rdentry->rd_op_old->d_hash)
-			rv = rdentry->rd_op_old->d_hash(dentry, name);
+			rv = rdentry->rd_op_old->d_hash(args.args.d_hash.dentry, args.args.d_hash.name);
 
 		args.retv.rv_int = rv;
 	}
@@ -355,9 +355,9 @@ int rfs_d_compare(struct dentry *dentry, struct qstr *name1, struct qstr *name2)
 	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 
 		if (rdentry->rd_op_old && rdentry->rd_op_old->d_compare)
-			rv = rdentry->rd_op_old->d_compare(dentry, name1, name2);
+			rv = rdentry->rd_op_old->d_compare(args.args.d_compare.dentry, args.args.d_compare.name1, args.args.d_compare.name2);
 		else
-			rv = rfs_d_compare_default(name1, name2);
+			rv = rfs_d_compare_default(args.args.d_compare.name1, args.args.d_compare.name2);
 
 		args.retv.rv_int = rv;
 	}
@@ -407,7 +407,7 @@ int rfs_d_delete(struct dentry *dentry)
 	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 
 		if (rdentry->rd_op_old && rdentry->rd_op_old->d_delete)
-			rv = rdentry->rd_op_old->d_delete(dentry);
+			rv = rdentry->rd_op_old->d_delete(args.args.d_delete.dentry);
 
 		args.retv.rv_int = rv;
 	}
@@ -457,7 +457,7 @@ void rfs_d_release(struct dentry *dentry)
 	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 
 		if (rdentry->rd_op_old && rdentry->rd_op_old->d_release)
-			rdentry->rd_op_old->d_release(dentry);
+			rdentry->rd_op_old->d_release(args.args.d_release.dentry);
 	} 
 
 	rfs_postcall_flts(chain, NULL, &args, &cnt);
@@ -504,9 +504,9 @@ void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 
 		if (rdentry->rd_op_old && rdentry->rd_op_old->d_iput)
-			rdentry->rd_op_old->d_iput(dentry, inode);
+			rdentry->rd_op_old->d_iput(args.args.d_iput.dentry, args.args.d_iput.inode);
 		else
-			iput(inode);
+			iput(args.args.d_iput.inode);
 	}
 
 	rfs_postcall_flts(chain, NULL, &args, &cnt);
