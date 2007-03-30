@@ -211,6 +211,7 @@ int rfs_d_revalidate(struct dentry *dentry, struct nameidata *nd)
 	struct inode *inode = NULL;
 	struct rfs_args args;
 	int rv = 1;
+	int cnt = 0;
 
 	rdentry = rdentry_find(dentry);
 
@@ -236,17 +237,16 @@ int rfs_d_revalidate(struct dentry *dentry, struct nameidata *nd)
 	} else
 		args.type.id = RFS_NONE_DOP_D_REVALIDATE;
 
-	if (!rfs_precall_flts(chain, NULL, &args)) {
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 		if (rdentry->rd_op_old && rdentry->rd_op_old->d_revalidate)
 			rv = rdentry->rd_op_old->d_revalidate(dentry, nd);
 
 		args.retv.rv_int = rv;
+	}
 		
-		if (!rfs_postcall_flts(chain, NULL, &args))
-			rv = args.retv.rv_int;
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
 
-	} else
-		rv = args.retv.rv_int;
+	rv = args.retv.rv_int;
 
 	rdentry_put(rdentry);
 	path_put(path);
@@ -263,6 +263,7 @@ int rfs_d_hash(struct dentry *dentry, struct qstr *name)
 	struct inode *inode = NULL;
 	struct rfs_args args;
 	int rv = 0;
+	int cnt = 0;
 
 	rdentry = rdentry_find(dentry);
 
@@ -288,17 +289,16 @@ int rfs_d_hash(struct dentry *dentry, struct qstr *name)
 	} else
 		args.type.id = RFS_NONE_DOP_D_HASH;
 
-	if (!rfs_precall_flts(chain, NULL, &args)) {
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 		if (rdentry->rd_op_old && rdentry->rd_op_old->d_hash)
 			rv = rdentry->rd_op_old->d_hash(dentry, name);
 
 		args.retv.rv_int = rv;
+	}
 
-		if (!rfs_postcall_flts(chain, NULL, &args))
-			rv = args.retv.rv_int;
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
 
-	} else
-		rv = args.retv.rv_int;
+	rv = args.retv.rv_int;
 
 	rdentry_put(rdentry);
 	path_put(path);
@@ -325,6 +325,7 @@ int rfs_d_compare(struct dentry *dentry, struct qstr *name1, struct qstr *name2)
 	struct inode *inode = NULL;
 	struct rfs_args args;
 	int rv = 0;
+	int cnt = 0;
 
 	rdentry = rdentry_find(dentry);
 	if (!rdentry) {
@@ -351,7 +352,7 @@ int rfs_d_compare(struct dentry *dentry, struct qstr *name1, struct qstr *name2)
 	} else
 		args.type.id = RFS_NONE_DOP_D_COMPARE;
 
-	if (!rfs_precall_flts(chain, NULL, &args)) {
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 
 		if (rdentry->rd_op_old && rdentry->rd_op_old->d_compare)
 			rv = rdentry->rd_op_old->d_compare(dentry, name1, name2);
@@ -359,12 +360,10 @@ int rfs_d_compare(struct dentry *dentry, struct qstr *name1, struct qstr *name2)
 			rv = rfs_d_compare_default(name1, name2);
 
 		args.retv.rv_int = rv;
+	}
 
-		if (!rfs_postcall_flts(chain, NULL, &args))
-			rv = args.retv.rv_int;
-
-	} else
-		rv = args.retv.rv_int;
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rv = args.retv.rv_int;
 
 	rdentry_put(rdentry);
 	path_put(path);
@@ -381,6 +380,7 @@ int rfs_d_delete(struct dentry *dentry)
 	struct inode *inode = NULL;
 	struct rfs_args args;
 	int rv = 0;
+	int cnt = 0;
 
 	rdentry = rdentry_find(dentry);
 	if (!rdentry) {
@@ -404,18 +404,16 @@ int rfs_d_delete(struct dentry *dentry)
 	} else
 		args.type.id = RFS_NONE_DOP_D_DELETE;
 
-	if (!rfs_precall_flts(chain, NULL, &args)) {
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 
 		if (rdentry->rd_op_old && rdentry->rd_op_old->d_delete)
 			rv = rdentry->rd_op_old->d_delete(dentry);
 
 		args.retv.rv_int = rv;
+	}
 
-		if (!rfs_postcall_flts(chain, NULL, &args))
-			rv = args.retv.rv_int;
-
-	} else
-		rv = args.retv.rv_int;
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rv = args.retv.rv_int;
 
 	rdentry_put(rdentry);
 	path_put(path);
@@ -431,6 +429,7 @@ void rfs_d_release(struct dentry *dentry)
 	struct chain *chain = NULL;
 	struct inode *inode = NULL;
 	struct rfs_args args;
+	int cnt = 0;
 
 	rdentry = rdentry_find(dentry);
 	if (!rdentry) {
@@ -455,13 +454,13 @@ void rfs_d_release(struct dentry *dentry)
 	} else
 		args.type.id = RFS_NONE_DOP_D_RELEASE;
 
-	if (!rfs_precall_flts(chain, NULL, &args)) {
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 
 		if (rdentry->rd_op_old && rdentry->rd_op_old->d_release)
 			rdentry->rd_op_old->d_release(dentry);
-
-		rfs_postcall_flts(chain, NULL, &args);
 	} 
+
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
 
 	rdentry_del(dentry);
 	rdentry_put(rdentry);
@@ -475,6 +474,7 @@ void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 	struct path *path = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
+	int cnt = 0;
 
 	rdentry = rdentry_find(dentry);
 	if (!rdentry) {
@@ -501,15 +501,15 @@ void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 	} else
 		args.type.id = RFS_NONE_DOP_D_IPUT;
 
-	if (!rfs_precall_flts(chain, NULL, &args)) {
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 
 		if (rdentry->rd_op_old && rdentry->rd_op_old->d_iput)
 			rdentry->rd_op_old->d_iput(dentry, inode);
 		else
 			iput(inode);
-
-		rfs_postcall_flts(chain, NULL, &args);
 	}
+
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
 
 	rinode_del(inode);
 	rdentry_put(rdentry);

@@ -50,6 +50,7 @@ enum rfs_op_id {
 
 	RFS_DIR_FOP_OPEN,
 	RFS_DIR_FOP_RELEASE,
+	RFS_DIR_FOP_READDIR,
 
 	RFS_OP_END
 };
@@ -128,6 +129,12 @@ union rfs_op_args {
 		struct inode *inode;
 		struct file *file;
 	} f_release;
+
+	struct {
+		struct file *file;
+		void *buf;
+		filldir_t filldir;
+	} f_readdir;
 };
 
 union rfs_op_retv {

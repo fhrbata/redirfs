@@ -208,6 +208,7 @@ int rfs_open(struct inode *inode, struct file *file)
 	struct chain *chain = NULL;
 	struct rfs_args args;
 	int rv = 0;
+	int cnt = 0;
 
 	fop = file->f_op;
 	rinode = rinode_find(inode);
@@ -233,16 +234,16 @@ int rfs_open(struct inode *inode, struct file *file)
 	else if (S_ISDIR(inode->i_mode))
 		args.type.id = RFS_DIR_FOP_OPEN;
 
-	if (!rfs_precall_flts(chain, NULL, &args)) {
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 		if (rinode->ri_fop_old && rinode->ri_fop_old->open)
 			rv = rinode->ri_fop_old->open(inode, file);
 
 		args.retv.rv_int = rv;
+	}
 
-		if (!rfs_postcall_flts(chain, NULL, &args))
-			rv = args.retv.rv_int;
-	} else
-		rv = args.retv.rv_int;
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+
+	rv = args.retv.rv_int;
 
 	if (!rv) {
 		rfile = rfile_add(file);
@@ -265,6 +266,7 @@ int rfs_release(struct inode *inode, struct file *file)
 	struct chain *chain = NULL;
 	struct rfs_args args;
 	int rv = 0;
+	int cnt = 0;
 
 	rfile = rfile_find(file);
 	if (!rfile) {
@@ -285,17 +287,16 @@ int rfs_release(struct inode *inode, struct file *file)
 	else if (S_ISDIR(inode->i_mode))
 		args.type.id = RFS_DIR_FOP_OPEN;
 
-	if (!rfs_precall_flts(chain, NULL, &args)) {
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 		if (rfile->rf_op_old && rfile->rf_op_old->release)
 			rv = rfile->rf_op_old->release(inode, file);
 
 		args.retv.rv_int = rv;
+	}
 
-		if (!rfs_postcall_flts(chain, NULL, &args))
-			rv = args.retv.rv_int;
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
 
-	} else
-		rv = args.retv.rv_int;
+	rv = args.retv.rv_int;
 
 	spin_lock(&rfile->rf_rdentry->rd_lock);
 	rfile_del(file);
@@ -308,8 +309,64 @@ int rfs_release(struct inode *inode, struct file *file)
 	return rv;
 }
 
+int rfs_readdir(struct file *file, void *buf, filldir_t filler)
+{
+	struct rfile *rfile = NULL;
+	struct path *path = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	int rv = 0;
+	int cnt = 0;
+
+	rfile = rfile_find(file);
+	if (!rfile) {
+		if (file->f_op && file->f_op->readdir)
+			return file->f_op->readdir(file, buf, filler);
+	}
+
+	spin_lock(&rfile->rf_lock);
+	path = path_get(rfile->rf_path);
+	chain = chain_get(rfile->rf_chain);
+	spin_unlock(&rfile->rf_lock);
+
+	args.args.f_readdir.file = file;
+	args.args.f_readdir.buf = buf;
+	args.args.f_readdir.filldir = filler;
+	args.type.id = RFS_DIR_FOP_READDIR;
+
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+		if (rfile->rf_op_old && rfile->rf_op_old->readdir)
+			rv = rfile->rf_op_old->readdir(file, buf, filler);
+
+		args.retv.rv_int = rv;
+	}
+	
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rv = args.retv.rv_int;
+
+	rfile_put(rfile);
+	path_put(path);
+	chain_put(chain);
+
+	return rv;
+}
+
+void rfile_set_dir_ops(struct rfile *rfile, int *ops)
+{
+	if (ops[RFS_DIR_FOP_READDIR])
+		rfile->rf_op_new.readdir = rfs_readdir;
+	else
+		rfile->rf_op_new.readdir = rfile->rf_op_old ? rfile->rf_op_old->readdir : NULL;
+}
+
 void rfile_set_ops(struct rfile *rfile, struct ops *ops)
 {
+	umode_t mode = rfile->rf_rdentry->rd_rinode->ri_inode->i_mode;
+
+
+	if (S_ISDIR(mode))
+		rfile_set_dir_ops(rfile, ops->o_ops);
+
 	rfile->rf_op_new.open = rfs_open;
 	rfile->rf_op_new.release = rfs_release;
 }

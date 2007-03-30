@@ -190,8 +190,8 @@ int rfs_set_path_cb(struct dentry *dentry, void *data);
 int rfs_set_ops(struct dentry *dentry, struct path *path);
 int rfs_set_ops_cb(struct dentry *dentry, void *data);
 int rfs_walk_dcache(struct dentry *root, int (*)(struct dentry *, void *), void *, int (*)(struct dentry *, void *), void *);
-int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_args *args);
-int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_args *args);
+int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_args *args, int *cnt);
+int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_args *args, int *cnt);
 
 int rfs_proc_init(void);
 void rfs_proc_destroy(void);

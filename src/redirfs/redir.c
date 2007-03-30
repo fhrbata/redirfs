@@ -13,7 +13,7 @@ extern spinlock_t rinode_cnt_lock;
 extern unsigned long long rfile_cnt;
 extern spinlock_t rfile_cnt_lock;
 
-int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_args *args)
+int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_args *args, int *cnt)
 {
 	enum rfs_retv (**ops)(rfs_context, struct rfs_args *);
 	enum rfs_retv (*op)(rfs_context, struct rfs_args *);
@@ -21,21 +21,24 @@ int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_ar
 	int i;
 
 	args->type.call = RFS_PRECALL;
+	*cnt = chain->c_flts_nr;
 
 	for (i = 0; i < chain->c_flts_nr; i++) {
 		ops = chain->c_flts[i]->f_pre_cbs;
 		op = ops[args->type.id];
 		if (op) {
 			retv = op(context, args);
-			if (retv == RFS_STOP)
+			if (retv == RFS_STOP) {
+				*cnt = i;
 				return -1;
+			}
 		}
 	}
 
 	return 0;
 }
 
-int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_args *args)
+int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_args *args, int *cnt)
 {
 	enum rfs_retv (**ops)(rfs_context, struct rfs_args *);
 	enum rfs_retv (*op)(rfs_context, struct rfs_args *);
@@ -44,13 +47,15 @@ int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_a
 
 	args->type.call = RFS_POSTCALL;
 
-	for (i = chain->c_flts_nr - 1; i >= 0; i--) {
+	for (i = *cnt; i >= 0; i--) {
 		ops = chain->c_flts[i]->f_post_cbs;
 		op = ops[args->type.id];
 		if (op) {
 			retv = op(context, args);
-			if (retv == RFS_STOP)
+			if (retv == RFS_STOP) {
+				*cnt = i;
 				return -1;
+			}
 		}
 	}
 

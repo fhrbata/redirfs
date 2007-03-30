@@ -154,6 +154,7 @@ int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	struct chain *chain = NULL;
 	struct rfs_args args;
 	int rv = 0;
+	int cnt = 0;
 
 	parent = rinode_find(dir);
 	if (!parent) {
@@ -174,17 +175,17 @@ int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	args.args.i_mkdir.mode = mode;
 	args.type.id = RFS_DIR_IOP_MKDIR;
 
-	if (!rfs_precall_flts(chain, NULL, &args)) {
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 
 		if (parent->ri_op_old && parent->ri_op_old->mkdir)
 			rv = parent->ri_op_old->mkdir(dir, dentry, mode);
 
 		args.retv.rv_int = rv;
+	}
 
-		if (!rfs_postcall_flts(chain, NULL, &args))
-			rv = args.retv.rv_int;
-	} else 
-		rv = args.retv.rv_int;
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	
+	rv = args.retv.rv_int;
 
 	if (!chain_set)
 		goto exit;
@@ -244,6 +245,7 @@ int rfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameid
 	struct chain *chain = NULL;
 	struct rfs_args args;
 	int rv = 0;
+	int cnt = 0;
 
 	parent = rinode_find(dir);
 	if (!parent) {
@@ -265,17 +267,17 @@ int rfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameid
 	args.args.i_create.nd = nd;
 	args.type.id = RFS_DIR_IOP_CREATE;
 
-	if (!rfs_precall_flts(chain, NULL, &args)) {
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 
 		if (parent->ri_op_old && parent->ri_op_old->create)
 			rv = parent->ri_op_old->create(dir, dentry, mode, nd);
 
 		args.retv.rv_int = rv;
+	}
 
-		if (!rfs_postcall_flts(chain, NULL, &args))
-			rv = args.retv.rv_int;
-	} else 
-		rv = args.retv.rv_int;
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+
+	rv = args.retv.rv_int;
 
 	if (!chain_set)
 		goto exit;
@@ -335,6 +337,7 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct namei
 	struct chain *chain = NULL;
 	struct rfs_args args;
 	struct dentry *rv = NULL;
+	int cnt = 0;
 
 	parent = rinode_find(dir);
 	if (!parent) {
@@ -355,17 +358,17 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct namei
 	args.args.i_lookup.nd = nd;
 	args.type.id = RFS_DIR_IOP_LOOKUP;
 
-	if (!rfs_precall_flts(chain, NULL, &args)) {
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 
 		if (parent->ri_op_old && parent->ri_op_old->lookup)
 			rv = parent->ri_op_old->lookup(dir, dentry, nd);
 
 		args.retv.rv_dentry = rv;
+	}
 
-		if (!rfs_postcall_flts(chain, NULL, &args))
-			rv = args.retv.rv_dentry;
-	} else
-		rv = args.retv.rv_dentry;
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+
+	rv = args.retv.rv_dentry;
 
 	if (!chain_set)
 		goto exit;
@@ -421,6 +424,7 @@ int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 	struct rfs_args args;
 	int submask = mask & ~MAY_APPEND;
 	int rv = 0;
+	int cnt = 0;
 
 	rinode = rinode_find(inode);
 	if (!rinode) {
@@ -440,19 +444,17 @@ int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 	args.args.i_permission.nd = nd;
 	args.type.id = RFS_DIR_IOP_PERMISSION;
 
-	if (!rfs_precall_flts(chain, NULL, &args)) {
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 		if (rinode->ri_op_old && rinode->ri_op_old->permission)
 			rv = rinode->ri_op_old->permission(inode, mask, nd);
 		else
 			rv = generic_permission(inode, submask, NULL);
 
 		args.retv.rv_int = rv;
+	}
 
-		if (!rfs_postcall_flts(chain, NULL, &args))
-			rv = args.retv.rv_int;
-
-	} else
-		rv = args.retv.rv_int;
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rv = args.retv.rv_int;
 
 	rinode_put(rinode);
 	path_put(path);
