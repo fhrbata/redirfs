@@ -8,9 +8,9 @@ fail:
 	@exit
 endif
 
-obj-m += dummyflt.o
+obj-m += procflt.o
 
-dummyflt.ko:
+procflt.ko:
 	$(MAKE) -C $(KERN_SRC) SUBDIRS=$(RFS_SRC) modules
 
 .PHONY: clean
