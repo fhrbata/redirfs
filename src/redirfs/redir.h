@@ -88,6 +88,7 @@ struct path {
 	struct chain *p_inchain_local;
 	struct chain *p_exchain_local;
 	struct ops *p_ops;
+	struct ops *p_ops_local;
 };
 
 int path_del(struct path *path);
@@ -137,6 +138,7 @@ struct rdentry {
 	spinlock_t rd_lock;
 	atomic_t rd_count;
 	int rd_root;
+	struct ops *rd_ops;
 };
 
 int rdentry_cache_create(void);

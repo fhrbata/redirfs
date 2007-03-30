@@ -24,6 +24,7 @@ struct rdentry *rdentry_alloc(struct dentry* dentry)
 	rdentry->rd_path = NULL;
 	rdentry->rd_rinode = NULL;
 	rdentry->rd_chain = NULL;
+	rdentry->rd_ops = NULL;
 	rdentry->rd_root = 0;
 	atomic_set(&rdentry->rd_count, 1);
 	spin_lock_init(&rdentry->rd_lock);
@@ -63,6 +64,7 @@ inline void rdentry_put(struct rdentry *rdentry)
 	path_put(rdentry->rd_path);
 	chain_put(rdentry->rd_chain);
 	rinode_put(rdentry->rd_rinode);
+	ops_put(rdentry->rd_ops);
 
 	kmem_cache_free(rdentry_cache, rdentry);
 

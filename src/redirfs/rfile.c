@@ -114,8 +114,6 @@ struct rfile *rfile_add(struct file *file)
 	struct rfile *rfile_new;
 	struct rdentry *rdentry;
 	struct rdentry *rdentry_tmp;
-	struct ops *ops = NULL;
-	struct rfile *retv = NULL;
 
 
 	rfile_new = rfile_alloc(file);
@@ -140,36 +138,20 @@ struct rfile *rfile_add(struct file *file)
 		rfile_new->rf_chain = chain_get(rdentry->rd_chain);
 		rfile_new->rf_path = path_get(rdentry->rd_path);
 
-		if (rfile_new->rf_path->p_flags & RFS_PATH_SINGLE) {
-			ops = ops_alloc();
-			if (IS_ERR(ops)) {
-				retv = ERR_PTR(PTR_ERR(ops));
-				goto exit;
-			}
-			chain_get_ops(rfile_new->rf_chain, ops->o_ops);
-
-		} else {
-			spin_lock(&rdentry->rd_rinode->ri_lock);
-			ops = ops_get(rdentry->rd_rinode->ri_ops_set);
-			spin_unlock(&rdentry->rd_rinode->ri_lock);
-		}
-
 		rcu_assign_pointer(file->f_op, &rfile_new->rf_op_new);
 
 		list_add_tail(&rfile_new->rf_rdentry_list, &rdentry->rd_rfiles);
 		rfile_get(rfile_new);
 
-		rfile_set_ops(rfile_new, ops);
+		rfile_set_ops(rfile_new, rdentry->rd_ops);
 	}
 
-	retv = rfile_get(rfile_new);
-exit:
+
 	spin_unlock(&rdentry->rd_lock);
 	rdentry_put(rdentry_tmp);
 	rdentry_put(rdentry);
-	ops_put(ops);
 
-	return retv;
+	return rfile_get(rfile_new);
 }
 
 static void rfile_del_rcu(struct rcu_head *head)

@@ -199,8 +199,10 @@ int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	spin_lock(&rdentry->rd_lock);
 	path_put(rdentry->rd_path);
 	chain_put(rdentry->rd_chain);
+	ops_put(rdentry->rd_ops);
 	rdentry->rd_path = path_get(path_set);
 	rdentry->rd_chain = chain_get(chain_set);
+	rdentry->rd_ops = ops_get(ops_set);
 	spin_unlock(&rdentry->rd_lock);
 	rdentry_set_ops(rdentry, ops_set);
 
@@ -291,8 +293,10 @@ int rfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameid
 	spin_lock(&rdentry->rd_lock);
 	path_put(rdentry->rd_path);
 	chain_put(rdentry->rd_chain);
+	ops_put(rdentry->rd_ops);
 	rdentry->rd_path = path_get(path_set);
 	rdentry->rd_chain = chain_get(chain_set);
+	rdentry->rd_ops = ops_get(ops_set);
 	spin_unlock(&rdentry->rd_lock);
 	rdentry_set_ops(rdentry, ops_set);
 
@@ -382,8 +386,10 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct namei
 	spin_lock(&rdentry->rd_lock);
 	path_put(rdentry->rd_path);
 	chain_put(rdentry->rd_chain);
+	ops_put(rdentry->rd_ops);
 	rdentry->rd_path = path_get(path_set);
 	rdentry->rd_chain = chain_get(chain_set);
+	rdentry->rd_ops = ops_get(ops_set);
 	spin_unlock(&rdentry->rd_lock);
 	rdentry_set_ops(rdentry, ops_set);
 

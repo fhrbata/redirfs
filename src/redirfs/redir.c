@@ -74,23 +74,19 @@ int rfs_replace_ops(struct path *path_old, struct path *path_new)
 	if (IS_ERR(rdentry))
 		return PTR_ERR(rdentry);
 
-	ops = ops_alloc();
-	if (IS_ERR(ops)) {
-		rdentry_put(rdentry);
-		return PTR_ERR(ops);
-	}
-
-	if (path_old->p_flags & RFS_PATH_SINGLE)
+	if (path_old->p_flags & RFS_PATH_SINGLE) {
 		chain = path_new->p_inchain_local;
-	else 
+		ops = path_new->p_ops_local;
+
+	} else {
 		chain = path_new->p_inchain;
+		ops = path_new->p_ops;
+	}
 
 	if (path_old == path_new)
 		rdentry->rd_root = 1;
 	else 
 		rdentry->rd_root = 0;
-
-	chain_get_ops(chain, ops->o_ops);
 
 	rdentry_set_ops(rdentry, ops);
 
@@ -98,8 +94,10 @@ int rfs_replace_ops(struct path *path_old, struct path *path_new)
 	
 	path_put(rdentry->rd_path);
 	chain_put(rdentry->rd_chain);
+	ops_put(rdentry->rd_ops);
 	rdentry->rd_path = path_get(path_new);
 	rdentry->rd_chain = chain_get(chain);
+	rdentry->rd_ops = ops_get(ops);
 
 	list_for_each_entry(rfile, &rdentry->rd_rfiles, rf_rdentry_list) {
 		rfile_set_ops(rfile, ops);
@@ -120,6 +118,7 @@ int rfs_replace_ops(struct path *path_old, struct path *path_new)
 
 	if (rinode) {
 		rinode_set_ops(rinode, ops);
+
 		spin_lock(&rinode->ri_lock);
 
 		path_put(rinode->ri_path);
@@ -131,7 +130,6 @@ int rfs_replace_ops(struct path *path_old, struct path *path_new)
 	}
 
 	rdentry_put(rdentry);
-	ops_put(ops);
 
 	return 0;
 }
@@ -188,8 +186,10 @@ int rfs_replace_ops_cb(struct dentry *dentry, void *data)
 	
 	path_put(rdentry->rd_path);
 	chain_put(rdentry->rd_chain);
+	ops_put(rdentry->rd_ops);
 	rdentry->rd_path = path_get(path);
 	rdentry->rd_chain = chain_get(path->p_inchain);
+	rdentry->rd_ops = ops_get(path->p_ops);
 
 	list_for_each_entry(rfile, &rdentry->rd_rfiles, rf_rdentry_list) {
 		rfile_set_ops(rfile, path->p_ops);
@@ -273,18 +273,15 @@ int rfs_set_ops(struct dentry *dentry, struct path *path)
 	struct rfile *rfile;
 	struct ops *ops;
 
-	ops = ops_alloc();
-	if (IS_ERR(ops))
-		return PTR_ERR(ops);
-
 	rdentry = rdentry_find(dentry);
 	rinode = rdentry->rd_rinode;
 
-	chain_get_ops(path->p_inchain_local, ops->o_ops);
-
+	ops = path->p_ops_local;
 	rdentry_set_ops(rdentry, ops);
 
 	spin_lock(&rdentry->rd_lock);
+	ops_put(rdentry->rd_ops);
+	rdentry->rd_ops = ops_get(ops);
 
 	list_for_each_entry(rfile, &rdentry->rd_rfiles, rf_rdentry_list) {
 		rfile_set_ops(rfile, ops);
@@ -295,7 +292,6 @@ int rfs_set_ops(struct dentry *dentry, struct path *path)
 	if (rinode)
 		rinode_set_ops(rinode, ops);
 
-	ops_put(ops);
 	rdentry_put(rdentry);
 
 	return RFS_ERR_OK;
@@ -338,6 +334,11 @@ int rfs_set_ops_cb(struct dentry *dentry, void *data)
 			return 1;
 		}
 	}
+
+	spin_lock(&rdentry->rd_lock);
+	ops_put(rdentry->rd_ops);
+	rdentry->rd_ops = ops_get(path->p_ops);
+	spin_unlock(&rdentry->rd_lock);
 
 	rdentry_set_ops(rdentry, path->p_ops);
 
