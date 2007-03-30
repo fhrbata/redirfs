@@ -53,12 +53,19 @@ static int __init dummyflt_init(void)
 	}
 
 #error "Please fill the path_info.path variable with the full pathname which you want to use and delete this line!!!"
+
 	path_info.path = "";
 	path_info.flags = RFS_PATH_INCLUDE | RFS_PATH_SUBTREE;
 
 	err = rfs_set_path(dummyflt, &path_info); 
 	if (err != RFS_ERR_OK) {
 		printk(KERN_ERR "dummyflt: set path failed: error %d\n", err);
+		goto error;
+	}
+
+	err = rfs_activate_filter(dummyflt);
+	if (err != RFS_ERR_OK) {
+		printk(KERN_ERR "dummyflt: activate filter failed: error %d\n", err);
 		goto error;
 	}
 

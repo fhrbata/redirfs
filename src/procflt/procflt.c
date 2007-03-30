@@ -61,6 +61,12 @@ static int __init procflt_init(void)
 		goto error;
 	}
 
+	err = rfs_activate_filter(procflt); 
+	if (err != RFS_ERR_OK) {
+		printk(KERN_ERR "procflt: activate filter failed: error %d\n", err);
+		goto error;
+	}
+
 	return 0;
 
 error:

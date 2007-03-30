@@ -24,6 +24,9 @@ int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_ar
 	*cnt = chain->c_flts_nr;
 
 	for (i = 0; i < chain->c_flts_nr; i++) {
+		if (!atomic_read(&chain->c_flts[i]->f_active))
+			continue;
+
 		ops = chain->c_flts[i]->f_pre_cbs;
 		op = ops[args->type.id];
 		if (op) {
@@ -48,6 +51,9 @@ int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_a
 	args->type.call = RFS_POSTCALL;
 
 	for (i = *cnt - 1; i >= 0; i--) {
+		if (!atomic_read(&chain->c_flts[i]->f_active))
+			continue;
+
 		ops = chain->c_flts[i]->f_post_cbs;
 		op = ops[args->type.id];
 		if (op) {
