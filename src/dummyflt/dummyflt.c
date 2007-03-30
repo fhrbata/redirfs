@@ -65,8 +65,7 @@ static int __init dummyflt_init(void)
 	return 0;
 
 error:
-	err = rfs_unregister_filter(dummyflt);
-	if (err)
+	if (rfs_unregister_filter(dummyflt))
 		printk(KERN_ERR "dummyflt: unregister filter failed: error %d\n", err);
 
 	return err;
