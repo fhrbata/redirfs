@@ -47,6 +47,8 @@ enum rfs_op_id {
 
 	RFS_REG_FOP_OPEN,
 	RFS_REG_FOP_RELEASE,
+	RFS_REG_FOP_READ,
+	RFS_REG_FOP_WRITE,
 
 	RFS_DIR_FOP_OPEN,
 	RFS_DIR_FOP_RELEASE,
@@ -135,6 +137,20 @@ union rfs_op_args {
 		void *buf;
 		filldir_t filldir;
 	} f_readdir;
+
+	struct {
+		struct file *file;
+		char __user *buf;
+		size_t count;
+		loff_t *pos;
+	} f_read;
+
+	struct {
+		struct file *file;
+		const char __user *buf;
+		size_t count;
+		loff_t *pos;
+	} f_write;
 };
 
 union rfs_op_retv {

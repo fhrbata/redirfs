@@ -351,6 +351,82 @@ int rfs_readdir(struct file *file, void *buf, filldir_t filler)
 	return rv;
 }
 
+ssize_t rfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
+{
+	struct rfile *rfile = NULL;
+	struct path *path = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	ssize_t rv = 0;
+	int cnt = 0;
+
+	rfile = rfile_find(file);
+	if (!rfile) {
+		if (file->f_op && file->f_op->read)
+			return file->f_op->read(file, buf, count, pos);
+	}
+
+	args.args.f_read.file = file;
+	args.args.f_read.buf = buf;
+	args.args.f_read.count = count;
+	args.args.f_read.pos = pos;
+	args.type.id = RFS_REG_FOP_READ;
+	
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+		if (rfile->rf_op_old && rfile->rf_op_old->read)
+			rv = rfile->rf_op_old->read(file, buf, count, pos);
+
+		args.retv.rv_ssize = rv;
+	}
+	
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rv = args.retv.rv_int;
+
+	rfile_put(rfile);
+	path_put(path);
+	chain_put(chain);
+
+	return rv;
+}
+
+ssize_t rfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
+{
+	struct rfile *rfile = NULL;
+	struct path *path = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	ssize_t rv = 0;
+	int cnt = 0;
+
+	rfile = rfile_find(file);
+	if (!rfile) {
+		if (file->f_op && file->f_op->write)
+			return file->f_op->write(file, buf, count, pos);
+	}
+
+	args.args.f_write.file = file;
+	args.args.f_write.buf = buf;
+	args.args.f_write.count = count;
+	args.args.f_write.pos = pos;
+	args.type.id = RFS_REG_FOP_WRITE;
+
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+		if (rfile->rf_op_old && rfile->rf_op_old->write)
+			rv = rfile->rf_op_old->write(file, buf, count, pos);
+
+		args.retv.rv_ssize = rv;
+	}
+	
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rv = args.retv.rv_int;
+
+	rfile_put(rfile);
+	path_put(path);
+	chain_put(chain);
+
+	return rv;
+}
+
 void rfile_set_dir_ops(struct rfile *rfile, int *ops)
 {
 	if (ops[RFS_DIR_FOP_READDIR])
@@ -359,12 +435,27 @@ void rfile_set_dir_ops(struct rfile *rfile, int *ops)
 		rfile->rf_op_new.readdir = rfile->rf_op_old ? rfile->rf_op_old->readdir : NULL;
 }
 
+void rfile_set_reg_ops(struct rfile *rfile, int *ops)
+{
+	if (ops[RFS_REG_FOP_READ])
+		rfile->rf_op_new.read = rfs_read;
+	else
+		rfile->rf_op_new.read = rfile->rf_op_old ? rfile->rf_op_old->read : NULL;
+
+	if (ops[RFS_REG_FOP_WRITE])
+		rfile->rf_op_new.write = rfs_write;
+	else
+		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
+}
+
 void rfile_set_ops(struct rfile *rfile, struct ops *ops)
 {
 	umode_t mode = rfile->rf_rdentry->rd_rinode->ri_inode->i_mode;
 
 
-	if (S_ISDIR(mode))
+	if (S_ISREG(mode))
+		rfile_set_reg_ops(rfile, ops->o_ops);
+	else if (S_ISDIR(mode))
 		rfile_set_dir_ops(rfile, ops->o_ops);
 
 	rfile->rf_op_new.open = rfs_open;
