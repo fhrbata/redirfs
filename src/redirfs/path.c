@@ -302,6 +302,7 @@ static int path_dump_cb(struct path *path, void *data)
 
 
 	rfs_debug("+++ path: %s +++\n", path->p_path);
+
 	rfs_debug("inchain %p:",path->p_inchain);
 	if (path->p_inchain) {
 		for (i = 0; i < path->p_inchain->c_flts_nr; i++) {
@@ -310,9 +311,8 @@ static int path_dump_cb(struct path *path, void *data)
 			rfs_debug(" -> %s(g,+,%c,%d)", flt->f_name, active, flt->f_priority);
 		}
 	}
-	rfs_debug("--- path: %s ---\n", path->p_path);
+	rfs_debug("\n");
 
-	rfs_debug("+++ path: %s +++\n", path->p_path);
 	rfs_debug("exchain %p:",path->p_exchain);
 	if (path->p_exchain) {
 		for (i = 0; i < path->p_exchain->c_flts_nr; i++) {
@@ -321,9 +321,8 @@ static int path_dump_cb(struct path *path, void *data)
 			rfs_debug(" -> %s(g,+,%c,%d)", flt->f_name, active, flt->f_priority);
 		}
 	}
-	rfs_debug("--- path: %s ---\n", path->p_path);
+	rfs_debug("\n");
 
-	rfs_debug("+++ path: %s +++\n", path->p_path);
 	rfs_debug("inchain_local %p:", path->p_inchain_local);
 	if (path->p_inchain_local) {
 		for (i = 0; i < path->p_inchain_local->c_flts_nr; i++) {
@@ -332,9 +331,8 @@ static int path_dump_cb(struct path *path, void *data)
 			rfs_debug(" -> %s(g,+,%c,%d)", flt->f_name, active, flt->f_priority);
 		}
 	}
-	rfs_debug("--- path: %s ---\n", path->p_path);
+	rfs_debug("\n");
 
-	rfs_debug("+++ path: %s +++\n", path->p_path);
 	rfs_debug("exchain_local %p:", path->p_exchain_local);
 	if (path->p_exchain_local) {
 		for (i = 0; i < path->p_exchain_local->c_flts_nr; i++) {
@@ -343,6 +341,8 @@ static int path_dump_cb(struct path *path, void *data)
 			rfs_debug(" -> %s(g,+,%c,%d)", flt->f_name, active, flt->f_priority);
 		}
 	}
+	rfs_debug("\n");
+
 	rfs_debug("--- path: %s ---\n", path->p_path);
 
 	return 0;
