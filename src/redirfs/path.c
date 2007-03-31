@@ -298,7 +298,7 @@ static int path_dump_cb(struct path *path, void *data)
 {
 	struct filter *flt;
 	int i;
-	int active;
+	char active;
 
 
 	rfs_debug("+++ path: %s +++\n", path->p_path);
@@ -328,7 +328,7 @@ static int path_dump_cb(struct path *path, void *data)
 		for (i = 0; i < path->p_inchain_local->c_flts_nr; i++) {
 			flt = path->p_inchain_local->c_flts[i];
 			active = atomic_read(&flt->f_active) ? 'y' : 'n';
-			rfs_debug(" -> %s(g,+,%c,%d)", flt->f_name, active, flt->f_priority);
+			rfs_debug(" -> %s(l,+,%c,%d)", flt->f_name, active, flt->f_priority);
 		}
 	}
 	rfs_debug("\n");
@@ -338,7 +338,7 @@ static int path_dump_cb(struct path *path, void *data)
 		for (i = 0; i < path->p_exchain_local->c_flts_nr; i++) {
 			flt = path->p_exchain_local->c_flts[i];
 			active = atomic_read(&flt->f_active) ? 'y' : 'n';
-			rfs_debug(" -> %s(g,+,%c,%d)", flt->f_name, active, flt->f_priority);
+			rfs_debug(" -> %s(l,+,%c,%d)", flt->f_name, active, flt->f_priority);
 		}
 	}
 	rfs_debug("\n");
