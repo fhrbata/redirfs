@@ -91,6 +91,9 @@ struct path {
 	struct ops *p_ops;
 	struct ops *p_ops_local;
 };
+#if defined(RFS_DEBUG)
+void path_dump(void);
+#endif
 
 int path_del(struct path *path);
 struct path *path_alloc(const char *path_name);

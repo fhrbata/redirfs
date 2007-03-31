@@ -132,7 +132,9 @@ enum rfs_err rfs_unregister_filter(void *filter)
 		list_del(&loop->p_rem);
 		path_rem(loop);
 	}
-
+#if defined(RFS_DEBUG)
+	path_dump();
+#endif
 	mutex_unlock(&path_list_mutex);
 
 	wait_event_interruptible(flt->f_wait, atomic_read(&flt->f_del));

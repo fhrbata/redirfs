@@ -348,7 +348,7 @@ static int path_dump_cb(struct path *path, void *data)
 	return 0;
 }
 
-static void path_dump(void)
+void path_dump(void)
 {
 	rfs_debug("++++++++++ paths dump ++++++++++\n");
 
