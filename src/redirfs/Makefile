@@ -8,6 +8,10 @@ fail:
 	@exit
 endif
 
+ifdef RFS_DEBUG
+EXTRA_CFLAGS += -DRFS_DEBUG
+endif
+
 obj-m += redirfs.o
 redirfs-y := path.o rdentry.o rinode.o redir.o rfile.o chain.o filter.o ops.o proc.o
 

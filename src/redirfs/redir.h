@@ -15,6 +15,7 @@
 #include <linux/delay.h>
 #include <linux/wait.h>
 #include "redirfs.h"
+#include "debug.h"
 
 struct rdentry;
 struct rinode;

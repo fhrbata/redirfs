@@ -293,6 +293,72 @@ int rfs_path_walk(struct path *path, int walkcb(struct path*, void*), void *data
 	return 0;
 }
 
+#if defined(RFS_DEBUG)
+static int path_dump_cb(struct path *path, void *data)
+{
+	struct filter *flt;
+	int i;
+	int active;
+
+
+	rfs_debug("+++ path: %s +++\n", path->p_path);
+	rfs_debug("inchain %p:",path->p_inchain);
+	if (path->p_inchain) {
+		for (i = 0; i < path->p_inchain->c_flts_nr; i++) {
+			flt = path->p_inchain->c_flts[i];
+			active = atomic_read(&flt->f_active) ? 'y' : 'n';
+			rfs_debug(" -> %s(g,+,%c,%d)", flt->f_name, active, flt->f_priority);
+		}
+	}
+	rfs_debug("--- path: %s ---\n", path->p_path);
+
+	rfs_debug("+++ path: %s +++\n", path->p_path);
+	rfs_debug("exchain %p:",path->p_exchain);
+	if (path->p_exchain) {
+		for (i = 0; i < path->p_exchain->c_flts_nr; i++) {
+			flt = path->p_exchain->c_flts[i];
+			active = atomic_read(&flt->f_active) ? 'y' : 'n';
+			rfs_debug(" -> %s(g,+,%c,%d)", flt->f_name, active, flt->f_priority);
+		}
+	}
+	rfs_debug("--- path: %s ---\n", path->p_path);
+
+	rfs_debug("+++ path: %s +++\n", path->p_path);
+	rfs_debug("inchain_local %p:", path->p_inchain_local);
+	if (path->p_inchain_local) {
+		for (i = 0; i < path->p_inchain_local->c_flts_nr; i++) {
+			flt = path->p_inchain_local->c_flts[i];
+			active = atomic_read(&flt->f_active) ? 'y' : 'n';
+			rfs_debug(" -> %s(g,+,%c,%d)", flt->f_name, active, flt->f_priority);
+		}
+	}
+	rfs_debug("--- path: %s ---\n", path->p_path);
+
+	rfs_debug("+++ path: %s +++\n", path->p_path);
+	rfs_debug("exchain_local %p:", path->p_exchain_local);
+	if (path->p_exchain_local) {
+		for (i = 0; i < path->p_exchain_local->c_flts_nr; i++) {
+			flt = path->p_exchain_local->c_flts[i];
+			active = atomic_read(&flt->f_active) ? 'y' : 'n';
+			rfs_debug(" -> %s(g,+,%c,%d)", flt->f_name, active, flt->f_priority);
+		}
+	}
+	rfs_debug("--- path: %s ---\n", path->p_path);
+
+	return 0;
+}
+
+static void path_dump(void)
+{
+	rfs_debug("++++++++++ paths dump ++++++++++\n");
+
+	rfs_path_walk(NULL, path_dump_cb, NULL);
+
+	rfs_debug("---------- paths dump ----------\n");
+}
+#endif
+
+
 enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 {
 	struct filter *flt = (struct filter *)filter;
@@ -456,6 +522,9 @@ enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 		path_rem(loop);
 	}
 
+#if defined(RFS_DEBUG)
+	path_dump();
+#endif
 exit:
 	chain_put(inchain);
 	chain_put(exchain);
