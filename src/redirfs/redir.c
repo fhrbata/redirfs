@@ -541,26 +541,37 @@ static int __init rfs_init(void)
 
 static void __exit rfs_exit(void)
 {
+	unsigned long long rdcnt;
+	unsigned long long ricnt;
+	unsigned long long rfcnt;
+
 	spin_lock(&rdentry_cnt_lock);
 	if (!rdentry_cnt)
 		atomic_set(&rdentries_freed, 1);
+	rdcnt = rdentry_cnt;
 	spin_unlock(&rdentry_cnt_lock);
-
-	wait_event_interruptible(rdentries_wait, atomic_read(&rdentries_freed));
-	rdentry_cache_destroy();
 
 	spin_lock(&rinode_cnt_lock);
 	if (!rinode_cnt)
 		atomic_set(&rinodes_freed, 1);
+	ricnt = rinode_cnt;
 	spin_unlock(&rinode_cnt_lock);
-
-	wait_event_interruptible(rinodes_wait, atomic_read(&rinodes_freed));
-	rinode_cache_destroy();
 
 	spin_lock(&rfile_cnt_lock);
 	if (!rfile_cnt)
 		atomic_set(&rfiles_freed, 1);
+	rfcnt = rfile_cnt;
 	spin_unlock(&rfile_cnt_lock);
+
+	rfs_debug("rdentry_cnt: %Ld\n", rdcnt);
+	rfs_debug("rinode_cnt: %Ld\n", ricnt);
+	rfs_debug("rfile_cnt: %Ld\n", rfcnt);
+
+	wait_event_interruptible(rdentries_wait, atomic_read(&rdentries_freed));
+	rdentry_cache_destroy();
+
+	wait_event_interruptible(rinodes_wait, atomic_read(&rinodes_freed));
+	rinode_cache_destroy();
 
 	wait_event_interruptible(rfiles_wait, atomic_read(&rfiles_freed));
 	rfile_cache_destroy();
