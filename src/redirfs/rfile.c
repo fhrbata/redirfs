@@ -16,6 +16,7 @@ static struct rfile *rfile_alloc(struct file *file)
 	struct rfile *rfile;
 	struct rinode *rinode = NULL;
 	const struct file_operations *op_old;
+	unsigned long flags;
 
 	
 	rfile = kmem_cache_alloc(rfile_cache, GFP_KERNEL);
@@ -53,9 +54,9 @@ static struct rfile *rfile_alloc(struct file *file)
 
 	rinode_put(rinode);
 
-	spin_lock(&rfile_cnt_lock);
+	spin_lock_irqsave(&rfile_cnt_lock, flags);
 	rfile_cnt++;
-	spin_unlock(&rfile_cnt_lock);
+	spin_unlock_irqrestore(&rfile_cnt_lock, flags);
 
 	return rfile;
 }
@@ -69,6 +70,8 @@ inline struct rfile *rfile_get(struct rfile* rfile)
 
 inline void rfile_put(struct rfile *rfile)
 {
+	unsigned long flags;
+
 	if (!rfile || IS_ERR(rfile))
 		return;
 
@@ -81,10 +84,10 @@ inline void rfile_put(struct rfile *rfile)
 	rdentry_put(rfile->rf_rdentry);
 	kmem_cache_free(rfile_cache, rfile);
 
-	spin_lock(&rfile_cnt_lock);
+	spin_lock_irqsave(&rfile_cnt_lock, flags);
 	if (!--rfile_cnt)
 		atomic_set(&rfiles_freed, 1);
-	spin_unlock(&rfile_cnt_lock);
+	spin_unlock_irqrestore(&rfile_cnt_lock, flags);
 
 	if (atomic_read(&rfiles_freed))
 		wake_up_interruptible(&rfiles_wait);

@@ -23,31 +23,35 @@ struct chain *chain_alloc(int size)
 
 struct chain *chain_get(struct chain *chain)
 {
+	unsigned long flags;
+
 	if (!chain || IS_ERR(chain))
 		return NULL;
 
-	spin_lock(&chain->c_lock);
+	spin_lock_irqsave(&chain->c_lock, flags);
 	BUG_ON(!chain->c_count);
 	chain->c_count++;
-	spin_unlock(&chain->c_lock);
+	spin_unlock_irqrestore(&chain->c_lock, flags);
 
 	return chain;
 }
 
 void chain_put(struct chain *chain)
 {
+	unsigned long flags;
+
 	int i;
 	int del = 0;
 
 	if (!chain || IS_ERR(chain))
 		return;
 
-	spin_lock(&chain->c_lock);
+	spin_lock_irqsave(&chain->c_lock, flags);
 	BUG_ON(!chain->c_count);
 	chain->c_count--;
 	if (!chain->c_count)
 		del = 1;
-	spin_unlock(&chain->c_lock);
+	spin_unlock_irqrestore(&chain->c_lock, flags);
 
 	if (!del)
 		return;

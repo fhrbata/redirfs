@@ -94,30 +94,34 @@ struct path *path_alloc(const char *path_name)
 
 struct path *path_get(struct path *path)
 {
+	unsigned long flags;
+
 	if (!path)
 		return NULL;
 
-	spin_lock(&path->p_lock);
+	spin_lock_irqsave(&path->p_lock, flags);
 	BUG_ON(!path->p_count);
 	path->p_count++;
-	spin_unlock(&path->p_lock);
+	spin_unlock_irqrestore(&path->p_lock, flags);
 
 	return path;
 }
 
 void path_put(struct path *path)
 {
+	unsigned long flags;
+
 	int del = 0;
 
 	if (!path || IS_ERR(path))
 		return;
 
-	spin_lock(&path->p_lock);
+	spin_lock_irqsave(&path->p_lock, flags);
 	BUG_ON(!path->p_count);
 	path->p_count--;
 	if (!path->p_count)
 		del = 1;
-	spin_unlock(&path->p_lock);
+	spin_unlock_irqrestore(&path->p_lock, flags);
 
 	if (!del)
 		return;

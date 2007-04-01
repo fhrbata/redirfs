@@ -9,6 +9,7 @@ extern wait_queue_head_t rinodes_wait;
 struct rinode *rinode_alloc(struct inode *inode)
 {
 	struct rinode *rinode = NULL;
+	unsigned long flags;
 
 
 	rinode = kmem_cache_alloc(rinode_cache, SLAB_KERNEL);
@@ -44,9 +45,9 @@ struct rinode *rinode_alloc(struct inode *inode)
 		memset(&rinode->ri_aop_new, 0,
 				sizeof(struct address_space_operations));
 
-	spin_lock(&rinode_cnt_lock);
+	spin_lock_irqsave(&rinode_cnt_lock, flags);
 	rinode_cnt++;
-	spin_unlock(&rinode_cnt_lock);
+	spin_unlock_irqrestore(&rinode_cnt_lock, flags);
 
 	return rinode;
 }
@@ -60,6 +61,8 @@ inline struct rinode *rinode_get(struct rinode *rinode)
 
 inline void rinode_put(struct rinode *rinode)
 {
+	unsigned long flags;
+
 	if (!rinode || IS_ERR(rinode))
 		return;
 
@@ -75,10 +78,10 @@ inline void rinode_put(struct rinode *rinode)
 	BUG_ON(!list_empty(&rinode->ri_rdentries));
 	kmem_cache_free(rinode_cache, rinode);
 
-	spin_lock(&rinode_cnt_lock);
+	spin_lock_irqsave(&rinode_cnt_lock, flags);
 	if (!--rinode_cnt)
 		atomic_set(&rinodes_freed, 1);
-	spin_unlock(&rinode_cnt_lock);
+	spin_unlock_irqrestore(&rinode_cnt_lock, flags);
 
 	if (atomic_read(&rinodes_freed))
 		wake_up_interruptible(&rinodes_wait);

@@ -10,6 +10,7 @@ extern wait_queue_head_t rdentries_wait;
 struct rdentry *rdentry_alloc(struct dentry* dentry)
 {
 	struct rdentry *rdentry = NULL;
+	unsigned long flags;
 
 
 	rdentry = kmem_cache_alloc(rdentry_cache, SLAB_KERNEL);
@@ -36,9 +37,9 @@ struct rdentry *rdentry_alloc(struct dentry* dentry)
 		memset(&rdentry->rd_op_new, 0, 
 				sizeof(struct dentry_operations));
 
-	spin_lock(&rdentry_cnt_lock);
+	spin_lock_irqsave(&rdentry_cnt_lock, flags);
 	rdentry_cnt++;
-	spin_unlock(&rdentry_cnt_lock);
+	spin_unlock_irqrestore(&rdentry_cnt_lock, flags);
 
 	return rdentry;
 }
@@ -52,6 +53,8 @@ inline struct rdentry *rdentry_get(struct rdentry *rdentry)
 
 inline void rdentry_put(struct rdentry *rdentry)
 {
+	unsigned long flags;
+
 	if (!rdentry || IS_ERR(rdentry))
 		return;
 
@@ -68,10 +71,10 @@ inline void rdentry_put(struct rdentry *rdentry)
 
 	kmem_cache_free(rdentry_cache, rdentry);
 
-	spin_lock(&rdentry_cnt_lock);
+	spin_lock_irqsave(&rdentry_cnt_lock, flags);
 	if (!--rdentry_cnt)
 		atomic_set(&rdentries_freed, 1);
-	spin_unlock(&rdentry_cnt_lock);
+	spin_unlock_irqrestore(&rdentry_cnt_lock, flags);
 
 	if (atomic_read(&rdentries_freed))
 		wake_up_interruptible(&rdentries_wait);
