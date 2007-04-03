@@ -20,6 +20,9 @@ int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_ar
 	int retv;
 	int i;
 
+	if (!chain)
+		return 0;
+
 	args->type.call = RFS_PRECALL;
 	*cnt = chain->c_flts_nr;
 
@@ -47,6 +50,9 @@ int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_a
 	enum rfs_retv (*op)(rfs_context, struct rfs_args *);
 	int retv;
 	int i;
+
+	if (!chain)
+		return 0;
 
 	args->type.call = RFS_POSTCALL;
 

@@ -54,6 +54,8 @@ static struct rfile *rfile_alloc(struct file *file)
 
 	rinode_put(rinode);
 
+	rfile->rf_op_new.open = rfs_open;
+
 	spin_lock_irqsave(&rfile_cnt_lock, flags);
 	rfile_cnt++;
 	spin_unlock_irqrestore(&rfile_cnt_lock, flags);
@@ -218,6 +220,16 @@ int rfs_open(struct inode *inode, struct file *file)
 		args.type.id = RFS_REG_FOP_OPEN;
 	else if (S_ISDIR(inode->i_mode))
 		args.type.id = RFS_DIR_FOP_OPEN;
+	else if (S_ISLNK(inode->i_mode))
+		args.type.id = RFS_LNK_FOP_OPEN;
+	else if (S_ISCHR(inode->i_mode))
+		args.type.id = RFS_CHR_FOP_OPEN;
+	else if (S_ISBLK(inode->i_mode))
+		args.type.id = RFS_BLK_FOP_OPEN;
+	else if (S_ISFIFO(inode->i_mode))
+		args.type.id = RFS_FIFO_FOP_OPEN;
+	else 
+		args.type.id = RFS_SOCK_FOP_OPEN;
 
 	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 		if (rinode->ri_fop_old && rinode->ri_fop_old->open)
@@ -268,9 +280,19 @@ int rfs_release(struct inode *inode, struct file *file)
 	args.args.f_release.file = file;
 
 	if (S_ISREG(inode->i_mode))
-		args.type.id = RFS_REG_FOP_OPEN;
+		args.type.id = RFS_REG_FOP_RELEASE;
 	else if (S_ISDIR(inode->i_mode))
-		args.type.id = RFS_DIR_FOP_OPEN;
+		args.type.id = RFS_DIR_FOP_RELEASE;
+	else if (S_ISLNK(inode->i_mode))
+		args.type.id = RFS_LNK_FOP_RELEASE;
+	else if (S_ISCHR(inode->i_mode))
+		args.type.id = RFS_CHR_FOP_RELEASE;
+	else if (S_ISBLK(inode->i_mode))
+		args.type.id = RFS_BLK_FOP_RELEASE;
+	else if (S_ISFIFO(inode->i_mode))
+		args.type.id = RFS_FIFO_FOP_RELEASE;
+	else 
+		args.type.id = RFS_SOCK_FOP_RELEASE;
 
 	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 		if (rfile->rf_op_old && rfile->rf_op_old->release)
@@ -317,7 +339,10 @@ int rfs_readdir(struct file *file, void *buf, filldir_t filler)
 	args.args.f_readdir.file = file;
 	args.args.f_readdir.buf = buf;
 	args.args.f_readdir.filldir = filler;
-	args.type.id = RFS_DIR_FOP_READDIR;
+	if (S_ISDIR(file->f_dentry->d_inode->i_mode))
+		args.type.id = RFS_DIR_FOP_READDIR;
+	else
+		BUG();
 
 	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 		if (rfile->rf_op_old && rfile->rf_op_old->readdir)
@@ -344,6 +369,7 @@ ssize_t rfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 	struct rfs_args args;
 	ssize_t rv = 0;
 	int cnt = 0;
+	umode_t mode;
 
 	rfile = rfile_find(file);
 	if (!rfile) {
@@ -356,12 +382,29 @@ ssize_t rfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 	chain = chain_get(rfile->rf_chain);
 	spin_unlock(&rfile->rf_lock);
 
+
 	args.args.f_read.file = file;
 	args.args.f_read.buf = buf;
 	args.args.f_read.count = count;
 	args.args.f_read.pos = pos;
-	args.type.id = RFS_REG_FOP_READ;
-	
+
+	mode = file->f_dentry->d_inode->i_mode;
+
+	if (S_ISREG(mode))
+		args.type.id = RFS_REG_FOP_READ;
+	else if (S_ISLNK(mode))
+		args.type.id = RFS_LNK_FOP_READ;
+	else if (S_ISCHR(mode))
+		args.type.id = RFS_CHR_FOP_READ;
+	else if (S_ISBLK(mode))
+		args.type.id = RFS_BLK_FOP_READ;
+	else if (S_ISFIFO(mode))
+		args.type.id = RFS_FIFO_FOP_READ;
+	else if (S_ISSOCK(mode))
+		args.type.id = RFS_SOCK_FOP_READ;
+	else
+		BUG();
+
 	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 		if (rfile->rf_op_old && rfile->rf_op_old->read)
 			rv = rfile->rf_op_old->read(file, buf, count, pos);
@@ -387,6 +430,7 @@ ssize_t rfs_write(struct file *file, const char __user *buf, size_t count, loff_
 	struct rfs_args args;
 	ssize_t rv = 0;
 	int cnt = 0;
+	umode_t mode;
 
 	rfile = rfile_find(file);
 	if (!rfile) {
@@ -403,7 +447,23 @@ ssize_t rfs_write(struct file *file, const char __user *buf, size_t count, loff_
 	args.args.f_write.buf = buf;
 	args.args.f_write.count = count;
 	args.args.f_write.pos = pos;
-	args.type.id = RFS_REG_FOP_WRITE;
+
+	mode = file->f_dentry->d_inode->i_mode;
+
+	if (S_ISREG(mode))
+		args.type.id = RFS_REG_FOP_WRITE;
+	else if (S_ISLNK(mode))
+		args.type.id = RFS_LNK_FOP_WRITE;
+	else if (S_ISCHR(mode))
+		args.type.id = RFS_CHR_FOP_WRITE;
+	else if (S_ISBLK(mode))
+		args.type.id = RFS_BLK_FOP_WRITE;
+	else if (S_ISFIFO(mode))
+		args.type.id = RFS_FIFO_FOP_WRITE;
+	else if (S_ISSOCK(mode))
+		args.type.id = RFS_SOCK_FOP_WRITE;
+	else
+		BUG();
 
 	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
 		if (rfile->rf_op_old && rfile->rf_op_old->write)
@@ -422,15 +482,7 @@ ssize_t rfs_write(struct file *file, const char __user *buf, size_t count, loff_
 	return rv;
 }
 
-void rfile_set_dir_ops(struct rfile *rfile, int *ops)
-{
-	if (ops[RFS_DIR_FOP_READDIR])
-		rfile->rf_op_new.readdir = rfs_readdir;
-	else
-		rfile->rf_op_new.readdir = rfile->rf_op_old ? rfile->rf_op_old->readdir : NULL;
-}
-
-void rfile_set_reg_ops(struct rfile *rfile, int *ops)
+static void rfile_set_reg_ops(struct rfile *rfile, char *ops)
 {
 	if (ops[RFS_REG_FOP_READ])
 		rfile->rf_op_new.read = rfs_read;
@@ -443,6 +495,79 @@ void rfile_set_reg_ops(struct rfile *rfile, int *ops)
 		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
 }
 
+static void rfile_set_dir_ops(struct rfile *rfile, char *ops)
+{
+	if (ops[RFS_DIR_FOP_READDIR])
+		rfile->rf_op_new.readdir = rfs_readdir;
+	else
+		rfile->rf_op_new.readdir = rfile->rf_op_old ? rfile->rf_op_old->readdir : NULL;
+}
+
+static void rfile_set_chr_ops(struct rfile *rfile, char *ops)
+{
+	if (ops[RFS_CHR_FOP_READ])
+		rfile->rf_op_new.read = rfs_read;
+	else
+		rfile->rf_op_new.read = rfile->rf_op_old ? rfile->rf_op_old->read : NULL;
+
+	if (ops[RFS_CHR_FOP_WRITE])
+		rfile->rf_op_new.write = rfs_write;
+	else
+		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
+}
+
+static void rfile_set_blk_ops(struct rfile *rfile, char *ops)
+{
+	if (ops[RFS_BLK_FOP_READ])
+		rfile->rf_op_new.read = rfs_read;
+	else
+		rfile->rf_op_new.read = rfile->rf_op_old ? rfile->rf_op_old->read : NULL;
+
+	if (ops[RFS_BLK_FOP_WRITE])
+		rfile->rf_op_new.write = rfs_write;
+	else
+		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
+}
+
+static void rfile_set_fifo_ops(struct rfile *rfile, char *ops)
+{
+	if (ops[RFS_FIFO_FOP_READ])
+		rfile->rf_op_new.read = rfs_read;
+	else
+		rfile->rf_op_new.read = rfile->rf_op_old ? rfile->rf_op_old->read : NULL;
+
+	if (ops[RFS_FIFO_FOP_WRITE])
+		rfile->rf_op_new.write = rfs_write;
+	else
+		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
+}
+
+static void rfile_set_lnk_ops(struct rfile *rfile, char *ops)
+{
+	if (ops[RFS_LNK_FOP_READ])
+		rfile->rf_op_new.read = rfs_read;
+	else
+		rfile->rf_op_new.read = rfile->rf_op_old ? rfile->rf_op_old->read : NULL;
+
+	if (ops[RFS_LNK_FOP_WRITE])
+		rfile->rf_op_new.write = rfs_write;
+	else
+		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
+}
+
+static void rfile_set_sock_ops(struct rfile *rfile, char *ops)
+{
+	if (ops[RFS_SOCK_FOP_READ])
+		rfile->rf_op_new.read = rfs_read;
+	else
+		rfile->rf_op_new.read = rfile->rf_op_old ? rfile->rf_op_old->read : NULL;
+
+	if (ops[RFS_SOCK_FOP_WRITE])
+		rfile->rf_op_new.write = rfs_write;
+	else
+		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
+}
+
 void rfile_set_ops(struct rfile *rfile, struct ops *ops)
 {
 	umode_t mode = rfile->rf_rdentry->rd_rinode->ri_inode->i_mode;
@@ -450,8 +575,24 @@ void rfile_set_ops(struct rfile *rfile, struct ops *ops)
 
 	if (S_ISREG(mode))
 		rfile_set_reg_ops(rfile, ops->o_ops);
+
 	else if (S_ISDIR(mode))
 		rfile_set_dir_ops(rfile, ops->o_ops);
+
+	else if (S_ISLNK(mode))
+		rfile_set_lnk_ops(rfile, ops->o_ops);
+
+	else if (S_ISCHR(mode))
+		rfile_set_chr_ops(rfile, ops->o_ops);
+
+	else if (S_ISBLK(mode))
+		rfile_set_blk_ops(rfile, ops->o_ops);
+
+	else if (S_ISFIFO(mode))
+		rfile_set_fifo_ops(rfile, ops->o_ops);
+
+	else if (S_ISSOCK(mode))
+		rfile_set_sock_ops(rfile, ops->o_ops);
 
 	rfile->rf_op_new.open = rfs_open;
 	rfile->rf_op_new.release = rfs_release;

@@ -3,10 +3,10 @@
 struct ops *ops_alloc(void)
 {
 	struct ops *ops;
-	int *arr;
+	char *arr;
 
 	ops = kmalloc(sizeof(struct ops), GFP_KERNEL);
-	arr = kmalloc(sizeof(int) * RFS_OP_END, GFP_KERNEL);
+	arr = kmalloc(sizeof(char) * RFS_OP_END, GFP_KERNEL);
 
 	if (!ops || !arr) {
 		kfree(ops);
@@ -14,7 +14,7 @@ struct ops *ops_alloc(void)
 		return ERR_PTR(RFS_ERR_NOMEM);
 	}
 
-	memset(arr, 0, sizeof(int) * RFS_OP_END);
+	memset(arr, 0, sizeof(char) * RFS_OP_END);
 	ops->o_ops = arr;
 	ops->o_count = 1;
 	spin_lock_init(&ops->o_lock);

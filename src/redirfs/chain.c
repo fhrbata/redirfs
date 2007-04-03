@@ -132,7 +132,7 @@ struct chain *chain_rem_flt(struct chain *chain, struct filter *flt)
 	return chain_new;
 }
 
-void chain_get_ops(struct chain *chain, int *ops)
+void chain_get_ops(struct chain *chain, char *ops)
 {
 	int i, j;
 

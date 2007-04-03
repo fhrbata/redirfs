@@ -47,7 +47,7 @@ int flt_proc_info(char *buf, int size);
 struct ops {
 	spinlock_t o_lock;
 	unsigned long long o_count;
-	int *o_ops;
+	char *o_ops;
 };
 
 struct ops *ops_alloc(void);
@@ -68,7 +68,7 @@ void chain_put(struct chain *chain);
 int chain_find_flt(struct chain *chain, struct filter *flt);
 struct chain *chain_add_flt(struct chain *chain, struct filter *flt);
 struct chain *chain_rem_flt(struct chain *chain, struct filter *flt);
-void chain_get_ops(struct chain *chain, int *ops);
+void chain_get_ops(struct chain *chain, char *ops);
 struct chain *chain_copy(struct chain *src);
 int chain_cmp(struct chain *chain1, struct chain *chain2);
 

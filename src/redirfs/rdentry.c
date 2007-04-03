@@ -37,6 +37,8 @@ struct rdentry *rdentry_alloc(struct dentry* dentry)
 		memset(&rdentry->rd_op_new, 0, 
 				sizeof(struct dentry_operations));
 
+	rdentry->rd_op_new.d_release = rfs_d_release;
+
 	spin_lock_irqsave(&rdentry_cnt_lock, flags);
 	rdentry_cnt++;
 	spin_unlock_irqrestore(&rdentry_cnt_lock, flags);
@@ -239,6 +241,16 @@ int rfs_d_revalidate(struct dentry *dentry, struct nameidata *nd)
 			args.type.id = RFS_REG_DOP_D_REVALIDATE;
 		else if (S_ISDIR(inode->i_mode))
 			args.type.id = RFS_DIR_DOP_D_REVALIDATE;
+		else if (S_ISLNK(inode->i_mode))
+			args.type.id = RFS_LNK_DOP_D_REVALIDATE;
+		else if (S_ISCHR(inode->i_mode))
+			args.type.id = RFS_CHR_DOP_D_REVALIDATE;
+		else if (S_ISBLK(inode->i_mode))
+			args.type.id = RFS_BLK_DOP_D_REVALIDATE;
+		else if (S_ISFIFO(inode->i_mode))
+			args.type.id = RFS_FIFO_DOP_D_REVALIDATE;
+		else
+			args.type.id = RFS_SOCK_DOP_D_REVALIDATE;
 	} else
 		args.type.id = RFS_NONE_DOP_D_REVALIDATE;
 
@@ -291,6 +303,16 @@ int rfs_d_hash(struct dentry *dentry, struct qstr *name)
 			args.type.id = RFS_REG_DOP_D_HASH;
 		else if (S_ISDIR(inode->i_mode))
 			args.type.id = RFS_DIR_DOP_D_HASH;
+		else if (S_ISLNK(inode->i_mode))
+			args.type.id = RFS_LNK_DOP_D_HASH;
+		else if (S_ISCHR(inode->i_mode))
+			args.type.id = RFS_CHR_DOP_D_HASH;
+		else if (S_ISBLK(inode->i_mode))
+			args.type.id = RFS_BLK_DOP_D_HASH;
+		else if (S_ISFIFO(inode->i_mode))
+			args.type.id = RFS_FIFO_DOP_D_HASH;
+		else
+			args.type.id = RFS_SOCK_DOP_D_HASH;
 	} else
 		args.type.id = RFS_NONE_DOP_D_HASH;
 
@@ -354,6 +376,16 @@ int rfs_d_compare(struct dentry *dentry, struct qstr *name1, struct qstr *name2)
 			args.type.id = RFS_REG_DOP_D_COMPARE;
 		else if (S_ISDIR(inode->i_mode))
 			args.type.id = RFS_DIR_DOP_D_COMPARE;
+		else if (S_ISLNK(inode->i_mode))
+			args.type.id = RFS_LNK_DOP_D_COMPARE;
+		else if (S_ISCHR(inode->i_mode))
+			args.type.id = RFS_CHR_DOP_D_COMPARE;
+		else if (S_ISBLK(inode->i_mode))
+			args.type.id = RFS_BLK_DOP_D_COMPARE;
+		else if (S_ISFIFO(inode->i_mode))
+			args.type.id = RFS_FIFO_DOP_D_COMPARE;
+		else
+			args.type.id = RFS_SOCK_DOP_D_COMPARE;
 	} else
 		args.type.id = RFS_NONE_DOP_D_COMPARE;
 
@@ -406,6 +438,16 @@ int rfs_d_delete(struct dentry *dentry)
 			args.type.id = RFS_REG_DOP_D_DELETE;
 		else if (S_ISDIR(inode->i_mode))
 			args.type.id = RFS_DIR_DOP_D_DELETE;
+		else if (S_ISLNK(inode->i_mode))
+			args.type.id = RFS_LNK_DOP_D_DELETE;
+		else if (S_ISCHR(inode->i_mode))
+			args.type.id = RFS_CHR_DOP_D_DELETE;
+		else if (S_ISBLK(inode->i_mode))
+			args.type.id = RFS_BLK_DOP_D_DELETE;
+		else if (S_ISFIFO(inode->i_mode))
+			args.type.id = RFS_FIFO_DOP_D_DELETE;
+		else
+			args.type.id = RFS_SOCK_DOP_D_DELETE;
 	} else
 		args.type.id = RFS_NONE_DOP_D_DELETE;
 
@@ -456,6 +498,16 @@ void rfs_d_release(struct dentry *dentry)
 			args.type.id = RFS_REG_DOP_D_RELEASE;
 		else if (S_ISDIR(inode->i_mode))
 			args.type.id = RFS_DIR_DOP_D_RELEASE;
+		else if (S_ISLNK(inode->i_mode))
+			args.type.id = RFS_LNK_DOP_D_RELEASE;
+		else if (S_ISCHR(inode->i_mode))
+			args.type.id = RFS_CHR_DOP_D_RELEASE;
+		else if (S_ISBLK(inode->i_mode))
+			args.type.id = RFS_BLK_DOP_D_RELEASE;
+		else if (S_ISFIFO(inode->i_mode))
+			args.type.id = RFS_FIFO_DOP_D_RELEASE;
+		else
+			args.type.id = RFS_SOCK_DOP_D_RELEASE;
 	} else
 		args.type.id = RFS_NONE_DOP_D_RELEASE;
 
@@ -503,6 +555,16 @@ void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 			args.type.id = RFS_REG_DOP_D_IPUT;
 		else if (S_ISDIR(inode->i_mode))
 			args.type.id = RFS_DIR_DOP_D_IPUT;
+		else if (S_ISLNK(inode->i_mode))
+			args.type.id = RFS_LNK_DOP_D_IPUT;
+		else if (S_ISCHR(inode->i_mode))
+			args.type.id = RFS_CHR_DOP_D_IPUT;
+		else if (S_ISBLK(inode->i_mode))
+			args.type.id = RFS_BLK_DOP_D_IPUT;
+		else if (S_ISFIFO(inode->i_mode))
+			args.type.id = RFS_FIFO_DOP_D_IPUT;
+		else
+			args.type.id = RFS_SOCK_DOP_D_IPUT;
 	} else
 		args.type.id = RFS_NONE_DOP_D_IPUT;
 
@@ -522,7 +584,7 @@ void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 	chain_put(chain);
 }
 
-void rdentry_set_none_ops(struct rdentry *rdentry, int *ops)
+static void rdentry_set_none_ops(struct rdentry *rdentry, char *ops)
 {
 	if (ops[RFS_NONE_DOP_D_REVALIDATE])
 		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
@@ -545,7 +607,7 @@ void rdentry_set_none_ops(struct rdentry *rdentry, int *ops)
 		rdentry->rd_op_new.d_delete = rdentry->rd_op_old ? rdentry->rd_op_old->d_delete : NULL;
 }
 
-void rdentry_set_reg_ops(struct rdentry *rdentry, int *ops)
+static void rdentry_set_reg_ops(struct rdentry *rdentry, char *ops)
 {
 	if (ops[RFS_REG_DOP_D_REVALIDATE])
 		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
@@ -568,7 +630,7 @@ void rdentry_set_reg_ops(struct rdentry *rdentry, int *ops)
 		rdentry->rd_op_new.d_delete = rdentry->rd_op_old ? rdentry->rd_op_old->d_delete : NULL;
 }
 
-void rdentry_set_dir_ops(struct rdentry *rdentry, int *ops)
+static void rdentry_set_dir_ops(struct rdentry *rdentry, char *ops)
 {
 	if (ops[RFS_DIR_DOP_D_REVALIDATE])
 		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
@@ -591,6 +653,121 @@ void rdentry_set_dir_ops(struct rdentry *rdentry, int *ops)
 		rdentry->rd_op_new.d_delete = rdentry->rd_op_old ? rdentry->rd_op_old->d_delete : NULL;
 }
 
+static void rdentry_set_lnk_ops(struct rdentry *rdentry, char *ops)
+{
+	if (ops[RFS_LNK_DOP_D_REVALIDATE])
+		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
+	else
+		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old ? rdentry->rd_op_old->d_revalidate : NULL;
+
+	if (ops[RFS_LNK_DOP_D_HASH])
+		rdentry->rd_op_new.d_hash = rfs_d_hash;
+	else
+		rdentry->rd_op_new.d_hash = rdentry->rd_op_old ? rdentry->rd_op_old->d_hash : NULL;
+
+	if (ops[RFS_LNK_DOP_D_COMPARE])
+		rdentry->rd_op_new.d_compare = rfs_d_compare;
+	else
+		rdentry->rd_op_new.d_compare = rdentry->rd_op_old ? rdentry->rd_op_old->d_compare : NULL;
+
+	if (ops[RFS_LNK_DOP_D_DELETE])
+		rdentry->rd_op_new.d_delete = rfs_d_delete;
+	else
+		rdentry->rd_op_new.d_delete = rdentry->rd_op_old ? rdentry->rd_op_old->d_delete : NULL;
+}
+
+static void rdentry_set_chr_ops(struct rdentry *rdentry, char *ops)
+{
+	if (ops[RFS_CHR_DOP_D_REVALIDATE])
+		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
+	else
+		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old ? rdentry->rd_op_old->d_revalidate : NULL;
+
+	if (ops[RFS_CHR_DOP_D_HASH])
+		rdentry->rd_op_new.d_hash = rfs_d_hash;
+	else
+		rdentry->rd_op_new.d_hash = rdentry->rd_op_old ? rdentry->rd_op_old->d_hash : NULL;
+
+	if (ops[RFS_CHR_DOP_D_COMPARE])
+		rdentry->rd_op_new.d_compare = rfs_d_compare;
+	else
+		rdentry->rd_op_new.d_compare = rdentry->rd_op_old ? rdentry->rd_op_old->d_compare : NULL;
+
+	if (ops[RFS_CHR_DOP_D_DELETE])
+		rdentry->rd_op_new.d_delete = rfs_d_delete;
+	else
+		rdentry->rd_op_new.d_delete = rdentry->rd_op_old ? rdentry->rd_op_old->d_delete : NULL;
+}
+
+static void rdentry_set_blk_ops(struct rdentry *rdentry, char *ops)
+{
+	if (ops[RFS_BLK_DOP_D_REVALIDATE])
+		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
+	else
+		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old ? rdentry->rd_op_old->d_revalidate : NULL;
+
+	if (ops[RFS_BLK_DOP_D_HASH])
+		rdentry->rd_op_new.d_hash = rfs_d_hash;
+	else
+		rdentry->rd_op_new.d_hash = rdentry->rd_op_old ? rdentry->rd_op_old->d_hash : NULL;
+
+	if (ops[RFS_BLK_DOP_D_COMPARE])
+		rdentry->rd_op_new.d_compare = rfs_d_compare;
+	else
+		rdentry->rd_op_new.d_compare = rdentry->rd_op_old ? rdentry->rd_op_old->d_compare : NULL;
+
+	if (ops[RFS_BLK_DOP_D_DELETE])
+		rdentry->rd_op_new.d_delete = rfs_d_delete;
+	else
+		rdentry->rd_op_new.d_delete = rdentry->rd_op_old ? rdentry->rd_op_old->d_delete : NULL;
+}
+
+static void rdentry_set_fifo_ops(struct rdentry *rdentry, char *ops)
+{
+	if (ops[RFS_FIFO_DOP_D_REVALIDATE])
+		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
+	else
+		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old ? rdentry->rd_op_old->d_revalidate : NULL;
+
+	if (ops[RFS_FIFO_DOP_D_HASH])
+		rdentry->rd_op_new.d_hash = rfs_d_hash;
+	else
+		rdentry->rd_op_new.d_hash = rdentry->rd_op_old ? rdentry->rd_op_old->d_hash : NULL;
+
+	if (ops[RFS_FIFO_DOP_D_COMPARE])
+		rdentry->rd_op_new.d_compare = rfs_d_compare;
+	else
+		rdentry->rd_op_new.d_compare = rdentry->rd_op_old ? rdentry->rd_op_old->d_compare : NULL;
+
+	if (ops[RFS_FIFO_DOP_D_DELETE])
+		rdentry->rd_op_new.d_delete = rfs_d_delete;
+	else
+		rdentry->rd_op_new.d_delete = rdentry->rd_op_old ? rdentry->rd_op_old->d_delete : NULL;
+}
+
+static void rdentry_set_sock_ops(struct rdentry *rdentry, char *ops)
+{
+	if (ops[RFS_SOCK_DOP_D_REVALIDATE])
+		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
+	else
+		rdentry->rd_op_new.d_revalidate = rdentry->rd_op_old ? rdentry->rd_op_old->d_revalidate : NULL;
+
+	if (ops[RFS_SOCK_DOP_D_HASH])
+		rdentry->rd_op_new.d_hash = rfs_d_hash;
+	else
+		rdentry->rd_op_new.d_hash = rdentry->rd_op_old ? rdentry->rd_op_old->d_hash : NULL;
+
+	if (ops[RFS_SOCK_DOP_D_COMPARE])
+		rdentry->rd_op_new.d_compare = rfs_d_compare;
+	else
+		rdentry->rd_op_new.d_compare = rdentry->rd_op_old ? rdentry->rd_op_old->d_compare : NULL;
+
+	if (ops[RFS_SOCK_DOP_D_DELETE])
+		rdentry->rd_op_new.d_delete = rfs_d_delete;
+	else
+		rdentry->rd_op_new.d_delete = rdentry->rd_op_old ? rdentry->rd_op_old->d_delete : NULL;
+}
+
 void rdentry_set_ops(struct rdentry *rdentry, struct ops *ops)
 {
 	umode_t mode;
@@ -607,6 +784,21 @@ void rdentry_set_ops(struct rdentry *rdentry, struct ops *ops)
 
 	else if (S_ISDIR(mode))
 		rdentry_set_dir_ops(rdentry, ops->o_ops);
+
+	else if (S_ISLNK(mode))
+		rdentry_set_lnk_ops(rdentry, ops->o_ops);
+
+	else if (S_ISCHR(mode))
+		rdentry_set_chr_ops(rdentry, ops->o_ops);
+
+	else if (S_ISBLK(mode))
+		rdentry_set_blk_ops(rdentry, ops->o_ops);
+
+	else if (S_ISFIFO(mode))
+		rdentry_set_fifo_ops(rdentry, ops->o_ops);
+
+	else if (S_ISSOCK(mode))
+		rdentry_set_sock_ops(rdentry, ops->o_ops);
 
 	rdentry->rd_op_new.d_release = rfs_d_release;
 	rdentry->rd_op_new.d_iput = rfs_d_iput;
