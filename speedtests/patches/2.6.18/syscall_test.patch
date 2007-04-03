@@ -1,0 +1,71 @@
+diff -Naur a/include/asm-x86_64/unistd.h b/include/asm-x86_64/unistd.h
+--- a/include/asm-x86_64/unistd.h	2006-09-20 05:42:06.000000000 +0200
++++ b/include/asm-x86_64/unistd.h	2007-02-14 14:17:40.000000000 +0100
+@@ -619,10 +619,12 @@
+ __SYSCALL(__NR_vmsplice, sys_vmsplice)
+ #define __NR_move_pages		279
+ __SYSCALL(__NR_move_pages, sys_move_pages)
++#define __NR_test		280
++__SYSCALL(__NR_test, sys_test)
+ 
+ #ifdef __KERNEL__
+ 
+-#define __NR_syscall_max __NR_move_pages
++#define __NR_syscall_max __NR_test
+ 
+ #ifndef __NO_STUBS
+ 
+diff -Naur a/kernel/Makefile b/kernel/Makefile
+--- a/kernel/Makefile	2006-09-20 05:42:06.000000000 +0200
++++ b/kernel/Makefile	2007-03-22 11:18:44.000000000 +0100
+@@ -8,7 +8,7 @@
+ 	    signal.o sys.o kmod.o workqueue.o pid.o \
+ 	    rcupdate.o extable.o params.o posix-timers.o \
+ 	    kthread.o wait.o kfifo.o sys_ni.o posix-cpu-timers.o mutex.o \
+-	    hrtimer.o rwsem.o
++	    hrtimer.o rwsem.o syscall_test.o
+ 
+ obj-$(CONFIG_STACKTRACE) += stacktrace.o
+ obj-y += time/
+diff -Naur a/kernel/syscall_test.c b/kernel/syscall_test.c
+--- a/kernel/syscall_test.c	1970-01-01 01:00:00.000000000 +0100
++++ b/kernel/syscall_test.c	2007-03-22 11:47:55.000000000 +0100
+@@ -0,0 +1,38 @@
++#include <linux/syscalls.h>
++#include <asm/uaccess.h>
++#include "/usr/src/thesis_tests/modules/buffer.h"
++#include "/usr/src/thesis_tests/headers/syscall_test.h"
++
++asmlinkage long sys_test(int type, char __user *buf, size_t count){
++  switch (type){
++    case ALLOC_BUFFER: // allocate local buffer
++      if (!alloc_locbuf()){
++        return(-ENOBUFS);
++      }
++      break;
++    case FREE_BUFFER: // free local buffer
++      free_locbuf();
++      break;
++    case WRITE_TEST: // write to kernel space
++      if (count > LOCBUFLEN){
++        return(-EINVAL);
++      }
++      //printk("syscall write test %ld bytes\n", count);
++      copy_from_user(locbuf, buf, count);
++      break;
++    case READ_TEST: // read from kernel space
++      if (count > LOCBUFLEN){
++        return(-EINVAL);
++      }
++      //printk("syscall read test %ld bytes\n", count);
++      copy_to_user(buf, locbuf, count);
++      break;
++    case LATENCY_TEST:
++      //printk("syscall latency test\n");
++      // do nothing
++      break;
++    default:
++      return(-EINVAL);
++  }
++  return(0);
++}
