@@ -206,6 +206,9 @@ int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	}
 
 	spin_lock(&rdentry->rd_lock);
+	path_put(rdentry->rd_path);
+	chain_put(rdentry->rd_chain);
+	ops_put(rdentry->rd_ops);
 	rdentry->rd_path = path_get(path_set);
 	rdentry->rd_chain = chain_get(chain_set);
 	rdentry->rd_ops = ops_get(ops_set);
@@ -215,6 +218,11 @@ int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	rinode = rdentry->rd_rinode;
 	if (rinode) {
 		spin_lock(&rinode->ri_lock);
+		path_put(rinode->ri_path_set);
+		chain_put(rinode->ri_chain_set);
+		ops_put(rinode->ri_ops_set);
+		path_put(rinode->ri_path);
+		chain_put(rinode->ri_chain);
 		rinode->ri_path_set = path_get(path_set);
 		rinode->ri_chain_set = chain_get(chain_set);
 		rinode->ri_ops_set = ops_get(ops_set);
@@ -296,6 +304,9 @@ int rfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameid
 	}
 
 	spin_lock(&rdentry->rd_lock);
+	path_put(rdentry->rd_path);
+	chain_put(rdentry->rd_chain);
+	ops_put(rdentry->rd_ops);
 	rdentry->rd_path = path_get(path_set);
 	rdentry->rd_chain = chain_get(chain_set);
 	rdentry->rd_ops = ops_get(ops_set);
@@ -305,6 +316,11 @@ int rfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameid
 	rinode = rdentry->rd_rinode;
 	if (rinode) {
 		spin_lock(&rinode->ri_lock);
+		path_put(rinode->ri_path_set);
+		chain_put(rinode->ri_chain_set);
+		ops_put(rinode->ri_ops_set);
+		path_put(rinode->ri_path);
+		chain_put(rinode->ri_chain);
 		rinode->ri_path_set = path_get(path_set);
 		rinode->ri_chain_set = chain_get(chain_set);
 		rinode->ri_ops_set = ops_get(ops_set);
@@ -385,6 +401,9 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct namei
 	}
 
 	spin_lock(&rdentry->rd_lock);
+	path_put(rdentry->rd_path);
+	chain_put(rdentry->rd_chain);
+	ops_put(rdentry->rd_ops);
 	rdentry->rd_path = path_get(path_set);
 	rdentry->rd_chain = chain_get(chain_set);
 	rdentry->rd_ops = ops_get(ops_set);
@@ -394,6 +413,11 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct namei
 	rinode = rdentry->rd_rinode;
 	if (rinode) {
 		spin_lock(&rinode->ri_lock);
+		path_put(rinode->ri_path_set);
+		chain_put(rinode->ri_chain_set);
+		ops_put(rinode->ri_ops_set);
+		path_put(rinode->ri_path);
+		chain_put(rinode->ri_chain);
 		rinode->ri_path_set = path_get(path_set);
 		rinode->ri_chain_set = chain_get(chain_set);
 		rinode->ri_ops_set = ops_get(ops_set);
@@ -475,6 +499,9 @@ int rfs_mknod(struct inode * dir, struct dentry *dentry, int mode, dev_t rdev)
 	}
 
 	spin_lock(&rdentry->rd_lock);
+	path_put(rdentry->rd_path);
+	chain_put(rdentry->rd_chain);
+	ops_put(rdentry->rd_ops);
 	rdentry->rd_path = path_get(path_set);
 	rdentry->rd_chain = chain_get(chain_set);
 	rdentry->rd_ops = ops_get(ops_set);
@@ -484,6 +511,11 @@ int rfs_mknod(struct inode * dir, struct dentry *dentry, int mode, dev_t rdev)
 	rinode = rdentry->rd_rinode;
 	if (rinode) {
 		spin_lock(&rinode->ri_lock);
+		path_put(rinode->ri_path_set);
+		chain_put(rinode->ri_chain_set);
+		ops_put(rinode->ri_ops_set);
+		path_put(rinode->ri_path);
+		chain_put(rinode->ri_chain);
 		rinode->ri_path_set = path_get(path_set);
 		rinode->ri_chain_set = chain_get(chain_set);
 		rinode->ri_ops_set = ops_get(ops_set);
