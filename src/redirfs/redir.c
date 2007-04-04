@@ -554,18 +554,24 @@ static void __exit rfs_exit(void)
 	spin_lock(&rdentry_cnt_lock);
 	if (!rdentry_cnt)
 		atomic_set(&rdentries_freed, 1);
+	else
+		atomic_set(&rdentries_freed, 0);
 	rdcnt = rdentry_cnt;
 	spin_unlock(&rdentry_cnt_lock);
 
 	spin_lock(&rinode_cnt_lock);
 	if (!rinode_cnt)
 		atomic_set(&rinodes_freed, 1);
+	else
+		atomic_set(&rinodes_freed, 0);
 	ricnt = rinode_cnt;
 	spin_unlock(&rinode_cnt_lock);
 
 	spin_lock(&rfile_cnt_lock);
 	if (!rfile_cnt)
 		atomic_set(&rfiles_freed, 1);
+	else
+		atomic_set(&rfiles_freed, 0);
 	rfcnt = rfile_cnt;
 	spin_unlock(&rfile_cnt_lock);
 
