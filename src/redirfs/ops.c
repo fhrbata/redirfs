@@ -24,30 +24,33 @@ struct ops *ops_alloc(void)
 
 struct ops *ops_get(struct ops *ops)
 {
+	unsigned long flags;
+
 	if (!ops || IS_ERR(ops))
 		return NULL;
 
-	spin_lock(&ops->o_lock);
+	spin_lock_irqsave(&ops->o_lock, flags);
 	BUG_ON(!ops->o_count);
 	ops->o_count++;
-	spin_unlock(&ops->o_lock);
+	spin_unlock_irqrestore(&ops->o_lock, flags);
 
 	return ops;
 }
 
 void ops_put(struct ops *ops)
 {
+	unsigned long flags;
 	int del = 0;
 
 	if (!ops || IS_ERR(ops))
 		return;
 
-	spin_lock(&ops->o_lock);
+	spin_lock_irqsave(&ops->o_lock, flags);
 	BUG_ON(!ops->o_count);
 	ops->o_count--;
 	if (!ops->o_count)
 		del = 1;
-	spin_unlock(&ops->o_lock);
+	spin_unlock_irqrestore(&ops->o_lock, flags);
 
 	if (!del)
 		return;
