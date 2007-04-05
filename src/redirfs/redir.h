@@ -154,7 +154,7 @@ struct rdentry *rdentry_find(struct dentry *dentry);
 struct rdentry *rdentry_add(struct dentry *dentry);
 void rdentry_del(struct dentry *dentry);
 void rdentry_set_ops(struct rdentry *rdentry, struct ops *ops);
-void rfs_d_release(struct dentry *dentry);
+void rfs_d_iput(struct dentry *dentry, struct inode *inode);
 
 
 struct rinode {
