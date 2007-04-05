@@ -144,11 +144,16 @@ struct rfile *rfile_add(struct file *file)
 		rfile_new->rf_path = path_get(rdentry->rd_path);
 
 		rcu_assign_pointer(file->f_op, &rfile_new->rf_op_new);
+		rfile_get(rfile_new);
 
 		list_add_tail(&rfile_new->rf_rdentry_list, &rdentry->rd_rfiles);
 		rfile_get(rfile_new);
 
 		rfile_set_ops(rfile_new, rdentry->rd_ops);
+
+	} else {
+		rfile_put(rfile_new);
+		rfile_new = NULL;
 	}
 
 
@@ -156,7 +161,7 @@ struct rfile *rfile_add(struct file *file)
 	rdentry_put(rdentry_tmp);
 	rdentry_put(rdentry);
 
-	return rfile_get(rfile_new);
+	return rfile_new;
 }
 
 static void rfile_del_rcu(struct rcu_head *head)
