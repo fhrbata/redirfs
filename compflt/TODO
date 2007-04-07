@@ -1,0 +1,8 @@
+- port to new RedirFS version
+- remove dmap specific things from header_read/header_write
+- locking (spin lock + use semaphores on anything that can sleep/take long)
+- better return value handling
+- add a max_u member to dmap so we can safely change COMPFLT_BLOCK_SIZE between versions
+- stat/fstat/... (struct stat).st_size
+
+NOTE: alot of TODOs are marked in the code

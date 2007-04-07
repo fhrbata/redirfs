@@ -1,0 +1,7 @@
+- port Christian Ludwig' bzip2 patch [1] for 2.6.18+ and make a cryptoapi module
+- use the lzf compression module from suspend2 [2][3]
+- test/benchmark module
+
+[1] http://shepard.kicks-ass.net/~cc/
+[2] http://lwn.net/Articles/144031/
+[3] http://www.suspend2.net/
