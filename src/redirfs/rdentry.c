@@ -197,10 +197,10 @@ void rdentry_del(struct dentry *dentry)
 
 	if (rinode) {
 		rinode_del(rinode->ri_inode);
-		spin_lock(&rinode->ri_inode->i_lock);
+		spin_lock(&rinode->ri_lock);
 		list_del_init(&rdentry->rd_rinode_list);
+		spin_unlock(&rinode->ri_lock);
 		rdentry_put(rdentry);
-		spin_unlock(&rinode->ri_inode->i_lock);
 	}
 
 	spin_unlock(&dentry->d_lock);
@@ -519,6 +519,7 @@ void rfs_d_release(struct dentry *dentry)
 
 	rfs_postcall_flts(chain, NULL, &args, &cnt);
 
+	rdentry_del(dentry);
 	rdentry_put(rdentry);
 	path_put(path);
 	chain_put(chain);
@@ -527,6 +528,7 @@ void rfs_d_release(struct dentry *dentry)
 void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 {
 	struct rdentry *rdentry = NULL;
+	struct rinode *rinode = NULL;
 	struct path *path = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
@@ -577,19 +579,26 @@ void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 
 	rfs_postcall_flts(chain, NULL, &args, &cnt);
 
-	rdentry_del(dentry);
+	rinode = rinode_find(inode);
+
+	spin_lock(&rinode->ri_lock);
+	list_del_init(&rdentry->rd_rinode_list);
+	spin_unlock(&rinode->ri_lock);
 	rdentry_put(rdentry);
+	rinode_del(rinode->ri_inode);
+
+	rdentry->rd_rinode = NULL;
+	rinode_put(rinode);
+	rdentry_set_ops(rdentry, rdentry->rd_ops);
+
+	rdentry_put(rdentry);
+	rinode_put(rinode);
 	path_put(path);
 	chain_put(chain);
 }
 
 static void rdentry_set_none_ops(struct rdentry *rdentry, char *ops)
 {
-	if (ops[RFS_NONE_DOP_D_RELEASE])
-		rdentry->rd_op_new.d_release = rfs_d_release;
-	else
-		rdentry->rd_op_new.d_release = rdentry->rd_op_old ? rdentry->rd_op_old->d_release : NULL;
-
 	if (ops[RFS_NONE_DOP_D_REVALIDATE])
 		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
 	else
@@ -613,11 +622,6 @@ static void rdentry_set_none_ops(struct rdentry *rdentry, char *ops)
 
 static void rdentry_set_reg_ops(struct rdentry *rdentry, char *ops)
 {
-	if (ops[RFS_REG_DOP_D_RELEASE])
-		rdentry->rd_op_new.d_release = rfs_d_release;
-	else
-		rdentry->rd_op_new.d_release = rdentry->rd_op_old ? rdentry->rd_op_old->d_release : NULL;
-
 	if (ops[RFS_REG_DOP_D_REVALIDATE])
 		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
 	else
@@ -641,11 +645,6 @@ static void rdentry_set_reg_ops(struct rdentry *rdentry, char *ops)
 
 static void rdentry_set_dir_ops(struct rdentry *rdentry, char *ops)
 {
-	if (ops[RFS_DIR_DOP_D_RELEASE])
-		rdentry->rd_op_new.d_release = rfs_d_release;
-	else
-		rdentry->rd_op_new.d_release = rdentry->rd_op_old ? rdentry->rd_op_old->d_release : NULL;
-
 	if (ops[RFS_DIR_DOP_D_REVALIDATE])
 		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
 	else
@@ -669,11 +668,6 @@ static void rdentry_set_dir_ops(struct rdentry *rdentry, char *ops)
 
 static void rdentry_set_lnk_ops(struct rdentry *rdentry, char *ops)
 {
-	if (ops[RFS_LNK_DOP_D_RELEASE])
-		rdentry->rd_op_new.d_release = rfs_d_release;
-	else
-		rdentry->rd_op_new.d_release = rdentry->rd_op_old ? rdentry->rd_op_old->d_release : NULL;
-
 	if (ops[RFS_LNK_DOP_D_REVALIDATE])
 		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
 	else
@@ -697,11 +691,6 @@ static void rdentry_set_lnk_ops(struct rdentry *rdentry, char *ops)
 
 static void rdentry_set_chr_ops(struct rdentry *rdentry, char *ops)
 {
-	if (ops[RFS_CHR_DOP_D_RELEASE])
-		rdentry->rd_op_new.d_release = rfs_d_release;
-	else
-		rdentry->rd_op_new.d_release = rdentry->rd_op_old ? rdentry->rd_op_old->d_release : NULL;
-
 	if (ops[RFS_CHR_DOP_D_REVALIDATE])
 		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
 	else
@@ -725,11 +714,6 @@ static void rdentry_set_chr_ops(struct rdentry *rdentry, char *ops)
 
 static void rdentry_set_blk_ops(struct rdentry *rdentry, char *ops)
 {
-	if (ops[RFS_BLK_DOP_D_RELEASE])
-		rdentry->rd_op_new.d_release = rfs_d_release;
-	else
-		rdentry->rd_op_new.d_release = rdentry->rd_op_old ? rdentry->rd_op_old->d_release : NULL;
-
 	if (ops[RFS_BLK_DOP_D_REVALIDATE])
 		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
 	else
@@ -781,11 +765,6 @@ static void rdentry_set_fifo_ops(struct rdentry *rdentry, char *ops)
 
 static void rdentry_set_sock_ops(struct rdentry *rdentry, char *ops)
 {
-	if (ops[RFS_SOCK_DOP_D_RELEASE])
-		rdentry->rd_op_new.d_release = rfs_d_release;
-	else
-		rdentry->rd_op_new.d_release = rdentry->rd_op_old ? rdentry->rd_op_old->d_release : NULL;
-
 	if (ops[RFS_SOCK_DOP_D_REVALIDATE])
 		rdentry->rd_op_new.d_revalidate = rfs_d_revalidate;
 	else
@@ -813,6 +792,8 @@ void rdentry_set_ops(struct rdentry *rdentry, struct ops *ops)
 
 	if (!rdentry->rd_rinode || !rdentry->rd_rinode->ri_inode) {
 		rdentry_set_none_ops(rdentry, ops->o_ops);
+		rdentry->rd_op_new.d_iput = rfs_d_iput;
+		rdentry->rd_op_new.d_release = rfs_d_release;
 		return;
 	}
 
@@ -840,6 +821,7 @@ void rdentry_set_ops(struct rdentry *rdentry, struct ops *ops)
 		rdentry_set_sock_ops(rdentry, ops->o_ops);
 
 	rdentry->rd_op_new.d_iput = rfs_d_iput;
+	rdentry->rd_op_new.d_release = rfs_d_release;
 }
 
 int rdentry_cache_create(void)
