@@ -13,6 +13,7 @@ enum rfs_err {
 	RFS_ERR_NOENT = -ENOENT,
 	RFS_ERR_NAMETOOLONG = -ENAMETOOLONG,
 	RFS_ERR_EXIST = -EEXIST,
+	RFS_ERR_NODATA = -ENODATA,
 	RFS_ERR_NOTDIR = -ENOTDIR
 };
 
@@ -287,5 +288,7 @@ enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info);
 enum rfs_err rfs_unregister_filter(rfs_filter filter);
 enum rfs_err rfs_activate_filter(rfs_filter filter);
 enum rfs_err rfs_deactivate_filter(rfs_filter filter);
+
+enum rfs_err rfs_get_filename(rfs_context *context, char *buffer, int size);
 
 #endif

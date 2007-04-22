@@ -187,6 +187,8 @@ void rinode_set_ops(struct rinode *rinode, struct ops *ops);
 struct dentry *rfs_lookup(struct inode *inode, struct dentry *dentry, struct nameidata *nd);
 
 struct context {
+	struct path *path;
+	struct rdentry *rdentry;
 };
 
 int rfs_replace_ops(struct path *path_old, struct path *path_new);

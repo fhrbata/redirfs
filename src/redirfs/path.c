@@ -622,4 +622,72 @@ int path_proc_info(char *buf, int size)
 	return info.len;
 }
 
+int path_dpath(struct rdentry *rdentry, struct path *path, char *buffer, int size)
+{
+	struct dentry *dentry;
+	char *end;
+	int len;
+
+	dentry = rdentry->rd_dentry;
+	end = buffer + size;
+	len = size;
+
+	if (size < 2)
+		return RFS_ERR_NAMETOOLONG;
+
+	*--end = '\0';
+	size--;
+
+	spin_lock(&dcache_lock);
+
+	while(path->p_dentry != dentry) {
+		end -= dentry->d_name.len;
+		size -= dentry->d_name.len + 1; /* dentry name + slash */
+		if (size < 0) {
+			spin_unlock(&dcache_lock);
+			return RFS_ERR_NAMETOOLONG;
+		}
+		memcpy(end, dentry->d_name.name, dentry->d_name.len);
+		*--end = '/';
+		dentry = dentry->d_parent;
+	}
+
+	end -= path->p_len;
+	size -= path->p_len;
+	if (size < 0) {
+		spin_unlock(&dcache_lock);
+		return RFS_ERR_NAMETOOLONG;
+	}
+
+	memcpy(end, path->p_path, path->p_len);
+	memmove(buffer, end, len - size);
+
+	spin_unlock(&dcache_lock);
+
+	return RFS_ERR_OK;
+}
+
+enum rfs_err rfs_get_filename(rfs_context *context, char *buffer, int size)
+{
+	struct context *con;
+
+	con = (struct context *)context;
+
+	if (!con || !buffer)
+		return RFS_ERR_INVAL;
+
+	if (!con->rdentry)
+		return RFS_ERR_NODATA;
+
+	/* NOTE: 2007-04-22 Frantisek Hrbata
+	 *
+	 * Maybe for better performance we can use use some 
+	 * kind of name cache here before going throught dcache.
+	 */
+
+	return path_dpath(con->rdentry, con->path, buffer, size);
+}
+
+
 EXPORT_SYMBOL(rfs_set_path);
+EXPORT_SYMBOL(rfs_get_filename);
