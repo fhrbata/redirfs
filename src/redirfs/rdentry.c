@@ -850,3 +850,114 @@ void rdentry_cache_destroy(void)
 	kmem_cache_destroy(rdentry_cache);
 }
 
+enum rfs_err rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, void *data, void (*cb)(void *))
+{
+	struct filter *flt;
+	struct rdentry *rdentry;
+	struct data *found;
+	struct data *data_new;
+
+	flt = (struct filter *)filter;
+
+	if (!flt || !dentry || !cb)
+		return RFS_ERR_INVAL;
+
+	data_new = kmalloc(sizeof(struct data), GFP_KERNEL);
+	if (!data_new)
+		return RFS_ERR_NOMEM;
+
+	rdentry = rdentry_find(dentry);
+	if (!rdentry) {
+		kfree(data_new);
+		return RFS_ERR_NODATA;
+	}
+
+	spin_lock(&rdentry->rd_lock);
+	found = data_find(&rdentry->rd_data, flt);
+	if (found) {
+		kfree(data_new);
+		spin_unlock(&rdentry->rd_lock);
+		rdentry_put(rdentry);
+		return RFS_ERR_EXIST;
+	}
+
+	INIT_LIST_HEAD(&data_new->list);
+	data_new->data = data;
+	data_new->cb = cb;
+	data_new->priority = flt->f_priority;
+	list_add_tail(&data_new->list, &rdentry->rd_data);
+	spin_unlock(&rdentry->rd_lock);
+
+	rdentry_put(rdentry);
+	return RFS_ERR_OK;
+}
+
+enum rfs_err rfs_detach_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data)
+{
+	struct filter *flt;
+	struct rdentry *rdentry;
+	struct data *found;
+
+	flt = (struct filter *)filter;
+	
+	if (!flt || !dentry)
+		return RFS_ERR_INVAL;
+
+	rdentry = rdentry_find(dentry);
+	if (!rdentry)
+		return RFS_ERR_NODATA;
+
+	spin_lock(&rdentry->rd_lock);
+	found = data_find(&rdentry->rd_data, flt);
+	if (!found) {
+		spin_unlock(&rdentry->rd_lock);
+		rdentry_put(rdentry);
+		return RFS_ERR_NODATA;
+	}
+
+	list_del(&found->list);
+	*data = found->data;
+	kfree(found);
+
+	spin_unlock(&rdentry->rd_lock);
+
+	rdentry_put(rdentry);
+
+	return RFS_ERR_OK;
+}
+
+enum rfs_err rfs_get_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data)
+{
+	struct filter *flt;
+	struct rdentry *rdentry;
+	struct data *found;
+
+	flt = (struct filter *)filter;
+	
+	if (!flt || !dentry)
+		return RFS_ERR_INVAL;
+
+	rdentry = rdentry_find(dentry);
+	if (!rdentry)
+		return RFS_ERR_NODATA;
+
+	spin_lock(&rdentry->rd_lock);
+	found = data_find(&rdentry->rd_data, flt);
+	if (!found) {
+		spin_unlock(&rdentry->rd_lock);
+		rdentry_put(rdentry);
+		return RFS_ERR_NODATA;
+	}
+
+	*data = found->data;
+
+	spin_unlock(&rdentry->rd_lock);
+
+	rdentry_put(rdentry);
+
+	return RFS_ERR_OK;
+}
+
+EXPORT_SYMBOL(rfs_attach_data_dentry);
+EXPORT_SYMBOL(rfs_detach_data_dentry);
+EXPORT_SYMBOL(rfs_get_data_dentry);

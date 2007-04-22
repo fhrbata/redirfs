@@ -715,3 +715,114 @@ void rinode_cache_destroy(void)
 	kmem_cache_destroy(rinode_cache);
 }
 
+enum rfs_err rfs_attach_data_inode(rfs_filter filter, struct inode *inode, void *data, void (*cb)(void *))
+{
+	struct filter *flt;
+	struct rinode *rinode;
+	struct data *found;
+	struct data *data_new;
+
+	flt = (struct filter *)filter;
+
+	if (!flt || !inode || !cb)
+		return RFS_ERR_INVAL;
+
+	data_new = kmalloc(sizeof(struct data), GFP_KERNEL);
+	if (!data_new)
+		return RFS_ERR_NOMEM;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		kfree(data_new);
+		return RFS_ERR_NODATA;
+	}
+
+	spin_lock(&rinode->ri_lock);
+	found = data_find(&rinode->ri_data, flt);
+	if (found) {
+		kfree(data_new);
+		spin_unlock(&rinode->ri_lock);
+		rinode_put(rinode);
+		return RFS_ERR_EXIST;
+	}
+
+	INIT_LIST_HEAD(&data_new->list);
+	data_new->data = data;
+	data_new->cb = cb;
+	data_new->priority = flt->f_priority;
+	list_add_tail(&data_new->list, &rinode->ri_data);
+	spin_unlock(&rinode->ri_lock);
+
+	rinode_put(rinode);
+	return RFS_ERR_OK;
+}
+
+enum rfs_err rfs_detach_data_inode(rfs_filter *filter, struct inode *inode, void **data)
+{
+	struct filter *flt;
+	struct rinode *rinode;
+	struct data *found;
+
+	flt = (struct filter *)filter;
+	
+	if (!flt || !inode)
+		return RFS_ERR_INVAL;
+
+	rinode = rinode_find(inode);
+	if (!rinode)
+		return RFS_ERR_NODATA;
+
+	spin_lock(&rinode->ri_lock);
+	found = data_find(&rinode->ri_data, flt);
+	if (!found) {
+		spin_unlock(&rinode->ri_lock);
+		rinode_put(rinode);
+		return RFS_ERR_NODATA;
+	}
+
+	list_del(&found->list);
+	*data = found->data;
+	kfree(found);
+
+	spin_unlock(&rinode->ri_lock);
+
+	rinode_put(rinode);
+
+	return RFS_ERR_OK;
+}
+
+enum rfs_err rfs_get_data_inode(rfs_filter *filter, struct inode *inode, void **data)
+{
+	struct filter *flt;
+	struct rinode *rinode;
+	struct data *found;
+
+	flt = (struct filter *)filter;
+	
+	if (!flt || !inode)
+		return RFS_ERR_INVAL;
+
+	rinode = rinode_find(inode);
+	if (!rinode)
+		return RFS_ERR_NODATA;
+
+	spin_lock(&rinode->ri_lock);
+	found = data_find(&rinode->ri_data, flt);
+	if (!found) {
+		spin_unlock(&rinode->ri_lock);
+		rinode_put(rinode);
+		return RFS_ERR_NODATA;
+	}
+
+	*data = found->data;
+
+	spin_unlock(&rinode->ri_lock);
+
+	rinode_put(rinode);
+
+	return RFS_ERR_OK;
+}
+
+EXPORT_SYMBOL(rfs_attach_data_inode);
+EXPORT_SYMBOL(rfs_detach_data_inode);
+EXPORT_SYMBOL(rfs_get_data_inode);

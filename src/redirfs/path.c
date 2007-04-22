@@ -667,17 +667,22 @@ int path_dpath(struct rdentry *rdentry, struct path *path, char *buffer, int siz
 	return RFS_ERR_OK;
 }
 
-enum rfs_err rfs_get_filename(rfs_context *context, char *buffer, int size)
+enum rfs_err rfs_get_filename(struct dentry *dentry, char *buffer, int size)
 {
-	struct context *con;
+	struct rdentry *rdentry;
+	struct path *path;
+	int retv;
 
-	con = (struct context *)context;
-
-	if (!con || !buffer)
+	if (!dentry || !buffer)
 		return RFS_ERR_INVAL;
 
-	if (!con->rdentry)
+	rdentry = rdentry_find(dentry);
+	if (!rdentry)
 		return RFS_ERR_NODATA;
+
+	spin_lock(&rdentry->rd_lock);
+	path = path_get(rdentry->rd_path);
+	spin_unlock(&rdentry->rd_lock);
 
 	/* NOTE: 2007-04-22 Frantisek Hrbata
 	 *
@@ -685,7 +690,12 @@ enum rfs_err rfs_get_filename(rfs_context *context, char *buffer, int size)
 	 * kind of name cache here before going throught dcache.
 	 */
 
-	return path_dpath(con->rdentry, con->path, buffer, size);
+	retv = path_dpath(rdentry, path, buffer, size);
+
+	path_put(path);
+	rdentry_put(rdentry);
+
+	return retv;
 }
 
 

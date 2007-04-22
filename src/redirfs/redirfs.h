@@ -241,10 +241,6 @@ union rfs_op_retv {
 	struct dentry	*rv_dentry;
 };
 
-struct rfs_op_exts {
-	const char* path;
-};
-
 struct rfs_op_type {
 	enum rfs_op_id id;
 	enum rfs_op_call call;
@@ -257,17 +253,12 @@ struct rfs_args {
 	union rfs_op_args args;
 	union rfs_op_retv retv;
 	struct rfs_op_type type;
-	struct rfs_op_exts exts;
 };
 
 #define RFS_PATH_SINGLE		1	
 #define RFS_PATH_SUBTREE	2
 #define RFS_PATH_INCLUDE	4	
 #define RFS_PATH_EXCLUDE	8
-
-#define RFS_DATA_INODE		1
-#define RFS_DATA_DENTRY		2
-#define RFS_DATA_FILE		4
 
 struct rfs_path_info {
 	const char *path;
@@ -292,10 +283,15 @@ enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info);
 enum rfs_err rfs_unregister_filter(rfs_filter filter);
 enum rfs_err rfs_activate_filter(rfs_filter filter);
 enum rfs_err rfs_deactivate_filter(rfs_filter filter);
-
-enum rfs_err rfs_get_filename(rfs_context *context, char *buffer, int size);
-enum rfs_err rfs_attach_data(rfs_context *context, void *data, void (*cb)(void *), int flags);
-enum rfs_err rfs_deattach_data(rfs_context *context, void **data, int flags);
-enum rfs_err rfs_get_data(rfs_context *context, void **data, int flags);
+enum rfs_err rfs_attach_data_inode(rfs_filter filter, struct inode *inode, void *data, void (*cb)(void *));
+enum rfs_err rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, void *data, void (*cb)(void *));
+enum rfs_err rfs_attach_data_file(rfs_filter filter, struct file *file, void *data, void (*cb)(void *));
+enum rfs_err rfs_detach_data_inode(rfs_filter *filter, struct inode *inode, void **data);
+enum rfs_err rfs_detach_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data);
+enum rfs_err rfs_detach_data_file(rfs_filter *filter, struct file *file, void **data);
+enum rfs_err rfs_get_data_inode(rfs_filter *filter, struct inode *inode, void **data);
+enum rfs_err rfs_get_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data);
+enum rfs_err rfs_get_data_file(rfs_filter *filter, struct file *file, void **data);
+enum rfs_err rfs_get_filename(struct dentry *dentry, char *buffer, int size);
 
 #endif

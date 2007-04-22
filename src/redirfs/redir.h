@@ -190,19 +190,16 @@ void rinode_set_ops(struct rinode *rinode, struct ops *ops);
 struct dentry *rfs_lookup(struct inode *inode, struct dentry *dentry, struct nameidata *nd);
 
 struct context {
-	struct filter *filter;
-	struct path *path;
-	struct rdentry *rdentry;
-	struct rinode *rinode;
-	struct rfile *rfile;
 };
 
 struct data {
 	struct list_head list;
-	struct filter *filter;
+	int priority;
 	void (*cb)(void *data);
 	void *data;
 };
+
+struct data *data_find(struct list_head *head, struct filter *flt);
 
 int rfs_replace_ops(struct path *path_old, struct path *path_new);
 int rfs_replace_ops_cb(struct dentry *dentry, void *data);

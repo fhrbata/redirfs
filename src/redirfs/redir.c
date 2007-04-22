@@ -13,152 +13,21 @@ extern spinlock_t rinode_cnt_lock;
 extern unsigned long long rfile_cnt;
 extern spinlock_t rfile_cnt_lock;
 
-enum rfs_err rfs_attach_data(rfs_context *context, void *data, void (*cb)(void *), int flags)
+struct data *data_find(struct list_head *head, struct filter *flt)
 {
-	struct context *con;
-	struct data *data_new;
-	struct data *loop;
-	spinlock_t *lock;
-	struct list_head *head;
-
-	con = (struct context *)context;
-
-	if (!con || !data || !cb)
-		return RFS_ERR_INVAL;
-	
-	if (!con->filter) {
-		BUG();
-		return RFS_ERR_NODATA;
-	}
-
-	switch (flags) {
-		case RFS_DATA_INODE:
-			if (!con->rinode)
-				return RFS_ERR_NODATA;
-			lock = &con->rinode->ri_lock;
-			head = &con->rinode->ri_data;
-			break;
-
-		case RFS_DATA_DENTRY:
-			if (!con->rdentry)
-				return RFS_ERR_NODATA;
-			lock = &con->rdentry->rd_lock;
-			head = &con->rdentry->rd_data;
-			break;
-
-		case RFS_DATA_FILE:
-			if (!con->rfile)
-				return RFS_ERR_NODATA;
-			lock = &con->rfile->rf_lock;
-			head = &con->rfile->rf_data;
-			break;
-
-		default:
-			return RFS_ERR_INVAL;
-	}
-
-	data_new = kmalloc(sizeof(struct data), GFP_KERNEL);
-	if (!data_new)
-		return RFS_ERR_NOMEM;
-
-	spin_lock(lock);
-	list_for_each_entry(loop, head, list) {
-		if (loop->filter == con->filter) {
-			spin_unlock(lock);
-			kfree(data_new);
-			return RFS_ERR_EXIST;
-		}
-	}
-
-	data_new->data = data;
-	data_new->cb = cb;
-	data_new->filter = con->filter;
-
-	list_add_tail(&data_new->list, head);
-
-	spin_unlock(lock);
-
-	return RFS_ERR_OK;
-}
-
-int rfs_get_del(rfs_context *context, void **data, int flags, int del)
-{
-	struct context *con;
 	struct data *loop;
 	struct data *found;
-	struct list_head *head;
-	spinlock_t *lock;
 
 	found = NULL;
-	con = (struct context *)context;
 
-	if (!con)
-		return RFS_ERR_INVAL;
-	
-	if (!con->filter) {
-		BUG();
-		return RFS_ERR_NODATA;
-	}
-
-	switch (flags) {
-		case RFS_DATA_INODE:
-			if (!con->rinode)
-				return RFS_ERR_NODATA;
-			lock = &con->rinode->ri_lock;
-			head = &con->rinode->ri_data;
-			break;
-
-		case RFS_DATA_DENTRY:
-			if (!con->rdentry)
-				return RFS_ERR_NODATA;
-			lock = &con->rdentry->rd_lock;
-			head = &con->rdentry->rd_data;
-			break;
-
-		case RFS_DATA_FILE:
-			if (!con->rfile)
-				return RFS_ERR_NODATA;
-			lock = &con->rfile->rf_lock;
-			head = &con->rfile->rf_data;
-			break;
-
-		default:
-			return RFS_ERR_INVAL;
-	}
-	spin_lock(lock);
 	list_for_each_entry(loop, head, list) {
-		if (loop->filter == con->filter) {
+		if (loop->priority == flt->f_priority) {
 			found = loop;
 			break;
 		}
 	}
 
-	if (!found) {
-		spin_unlock(lock);
-		return RFS_ERR_NODATA;
-	}
-
-	if (del)
-		list_del(&found->list);
-	
-	spin_unlock(lock);
-
-	*data = loop->data;
-
-	if (del)
-		kfree(loop);
-
-	return RFS_ERR_OK;
-}
-
-enum rfs_err rfs_deattach_data(rfs_context *context, void **data, int flags)
-{
-	return rfs_get_del(context, data, flags, 1);
-}
-
-enum rfs_err rfs_get_data(rfs_context *context, void **data, int flags)
-{
-	return rfs_get_del(context, data, flags, 0);
+	return found;
 }
 
 int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_args *args, int *cnt)
@@ -744,10 +613,6 @@ static void __exit rfs_exit(void)
 
 module_init(rfs_init);
 module_exit(rfs_exit);
-
-EXPORT_SYMBOL(rfs_attach_data);
-EXPORT_SYMBOL(rfs_deattach_data);
-EXPORT_SYMBOL(rfs_get_data);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Frantisek Hrbata <franta@redirfs.org>");
