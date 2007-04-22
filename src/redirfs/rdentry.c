@@ -18,6 +18,7 @@ struct rdentry *rdentry_alloc(struct dentry* dentry)
 		return ERR_PTR(RFS_ERR_NOMEM);
 
 	INIT_LIST_HEAD(&rdentry->rd_rfiles);
+	INIT_LIST_HEAD(&rdentry->rd_data);
 	INIT_LIST_HEAD(&rdentry->rd_rinode_list);
 	INIT_RCU_HEAD(&rdentry->rd_rcu);
 	rdentry->rd_op_old = dentry->d_op;
@@ -56,6 +57,8 @@ inline struct rdentry *rdentry_get(struct rdentry *rdentry)
 inline void rdentry_put(struct rdentry *rdentry)
 {
 	unsigned long flags;
+	struct data *data;
+	struct data *tmp;
 
 	if (!rdentry || IS_ERR(rdentry))
 		return;
@@ -70,6 +73,12 @@ inline void rdentry_put(struct rdentry *rdentry)
 	chain_put(rdentry->rd_chain);
 	rinode_put(rdentry->rd_rinode);
 	ops_put(rdentry->rd_ops);
+
+	list_for_each_entry_safe(data, tmp, &rdentry->rd_data, list) {
+		data->cb(data->data);
+		list_del(&data->list);
+		kfree(data);
+	}
 
 	kmem_cache_free(rdentry_cache, rdentry);
 

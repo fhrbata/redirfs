@@ -640,7 +640,7 @@ int path_dpath(struct rdentry *rdentry, struct path *path, char *buffer, int siz
 
 	spin_lock(&dcache_lock);
 
-	while(path->p_dentry != dentry) {
+	while (path->p_dentry != dentry) {
 		end -= dentry->d_name.len;
 		size -= dentry->d_name.len + 1; /* dentry name + slash */
 		if (size < 0) {

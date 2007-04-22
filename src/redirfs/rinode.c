@@ -18,6 +18,7 @@ struct rinode *rinode_alloc(struct inode *inode)
 
 	INIT_RCU_HEAD(&rinode->ri_rcu);
 	INIT_LIST_HEAD(&rinode->ri_rdentries);
+	INIT_LIST_HEAD(&rinode->ri_data);
 	rinode->ri_inode = inode;
 	rinode->ri_op_old = inode->i_op;
 	rinode->ri_fop_old = (struct file_operations *)inode->i_fop;
@@ -64,6 +65,8 @@ inline struct rinode *rinode_get(struct rinode *rinode)
 inline void rinode_put(struct rinode *rinode)
 {
 	unsigned long flags;
+	struct data *data;
+	struct data *tmp;
 
 	if (!rinode || IS_ERR(rinode))
 		return;
@@ -78,6 +81,13 @@ inline void rinode_put(struct rinode *rinode)
 	chain_put(rinode->ri_chain_set);
 	ops_put(rinode->ri_ops_set);
 	BUG_ON(!list_empty(&rinode->ri_rdentries));
+
+	list_for_each_entry_safe(data, tmp, &rinode->ri_data, list) {
+		data->cb(data->data);
+		list_del(&data->list);
+		kfree(data);
+	}
+
 	kmem_cache_free(rinode_cache, rinode);
 
 	spin_lock_irqsave(&rinode_cnt_lock, flags);

@@ -116,6 +116,7 @@ struct rfile {
 	struct file_operations rf_op_new;
 	atomic_t rf_count;
 	spinlock_t rf_lock;
+	struct list_head rf_data;
 };
 
 int rfile_cache_create(void);
@@ -143,6 +144,7 @@ struct rdentry {
 	atomic_t rd_count;
 	int rd_root;
 	struct ops *rd_ops;
+	struct list_head rd_data;
 };
 
 int rdentry_cache_create(void);
@@ -174,6 +176,7 @@ struct rinode {
 	spinlock_t ri_lock;
 	atomic_t ri_count;
 	atomic_t ri_nlink;
+	struct list_head ri_data;
 };
 
 int rinode_cache_create(void);
@@ -187,8 +190,18 @@ void rinode_set_ops(struct rinode *rinode, struct ops *ops);
 struct dentry *rfs_lookup(struct inode *inode, struct dentry *dentry, struct nameidata *nd);
 
 struct context {
+	struct filter *filter;
 	struct path *path;
 	struct rdentry *rdentry;
+	struct rinode *rinode;
+	struct rfile *rfile;
+};
+
+struct data {
+	struct list_head list;
+	struct filter *filter;
+	void (*cb)(void *data);
+	void *data;
 };
 
 int rfs_replace_ops(struct path *path_old, struct path *path_new);

@@ -265,6 +265,10 @@ struct rfs_args {
 #define RFS_PATH_INCLUDE	4	
 #define RFS_PATH_EXCLUDE	8
 
+#define RFS_DATA_INODE		1
+#define RFS_DATA_DENTRY		2
+#define RFS_DATA_FILE		4
+
 struct rfs_path_info {
 	const char *path;
 	int flags;
@@ -290,5 +294,8 @@ enum rfs_err rfs_activate_filter(rfs_filter filter);
 enum rfs_err rfs_deactivate_filter(rfs_filter filter);
 
 enum rfs_err rfs_get_filename(rfs_context *context, char *buffer, int size);
+enum rfs_err rfs_attach_data(rfs_context *context, void *data, void (*cb)(void *), int flags);
+enum rfs_err rfs_deattach_data(rfs_context *context, void **data, int flags);
+enum rfs_err rfs_get_data(rfs_context *context, void **data, int flags);
 
 #endif

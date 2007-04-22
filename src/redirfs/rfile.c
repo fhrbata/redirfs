@@ -24,6 +24,7 @@ static struct rfile *rfile_alloc(struct file *file)
 		return ERR_PTR(RFS_ERR_NOMEM);
 	
 	INIT_LIST_HEAD(&rfile->rf_rdentry_list);
+	INIT_LIST_HEAD(&rfile->rf_data);
 	INIT_RCU_HEAD(&rfile->rf_rcu);
 	rfile->rf_path = NULL;
 	rfile->rf_chain = NULL;
@@ -73,6 +74,8 @@ inline struct rfile *rfile_get(struct rfile* rfile)
 inline void rfile_put(struct rfile *rfile)
 {
 	unsigned long flags;
+	struct data *data;
+	struct data *tmp;
 
 	if (!rfile || IS_ERR(rfile))
 		return;
@@ -84,6 +87,13 @@ inline void rfile_put(struct rfile *rfile)
 	path_put(rfile->rf_path);
 	chain_put(rfile->rf_chain);
 	rdentry_put(rfile->rf_rdentry);
+
+	list_for_each_entry_safe(data, tmp, &rfile->rf_data, list) {
+		data->cb(data->data);
+		list_del(&data->list);
+		kfree(data);
+	}
+
 	kmem_cache_free(rfile_cache, rfile);
 
 	spin_lock_irqsave(&rfile_cnt_lock, flags);
