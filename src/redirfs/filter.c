@@ -7,18 +7,32 @@ extern struct mutex path_list_mutex;
 
 struct filter *flt_get(struct filter *flt)
 {
-	BUG_ON(!atomic_read(&flt->f_count));
-	atomic_inc(&flt->f_count);
+	unsigned long flags;
+
+	spin_lock_irqsave(&flt->f_lock, flags);
+	BUG_ON(!flt->f_count);
+	flt->f_count++;
+	spin_unlock_irqrestore(&flt->f_lock, flags);
 	return flt;
 }
 
 void flt_put(struct filter *flt)
 {
+	unsigned long flags;
+	int del;
+
+	del = 0;
+
 	if (!flt || IS_ERR(flt))
 		return;
 
-	BUG_ON(!atomic_read(&flt->f_count));
-	if (!atomic_dec_and_test(&flt->f_count))
+	spin_lock_irqsave(&flt->f_lock, flags);
+	BUG_ON(!flt->f_count);
+	if (!flt->f_count)
+		del = 1;
+	spin_unlock_irqrestore(&flt->f_lock, flags);
+
+	if (!del)
 		return;
 
 	atomic_set(&flt->f_del, 1);
@@ -47,8 +61,9 @@ struct filter *flt_alloc(struct rfs_filter_info *flt_info)
 	flt_name[flt_name_len] = 0;
 	flt->f_name = flt_name;
 	flt->f_priority = flt_info->priority;
-	atomic_set(&flt->f_count, 1);
+	flt->f_count = 1;
 	atomic_set(&flt->f_del, 0);
+	spin_lock_init(&flt->f_lock);
 	init_waitqueue_head(&flt->f_wait);
 	memset(&flt->f_pre_cbs, 0, sizeof(op) * RFS_OP_END);
 	memset(&flt->f_post_cbs, 0, sizeof(op) * RFS_OP_END);

@@ -85,6 +85,7 @@ inline void rinode_put(struct rinode *rinode)
 	list_for_each_entry_safe(data, tmp, &rinode->ri_data, list) {
 		data->cb(data->data);
 		list_del(&data->list);
+		flt_put(data->filter);
 		kfree(data);
 	}
 
@@ -749,7 +750,7 @@ enum rfs_err rfs_attach_data_inode(rfs_filter filter, struct inode *inode, void 
 	INIT_LIST_HEAD(&data_new->list);
 	data_new->data = data;
 	data_new->cb = cb;
-	data_new->priority = flt->f_priority;
+	data_new->filter = flt_get(flt);
 	list_add_tail(&data_new->list, &rinode->ri_data);
 	spin_unlock(&rinode->ri_lock);
 
@@ -782,6 +783,7 @@ enum rfs_err rfs_detach_data_inode(rfs_filter *filter, struct inode *inode, void
 
 	list_del(&found->list);
 	*data = found->data;
+	flt_put(found->filter);
 	kfree(found);
 
 	spin_unlock(&rinode->ri_lock);

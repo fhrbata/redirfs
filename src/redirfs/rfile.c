@@ -91,6 +91,7 @@ inline void rfile_put(struct rfile *rfile)
 	list_for_each_entry_safe(data, tmp, &rfile->rf_data, list) {
 		data->cb(data->data);
 		list_del(&data->list);
+		flt_put(data->filter);
 		kfree(data);
 	}
 
@@ -665,7 +666,7 @@ enum rfs_err rfs_attach_data_file(rfs_filter filter, struct file *file, void *da
 	INIT_LIST_HEAD(&data_new->list);
 	data_new->data = data;
 	data_new->cb = cb;
-	data_new->priority = flt->f_priority;
+	data_new->filter = flt_get(flt);
 	list_add_tail(&data_new->list, &rfile->rf_data);
 	spin_unlock(&rfile->rf_lock);
 
@@ -698,6 +699,7 @@ enum rfs_err rfs_detach_data_file(rfs_filter *filter, struct file *file, void **
 
 	list_del(&found->list);
 	*data = found->data;
+	flt_put(found->filter);
 	kfree(found);
 
 	spin_unlock(&rfile->rf_lock);

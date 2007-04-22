@@ -21,7 +21,7 @@ struct data *data_find(struct list_head *head, struct filter *flt)
 	found = NULL;
 
 	list_for_each_entry(loop, head, list) {
-		if (loop->priority == flt->f_priority) {
+		if (loop->filter == flt) {
 			found = loop;
 			break;
 		}

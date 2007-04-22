@@ -27,10 +27,11 @@ struct filter {
 	int f_priority;
 	enum rfs_retv (*f_pre_cbs[RFS_OP_END])(rfs_context, struct rfs_args *);
 	enum rfs_retv (*f_post_cbs[RFS_OP_END])(rfs_context, struct rfs_args *);
-	atomic_t f_count;
+	unsigned long long f_count;
 	atomic_t f_active;
 	atomic_t f_del;
 	wait_queue_head_t f_wait;
+	spinlock_t f_lock;
 };
 
 int flt_add_local(struct path *path, struct filter *flt);
@@ -194,7 +195,7 @@ struct context {
 
 struct data {
 	struct list_head list;
-	int priority;
+	struct filter *filter;
 	void (*cb)(void *data);
 	void *data;
 };

@@ -77,6 +77,7 @@ inline void rdentry_put(struct rdentry *rdentry)
 	list_for_each_entry_safe(data, tmp, &rdentry->rd_data, list) {
 		data->cb(data->data);
 		list_del(&data->list);
+		flt_put(data->filter);
 		kfree(data);
 	}
 
@@ -884,7 +885,7 @@ enum rfs_err rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, vo
 	INIT_LIST_HEAD(&data_new->list);
 	data_new->data = data;
 	data_new->cb = cb;
-	data_new->priority = flt->f_priority;
+	data_new->filter = flt_get(flt);
 	list_add_tail(&data_new->list, &rdentry->rd_data);
 	spin_unlock(&rdentry->rd_lock);
 
@@ -917,6 +918,7 @@ enum rfs_err rfs_detach_data_dentry(rfs_filter *filter, struct dentry *dentry, v
 
 	list_del(&found->list);
 	*data = found->data;
+	flt_put(found->filter);
 	kfree(found);
 
 	spin_unlock(&rdentry->rd_lock);
