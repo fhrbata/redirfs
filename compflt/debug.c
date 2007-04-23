@@ -1,4 +1,13 @@
 #include <linux/kernel.h>
+#include "compflt.h"
+
+#ifdef COMPFLT_DEBUG
+
+void debug_block(char *pre, struct block *blk)
+{
+        printk("%s map=%i@%i -> %i@%i\n", pre,
+        (int)blk->size_c, (int)blk->off_c, (int)blk->size_u, (int)blk->off_u);
+}
 
 void hexdump(void *buf, unsigned int len)
 {
@@ -15,3 +24,5 @@ void hexdump(void *buf, unsigned int len)
         }
         printk("\n");
 }
+
+#endif

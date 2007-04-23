@@ -5,6 +5,8 @@ MISC = test
 #obj-m += redirfs/ compflt/ crypto/
 obj-m += compflt/ crypto/
 
+#CFLAGS += -DCOMPFLT_DEBUG
+
 all:
 	make -C ${KDIR} M=$(shell pwd) modules
 	@for subdir in ${MISC}; do \

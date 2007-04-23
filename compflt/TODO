@@ -1,8 +1,12 @@
-- port to new RedirFS version
-- remove dmap specific things from header_read/header_write
-- locking (spin lock + use semaphores on anything that can sleep/take long)
-- better return value handling
-- add a max_u member to dmap so we can safely change COMPFLT_BLOCK_SIZE between versions
+- implement constat-size compressed blocks (cblock.c)
+- implement i_post_unlink (delete fheader from cache)
+- implement f_pre_llseek (compensate for wrong inode->i_size)
+- make it thread/smp safe
+- optimize writes that overwrite whole existing blocks (no need to read them)
+- better return value / error handling
+- support for dynamic changing of COMPFLT_BLOCK_SIZE_U (dm->size_max?)
+- get rid of hard-coded comp_methods list (fill from cryptoapi)
 - stat/fstat/... (struct stat).st_size
-
-NOTE: alot of TODOs are marked in the code
+- support already existig non-compressed files in write operations ?
+- optimize writes to the last block(not-full) by holding it in memory ?
+  (== better performance on sequential writes with COMPFLT_BLOCK_SIZE_U > 4096)

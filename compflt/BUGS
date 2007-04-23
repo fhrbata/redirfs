@@ -1,9 +1,3 @@
 --------
 BUG: Seeks containing SEEK_END have wrong results, because it bases the seek on the size of the file , which doesnt correspond to the real uncompressed size.
-
-SOLUTION: At least the generic seek seems to use inode->i_size in this case, so we need to know where does this value get set/updated and work from there.
---------
-BUG: Using the cached header fails when a file is opened with O_TRUNC.
-
-SOLUTION: First of all figure out what exactly happens when the file is opened with the O_TRUC flag ;)
 --------

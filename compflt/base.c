@@ -4,152 +4,188 @@
 #include "compflt.h"
 #include "path.h"
 
-char version[] = "pre2";
+char version[] = "pre6";
 
-redirfs_filter compflt;
+static enum rfs_retv f_pre_open(rfs_context context, struct rfs_args *args)
+{
+        struct file *f = args->args.f_open.file;
+        struct inode *inode = args->args.f_open.inode;
+        struct fheader *fh;
 
-static enum redirfs_retv compflt_post_release(redirfs_context context,
-                struct redirfs_args_t *args)
+        debug_printk("compflt: [pre_open i=%li\n", inode->i_ino);
+
+        if (f->f_flags & O_TRUNC) {
+                fh = fheader_find(inode->i_ino);
+                if (fh) {
+                        fheader_clear_blks(fh);
+                        fh->compressed = 0;
+                        fh->size = 0;
+                }
+
+        }
+
+        return RFS_CONTINUE;
+}
+
+static enum rfs_retv f_post_release(rfs_context context, struct rfs_args *args)
 {
         struct inode *inode = args->args.f_release.inode;
         struct file *f = args->args.f_release.file;
+        struct fheader *fh;
 
-        struct header *fh;
+        debug_printk("compflt: [post_release] i=%li\n", inode->i_ino);
 
-        printk("compflt: [post_release] i=%li\n", inode->i_ino);
+        fh = fheader_find(inode->i_ino);
+        if (fh && fh->compressed)
+                fheader_write(f, fh);
 
-        fh = header_find(inode->i_ino);
-        if (fh)
-                header_write(f, fh);
-
-        return REDIRFS_RETV_CONTINUE;
+        return RFS_CONTINUE;
 }
 
-static enum redirfs_retv compflt_pre_read(redirfs_context context,
-                struct redirfs_args_t *args)
+static enum rfs_retv f_pre_read(rfs_context context, struct rfs_args *args)
 {
         struct file *f = args->args.f_read.file;
         size_t count = args->args.f_read.count;
         loff_t *pos = args->args.f_read.pos;
-        char __user *ubuffer = args->args.f_read.buffer;
-        unsigned long ino = f->f_dentry->d_inode->i_ino;
+        char __user *dst = args->args.f_read.buf;
+        size_t *rv = &args->retv.rv_ssize;
+        struct fheader *fh;
 
-        struct header *fh;
+        debug_printk("compflt: [pre_read] i=%li | pos=%i len=%i\n", f->f_dentry->d_inode->i_ino, (int)*pos, count);
 
-        printk("compflt: [pre_read] i=%li | pos=%i len=%i\n", ino, (int)*pos, count);
-
-        fh = header_get(f);
+        fh = fheader_get(f);
         if (!fh)
-                return REDIRFS_RETV_CONTINUE;
+                return RFS_CONTINUE;
 
-        // TODO: we dont support already existing non-compressed files, yet ;)
         if (!fh->compressed) {
-                printk(KERN_INFO "compflt: [pre_read] file not compressed\n");
-                return REDIRFS_RETV_CONTINUE;
+                printk(KERN_INFO "compflt: file not compressed\n");
+                return RFS_CONTINUE;
         }
 
-        read_u(f, fh, *pos, &count, ubuffer);
+        read_u(f, fh, *pos, &count, dst);
 
-        args->retv.rv_ssize = count;
-        *args->args.f_read.pos += args->retv.rv_ssize;
+        *rv = count;
+        *pos += *rv;
 
-        printk("compflt: [pre_read] returning: count=%i pos=%i\n", count, (int)*args->args.f_read.pos);
+        debug_printk("compflt: [pre_read] returning: count=%i pos=%i\n", *rv, (int)*pos);
 
-        return REDIRFS_RETV_STOP;
+        return RFS_STOP;
 }
 
-static enum redirfs_retv compflt_pre_write(redirfs_context context,
-                struct redirfs_args_t *args)
+static enum rfs_retv f_pre_write(rfs_context context, struct rfs_args *args)
 {
         struct file *f = args->args.f_write.file;
-        unsigned char *src = (unsigned char *) args->args.f_write.buffer;
+        unsigned char *src = (unsigned char *) args->args.f_write.buf;
         size_t count = args->args.f_write.count;
         loff_t *pos = args->args.f_write.pos;
-        unsigned long ino = f->f_dentry->d_inode->i_ino;
+        size_t *rv = &args->retv.rv_ssize;
+        struct fheader *fh;
 
-        struct header *fh;
+        debug_printk("compflt: [pre_write] i=%li | pos=%i len=%i\n", f->f_dentry->d_inode->i_ino, (int) *pos, count);
 
-        printk ("compflt: [pre_write] i=%li | pos=%i len=%i\n", ino, (int) *pos, count);
-
-        fh = header_get(f);
+        fh = fheader_get(f);
         if (!fh)
-                return REDIRFS_RETV_CONTINUE;
+                return RFS_CONTINUE;
 
-        write_u(f, fh, *pos, count, src);
+        if (!fh->compressed && fh->size != 0) {
+                printk(KERN_INFO "compflt: file not compressed\n");
+                return RFS_CONTINUE;
+        }
 
-        return REDIRFS_RETV_STOP;
+        if (f->f_flags & O_APPEND)
+                *pos = fh->size;
+
+        write_u(f, fh, *pos, &count, src);
+
+        *rv = count;
+        *pos += *rv;
+
+        debug_printk("compflt: [pre_write] returning: count=%i pos=%i\n", *rv, (int)*pos);
+
+        return RFS_STOP;
 }
 
-static struct redirfs_op_t compflt_ops[] = {
-        {REDIRFS_F_REG, REDIRFS_FOP_RELEASE, NULL, compflt_post_release},
-        {REDIRFS_F_REG, REDIRFS_FOP_READ, compflt_pre_read, NULL},
-        {REDIRFS_F_REG, REDIRFS_FOP_WRITE, compflt_pre_write, NULL},
-        REDIRFS_OP_END
+// ====================================
+
+rfs_filter compflt;
+static struct rfs_path_info path_info = {COMPFLT_INC_DIR, RFS_PATH_INCLUDE|RFS_PATH_SUBTREE};
+static struct rfs_filter_info flt_info = {"compflt", 999, 0};
+static struct rfs_op_info ops_info[] = {
+        {RFS_REG_FOP_OPEN, f_pre_open, NULL},
+        {RFS_REG_FOP_RELEASE, NULL, f_post_release},
+        {RFS_REG_FOP_READ, f_pre_read, NULL},
+        {RFS_REG_FOP_WRITE, f_pre_write, NULL},
+        {RFS_OP_END, NULL, NULL}
 };
 
 static int __init compflt_init(void)
 {
-        char name[] = "compflt";
-        int priority = 99;
-        int error = 0;
+        enum rfs_err err = 1;
 
-        compflt = redirfs_register_filter(name, priority, 0);
-        if (IS_ERR(compflt)) {
-                printk(KERN_ERR "compflt: registration failed: error %ld\n", PTR_ERR(compflt));
-                return PTR_ERR(compflt);
+        err = rfs_register_filter(&compflt, &flt_info);
+        if (err != RFS_ERR_OK) {
+                printk(KERN_ERR "compflt: registration failed: error %d\n", err);
+                goto error;
         }
 
-        error = redirfs_set_operations(compflt, compflt_ops);
-        if (error) {
-                printk(KERN_ERR "compflt: set operations failed: error %d\n", error);
-                goto unregister;
+        err = rfs_set_operations(compflt, ops_info);
+        if (err != RFS_ERR_OK) {
+                printk(KERN_ERR "compflt: set operations failed: error %d\n", err);
+                goto error;
         }
 
-        error = redirfs_include_path(compflt, COMPFLT_INC_DIR);
-        if (error) {
-                printk(KERN_ERR "compflt: include path failed: error %d\n", error);
-                goto unregister;
+        err = rfs_set_path(compflt, &path_info);
+        if (err != RFS_ERR_OK) {
+                printk(KERN_ERR "compflt: include path failed: error %d\n", err);
+                goto error;
         }
 
-        error = redirfs_activate_filter(compflt);
-        if (error) {
-                printk(KERN_ERR "compflt: filter activation failed: error %d\n", error);
-                goto unregister;
+        err = rfs_activate_filter(compflt);
+        if (err != RFS_ERR_OK) {
+                printk(KERN_ERR "compflt: filter activation failed: error %d\n", err);
+                goto error;
         }
 
-        if (dmap_cache_init()) {
-                printk(KERN_ERR "compflt: dmap cache initialization failed\n");
-                goto unregister;
+        err = block_cache_init();
+        if (err) {
+                printk(KERN_ERR "compflt: block cache initialization failed: error %d\n", err);
+                goto error;
         }
 
-        if (header_cache_init()) {
-                printk(KERN_ERR "compflt: header cache initialization failed\n");
-                goto unregister;
+        err = fheader_cache_init();
+        if (err) {
+                printk(KERN_ERR "compflt: fheader cache initialization failed: error %d\n", err);
+                goto error;
         }
 
-        printk(KERN_ALERT "compflt: loaded version %s\n", version);
+        err = proc_init();
+        if (err) {
+                printk(KERN_ERR "compflt: /proc initialization failed: error %d\n", err);
+                goto error;
+        }
+
+        printk(KERN_INFO "compflt: loaded version %s\n", version);
 
         return 0;
 
-unregister:
-        error = redirfs_unregister_filter(compflt);
-        if (error)
-                printk(KERN_ERR "compflt: unregistration failed: error %d\n", error);
+error:
+        if (rfs_unregister_filter(compflt))
+                printk(KERN_ERR "compflt: unregistration failed: error %d\n", err);
 
-        return error;
+        return err;
 }
 
 static void __exit compflt_exit(void)
 {
-        int error;
+        enum rfs_err err;
 
-        header_cache_deinit();
-        // NOTE: shouldnt be needed, every dm is in some header
-        dmap_cache_deinit();
+        proc_deinit();
+        fheader_cache_deinit();
+        block_cache_deinit();
 
-        error = redirfs_unregister_filter(compflt);
-        if (error)
-                printk(KERN_ERR "compflt: unregistration failed: error %d\n", error);
+	err = rfs_unregister_filter(compflt);
+	if (err != RFS_ERR_OK)
+                printk(KERN_ERR "compflt: unregistration failed: error %d\n", err);
 }
 
 module_init(compflt_init);
