@@ -429,7 +429,7 @@ ssize_t rfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 	}
 	
 	rfs_postcall_flts(chain, NULL, &args, &cnt);
-	rv = args.retv.rv_int;
+	rv = args.retv.rv_ssize;
 
 	rfile_put(rfile);
 	path_put(path);
@@ -489,7 +489,7 @@ ssize_t rfs_write(struct file *file, const char __user *buf, size_t count, loff_
 	}
 	
 	rfs_postcall_flts(chain, NULL, &args, &cnt);
-	rv = args.retv.rv_int;
+	rv = args.retv.rv_ssize;
 
 	rfile_put(rfile);
 	path_put(path);
