@@ -10,7 +10,7 @@ endif
 
 obj-m += dummyflt.o
 
-dummyflt.ko:
+dummyflt.ko: *.c
 	$(MAKE) -C $(KERN_SRC) SUBDIRS=$(RFS_SRC) modules
 
 .PHONY: clean

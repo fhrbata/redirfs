@@ -10,7 +10,7 @@ endif
 
 obj-m += procflt.o
 
-procflt.ko:
+procflt.ko: *.c
 	$(MAKE) -C $(KERN_SRC) SUBDIRS=$(RFS_SRC) modules
 
 .PHONY: clean
