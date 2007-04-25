@@ -250,7 +250,7 @@ static unsigned int redirctl_major;
 int redirctl_init(void){
   int err=0;
 
-  if ((redirctl_major = register_chrdev(0, REDIRCTL_NAME, &redirctl_ops)))
+  if ((redirctl_major = register_chrdev(0, REDIRCTL_NAME, &redirctl_ops)) <= 0)
     goto end;
 
   redirctl_class = class_create(THIS_MODULE, REDIRCTL_NAME);
