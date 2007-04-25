@@ -7,25 +7,13 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <string.h>
-#include <linux/kdev_t.h>
 
 #include <stdio.h>
 
-#include "../../../trunk/src/redirfs/redirfs.h"
+#include "../redirfs/redirfs.h"
 
-#define NODFILE "/dev/" REDIRCTL_NAME
-
+/* file descriptor for nodfile - global all over the program */
 int fd;
-
-int redirctl_open(void){
-  fd = open(NODFILE, O_RDWR);
-  return(fd);
-}
-
-void redirctl_close(void){
-  close(fd);
-}
 
 int redirctl_filters_list(void){
   int retval;
@@ -232,8 +220,8 @@ int main(int argc, char *argv[]){
     return(1);
   }
 
-  if (redirctl_open() == -1){
-    printf("cannot open redirctl chardev\n");
+  if ((fd = open("/dev/" REDIRCTL_NAME, O_RDWR)) == -1){
+    printf("cannot open redirctl device - check for /dev/" REDIRCTL_NAME " file presence!\n");
     return(2);
   }
 
@@ -322,7 +310,7 @@ int main(int argc, char *argv[]){
   }
 
 end:
-  redirctl_close();
+  close(fd);
   return(retval);
 }
 

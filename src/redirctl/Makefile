@@ -7,8 +7,8 @@ NAME = redirctl
 all: $(NAME)
 
 $(NAME): redirctl.c
-	$(CC) $^ -o redirctl
+	$(CC) $< -o $@
 
 clean:
-	rm -f redirctl
-
+	rm -f $(NAME)
+	rm -f *~
