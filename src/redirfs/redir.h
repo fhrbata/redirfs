@@ -15,7 +15,6 @@
 #include <linux/delay.h>
 #include <linux/wait.h>
 #include <asm/uaccess.h>
-//#include <linux/cdev.h>
 #include <linux/device.h>
 #include "redirfs.h"
 #include "debug.h"

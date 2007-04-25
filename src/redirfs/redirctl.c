@@ -245,11 +245,12 @@ static struct file_operations redirctl_ops = {
 };
 
 static struct class *redirctl_class;
+static unsigned int redirctl_major;
 
 int redirctl_init(void){
   int err=0;
 
-  if (register_chrdev(REDIRCTL_MAJOR, REDIRCTL_NAME, &redirctl_ops))
+  if ((redirctl_major = register_chrdev(0, REDIRCTL_NAME, &redirctl_ops)))
     goto end;
 
   redirctl_class = class_create(THIS_MODULE, REDIRCTL_NAME);
@@ -257,20 +258,20 @@ int redirctl_init(void){
     err = PTR_ERR(redirctl_class);
     goto unreg_cdev;
   }
-  class_device_create(redirctl_class, NULL, MKDEV(REDIRCTL_MAJOR,0), NULL, REDIRCTL_NAME);
+  class_device_create(redirctl_class, NULL, MKDEV(redirctl_major,0), NULL, REDIRCTL_NAME);
 
   return(0);
 
 unreg_cdev:
-  unregister_chrdev(REDIRCTL_MAJOR, REDIRCTL_NAME);
+  unregister_chrdev(redirctl_major, REDIRCTL_NAME);
 
 end:
   return(err);
 }
 
 void redirctl_destroy(void){
-  class_device_destroy(redirctl_class, MKDEV(REDIRCTL_MAJOR,0));
+  class_device_destroy(redirctl_class, MKDEV(redirctl_major,0));
   class_destroy(redirctl_class);
-  unregister_chrdev(REDIRCTL_MAJOR, REDIRCTL_NAME);
+  unregister_chrdev(redirctl_major, REDIRCTL_NAME);
 }
 

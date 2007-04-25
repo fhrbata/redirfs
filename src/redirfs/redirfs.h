@@ -11,7 +11,6 @@
 #endif // __KERNEL__
 
 #define REDIRCTL_NAME "redirctl"
-#define REDIRCTL_MAJOR 120  /* see Documentation/devices.txt */
 
 enum redirctl_cmd{
   REDIRCTL_CMD_GET_FILTERS_INFO_PREPARE = 0,
