@@ -36,6 +36,25 @@ enum rfs_retv dummyflt_open(rfs_context context, struct rfs_args *args)
 	return RFS_CONTINUE;
 }
 
+enum rfs_err dummyflt_mod_cb(union rfs_mod *mod)
+{
+	enum rfs_err err;
+	switch (mod->id){
+		case RFS_ACTIVATE:
+			err = rfs_activate_filter(dummyflt);
+			break;
+		case RFS_DEACTIVATE:
+			err = rfs_deactivate_filter(dummyflt);
+			break;
+		case RFS_SET_PATH:
+			err = rfs_set_path(dummyflt, &mod->set_path.path_info);
+			break;
+		default:
+			err = RFS_ERR_NOENT;
+	}
+	return err;
+}
+
 static int __init dummyflt_init(void)
 {
 	enum rfs_err err;
@@ -66,6 +85,12 @@ static int __init dummyflt_init(void)
 	err = rfs_activate_filter(dummyflt);
 	if (err != RFS_ERR_OK) {
 		printk(KERN_ERR "dummyflt: activate filter failed: error %d\n", err);
+		goto error;
+	}
+
+	err = rfs_set_mod_cb(dummyflt, &dummyflt_mod_cb);
+	if (err != RFS_ERR_OK) {
+		printk(KERN_ERR "dummyflt: set filter modification callback failed: error %d\n", err);
 		goto error;
 	}
 
