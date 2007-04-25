@@ -244,7 +244,6 @@ static struct file_operations redirctl_ops = {
   .ioctl = redirctl_ioctl,
 };
 
-static dev_t redirctl_dev;
 static struct class *redirctl_class;
 
 int redirctl_init(void){
@@ -258,7 +257,7 @@ int redirctl_init(void){
     err = PTR_ERR(redirctl_class);
     goto unreg_cdev;
   }
-  class_device_create(redirctl_class, NULL, redirctl_dev, NULL, REDIRCTL_NAME);
+  class_device_create(redirctl_class, NULL, MKDEV(REDIRCTL_MAJOR,0), NULL, REDIRCTL_NAME);
 
   return(0);
 
@@ -270,7 +269,7 @@ end:
 }
 
 void redirctl_destroy(void){
-  class_device_destroy(redirctl_class, redirctl_dev);
+  class_device_destroy(redirctl_class, MKDEV(REDIRCTL_MAJOR,0));
   class_destroy(redirctl_class);
   unregister_chrdev(REDIRCTL_MAJOR, REDIRCTL_NAME);
 }
