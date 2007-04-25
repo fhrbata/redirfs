@@ -698,6 +698,117 @@ enum rfs_err rfs_get_filename(struct dentry *dentry, char *buffer, int size)
 	return retv;
 }
 
+struct path_get_info{
+	struct filter *flt;
+	struct rfs_path_info *paths_info;
+	int count;
+};
+
+static void process_path(struct filter *flt, struct path_get_info *info, char *pathname, int flags){
+	if (flt == info->flt){
+		if (info->paths_info != NULL){
+			info->paths_info[info->count].path = pathname;
+			info->paths_info[info->count].flags = flags;
+		}
+		info->count++;
+	}
+}
+
+static int path_get_infos_cb(struct path *path, void *data)
+{
+	struct path_get_info *info;
+	int i;
+	char *pathname = NULL;
+	int pathnamememlen;
+	int startcount = 0;
+
+	info = (struct path_get_info *) data;
+
+	if (info->paths_info != NULL){
+		pathnamememlen = strlen(path->p_path) + 1;
+        	pathname = (char *) kmalloc(pathnamememlen, GFP_KERNEL);
+		if (!pathname){
+			return(-1);
+		}
+		memcpy(pathname, path->p_path, pathnamememlen);
+		startcount = info->count;
+	}
+
+	if (path->p_inchain){
+		for(i = 0; i < path->p_inchain->c_flts_nr; i++){
+			process_path(path->p_inchain->c_flts[i], info, pathname, RFS_PATH_INCLUDE | RFS_PATH_SUBTREE);
+		}
+	}
+
+	if (path->p_exchain){
+		for(i = 0; i < path->p_exchain->c_flts_nr; i++){
+			process_path(path->p_exchain->c_flts[i], info, pathname, RFS_PATH_EXCLUDE | RFS_PATH_SUBTREE);
+		}
+	}
+
+	if (path->p_inchain_local){
+		for(i = 0; i < path->p_inchain_local->c_flts_nr; i++){
+			process_path(path->p_inchain_local->c_flts[i], info, pathname, RFS_PATH_INCLUDE | RFS_PATH_SINGLE);
+		}
+	}
+
+	if (path->p_exchain_local){
+		for(i = 0; i < path->p_exchain_local->c_flts_nr; i++){
+			process_path(path->p_exchain_local->c_flts[i], info, pathname, RFS_PATH_EXCLUDE | RFS_PATH_SINGLE);
+		}
+	}
+
+	if (info->paths_info != NULL && info->count == startcount){
+		kfree(pathname);
+	}
+
+	return(0);
+}               
+
+int path_get_infos(rfs_filter filter, struct rfs_path_info **paths_info, int *count)
+{
+	int retval;
+	struct path_get_info info;
+	char *tmp;
+
+	info.flt = filter;
+	info.count = 0;
+	info.paths_info = NULL;
+	mutex_lock(&path_list_mutex);
+	rfs_path_walk(NULL, path_get_infos_cb, &info);
+	if (info.count > 0){
+		*paths_info = (struct rfs_path_info *) kmalloc(sizeof(struct rfs_path_info) * info.count, GFP_KERNEL);
+		if (!(*paths_info)){
+			retval = -1;
+			goto end;
+		}
+
+		info.count = 0;
+		info.paths_info = *paths_info;
+		if (rfs_path_walk(NULL, path_get_infos_cb, &info) != 0){
+			retval = -1;
+			goto cleanup;
+		}
+	}
+	*count = info.count;
+	retval = 0;
+	goto end;
+cleanup:
+	while(info.count-- > 0){
+		tmp = ((*paths_info)[info.count]).path;
+		if (tmp != NULL){
+			kfree(tmp);
+			tmp = NULL;
+		}
+	}
+	kfree(*paths_info);
+	*paths_info = NULL;
+	*count = 0;
+end:
+	mutex_unlock(&path_list_mutex);
+	return(retval);
+}
 
 EXPORT_SYMBOL(rfs_set_path);
 EXPORT_SYMBOL(rfs_get_filename);
+

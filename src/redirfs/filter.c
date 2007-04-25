@@ -67,6 +67,7 @@ struct filter *flt_alloc(struct rfs_filter_info *flt_info)
 	init_waitqueue_head(&flt->f_wait);
 	memset(&flt->f_pre_cbs, 0, sizeof(op) * RFS_OP_END);
 	memset(&flt->f_post_cbs, 0, sizeof(op) * RFS_OP_END);
+	flt->mod_cb = NULL;
 	
 	if (flt_info->active)
 		atomic_set(&flt->f_active, 1);
@@ -91,7 +92,8 @@ enum rfs_err rfs_register_filter(void **filter, struct rfs_filter_info *filter_i
 	spin_lock(&flt_list_lock);
 
 	list_for_each_entry(pos, &flt_list, f_list) {
-		if (pos->f_priority == filter_info->priority) {
+		if (pos->f_priority == filter_info->priority ||
+		    strcmp(pos->f_name, filter_info->name) == 0) {
 			spin_unlock(&flt_list_lock);
 			flt_put(flt);
 			return RFS_ERR_EXIST;
@@ -209,6 +211,18 @@ enum rfs_err rfs_set_operations(void *filter, struct rfs_op_info ops_info[])
 	mutex_unlock(&path_list_mutex);
 
 	return retv;
+}
+
+enum rfs_err rfs_set_mod_cb(rfs_filter filter, enum rfs_err (*mod_cb)(union rfs_mod *))
+{
+	struct filter *flt = (struct filter *)filter;
+
+	if (!flt)
+		return RFS_ERR_INVAL;
+
+	flt->mod_cb = mod_cb;
+
+	return RFS_ERR_OK;
 }
 
 int flt_add_local(struct path *path, struct filter *flt)
@@ -666,10 +680,94 @@ out:
 	return len;
 }
 
+int flt_get_by_name(rfs_filter *filter, char *name)
+{
+	struct filter *flt;
+	int retval;
+
+	spin_lock(&flt_list_lock);
+	list_for_each_entry(flt, &flt_list, f_list){
+		if (strcmp(flt->f_name, name) == 0){
+			*filter = flt;
+			goto ok;
+		}
+	}
+	retval = -1;
+	goto end;
+ok:
+	retval = 0;
+end:
+	spin_unlock(&flt_list_lock);
+	return(retval);
+}
+
+int flt_get_all_infos(struct rfs_filter_info **filters_info, int *count)
+{
+	struct filter *flt;
+	struct rfs_filter_info *filter_info;
+	int i = 0;
+	int namememlen;
+	int retval;
+
+	i = 0;
+	spin_lock(&flt_list_lock);
+        list_for_each_entry(flt, &flt_list, f_list){
+		i++;
+	}
+	
+	if (i > 0){
+		*filters_info = (struct rfs_filter_info *) kmalloc(sizeof(struct rfs_filter_info) * i, GFP_KERNEL);
+		if (!(*filters_info)){
+			retval = -1;
+			goto end;
+		}
+
+		i = 0;
+		list_for_each_entry(flt, &flt_list, f_list){
+			filter_info = &((*filters_info)[i]);
+			namememlen = strlen(flt->f_name) + 1;
+			filter_info->name = (char *) kmalloc(namememlen, GFP_KERNEL);
+			if (!filter_info){
+				retval = -1;
+				goto cleanup;
+			}
+			memcpy(filter_info->name, flt->f_name, namememlen);
+			filter_info->priority = flt->f_priority;
+			filter_info->active = atomic_read(&flt->f_active);
+			i++;
+		}
+	}
+
+	retval = 0;
+	*count = i;
+	goto end;
+cleanup:
+	while(i-- > 0){
+		filter_info = &((*filters_info)[i]);
+		kfree(filter_info->name);
+	}
+	kfree(*filters_info);
+	*filters_info = NULL;
+end:
+	spin_unlock(&flt_list_lock);
+	return(retval);
+}
+
+enum rfs_err flt_execute_mod_cb(struct filter *flt, union rfs_mod *mod)
+{
+	if (!flt){
+		return(RFS_ERR_NOENT);
+	}
+	if (flt->mod_cb){
+		return(flt->mod_cb(mod));
+	}
+	return(RFS_ERR_OPNOTSUPP);
+}
 
 EXPORT_SYMBOL(rfs_register_filter);
 EXPORT_SYMBOL(rfs_unregister_filter);
 EXPORT_SYMBOL(rfs_activate_filter);
 EXPORT_SYMBOL(rfs_deactivate_filter);
 EXPORT_SYMBOL(rfs_set_operations);
+EXPORT_SYMBOL(rfs_set_mod_cb);
 

@@ -14,6 +14,9 @@
 #include <linux/namei.h>
 #include <linux/delay.h>
 #include <linux/wait.h>
+#include <asm/uaccess.h>
+//#include <linux/cdev.h>
+#include <linux/device.h>
 #include "redirfs.h"
 #include "debug.h"
 
@@ -27,6 +30,7 @@ struct filter {
 	int f_priority;
 	enum rfs_retv (*f_pre_cbs[RFS_OP_END])(rfs_context, struct rfs_args *);
 	enum rfs_retv (*f_post_cbs[RFS_OP_END])(rfs_context, struct rfs_args *);
+	int (*mod_cb)(union rfs_mod *);
 	unsigned long long f_count;
 	atomic_t f_active;
 	atomic_t f_del;
@@ -43,7 +47,9 @@ void flt_put(struct filter *flt);
 struct filter *flt_alloc(struct rfs_filter_info *flt_info);
 int flt_set_ops_cb(struct path *path, void *data);
 int flt_proc_info(char *buf, int size);
-
+int flt_get_by_name(rfs_filter *filter, char *name);
+int flt_get_all_infos(struct rfs_filter_info **filters_info, int *count);
+int flt_execute_mod_cb(struct filter *flt, union rfs_mod *mod);
 
 struct ops {
 	spinlock_t o_lock;
@@ -105,6 +111,7 @@ void path_del_rdentry(struct path *path, struct rdentry *rdentry);
 int rfs_path_walk(struct path *path, int walkcb(struct path*, void*), void *datacb);
 void path_rem(struct path *path);
 int path_proc_info(char *buf, int size);
+int path_get_infos(rfs_filter filter, struct rfs_path_info **paths_info, int *count);
 
 struct rfile {
 	struct list_head rf_rdentry_list;
@@ -214,6 +221,9 @@ int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_a
 
 int rfs_proc_init(void);
 void rfs_proc_destroy(void);
+
+int redirctl_init(void);
+void redirctl_destroy(void);
 
 #endif /* _RFS_REDIR_H */
 
