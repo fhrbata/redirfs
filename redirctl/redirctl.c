@@ -15,50 +15,10 @@
 #include "../../../trunk/src/redirfs/redirfs.h"
 
 #define NODFILE "/dev/" REDIRCTL_NAME
-#define PROCDEVICES "/proc/devices"
 
 int fd;
 
-int get_major(){
-  FILE *f;
-  char buffer[256];
-  int major;
-  int retval = -1;
-
-  f = fopen(PROCDEVICES, "r");
-  if (f){
-    while(!feof(f)){
-      fgets(buffer, sizeof(buffer), f);
-      if (sscanf(buffer, "%d %s\n", &major, buffer) == 2){
-	if (strcmp(buffer, REDIRCTL_NAME) == 0){
-	  retval = major;
-	}
-      }
-    }
-    fclose(f);
-  }
-  return(retval);
-}
-
 int redirctl_open(void){
-  int err;
-  int major;
-
-  err = unlink(NODFILE);
-  if (err == -1 && errno != ENOENT){
-    return(err);
-  }
-
-  major = get_major();
-  if (major < 0){
-    return(major);
-  }
-
-  err = mknod(NODFILE, S_IFCHR | S_IRUSR | S_IRGRP | S_IROTH | S_IWUSR, MKDEV(major, 0));
-  if (err == -1){
-    return(err);
-  }
-
   fd = open(NODFILE, O_RDWR);
   return(fd);
 }
@@ -257,7 +217,6 @@ int redirctl_deactivate_filter(char *filter_name){
 void usage(void){
   printf("usage: redirctl [command] [options]\n"
          "commands:\n"
-	 "  mknod\n"
 	 "  list\n"
 	 "  paths filter_name\n"
 	 "  setpath filter_name path [include|exclude] [single|subtree]\n"
@@ -278,10 +237,7 @@ int main(int argc, char *argv[]){
     return(2);
   }
 
-  if (strcmp(argv[1], "nodfile") == 0){
-    // only refresh nodfile and it's done by redirctl_open()
-  }
-  else if (strcmp(argv[1], "list") == 0){
+  if (strcmp(argv[1], "list") == 0){
     if (redirctl_filters_list() != 0){
       retval = 3;
       goto end;
