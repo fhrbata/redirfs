@@ -111,8 +111,8 @@ enum rfs_err rfs_register_filter(void **filter, struct rfs_filter_info *filter_i
 
 enum rfs_err rfs_unregister_filter(void *filter)
 {
-	struct path *loop;
-	struct path *tmp;
+	struct rpath *loop;
+	struct rpath *tmp;
 	struct filter *flt;
 	struct filter *pos;
 	int found = 0;
@@ -225,13 +225,13 @@ enum rfs_err rfs_set_mod_cb(rfs_filter filter, enum rfs_err (*mod_cb)(union rfs_
 	return RFS_ERR_OK;
 }
 
-int flt_add_local(struct path *path, struct filter *flt)
+int flt_add_local(struct rpath *path, struct filter *flt)
 {
 	struct chain *inchain_local = NULL;
 	struct chain *exchain_local = NULL;
-	struct path *path_cmp = path;
+	struct rpath *path_cmp = path;
 	struct ops *ops = NULL;
-	struct path *path_go = path;
+	struct rpath *path_go = path;
 	int retv;
 
 	if (chain_find_flt(path->p_inchain_local, flt) == -1) {
@@ -306,12 +306,12 @@ int flt_add_local(struct path *path, struct filter *flt)
 	return RFS_ERR_OK;
 }
 
-int flt_rem_local(struct path *path, struct filter *flt)
+int flt_rem_local(struct rpath *path, struct filter *flt)
 {
 	struct chain *inchain_local = NULL;
 	struct chain *exchain_local = NULL;
-	struct path *path_go = path;
-	struct path *path_cmp = path;
+	struct rpath *path_go = path;
+	struct rpath *path_cmp = path;
 	struct ops *ops = NULL;
 	int aux = 0;
 	int retv;
@@ -412,13 +412,13 @@ int flt_rem_local(struct path *path, struct filter *flt)
 	return RFS_ERR_OK;
 }
 
-int flt_add_cb(struct path *path, void *data)
+int flt_add_cb(struct rpath *path, void *data)
 {
 	struct filter *flt;
 	struct chain *inchain = NULL;
 	struct chain *exchain = NULL;
-	struct path *path_go = path;
-	struct path *path_cmp = path->p_parent;
+	struct rpath *path_go = path;
+	struct rpath *path_cmp = path->p_parent;
 	struct ops *ops;
 	int retv;
 
@@ -503,13 +503,13 @@ int flt_add_cb(struct path *path, void *data)
 	return RFS_ERR_OK;
 }
 
-int flt_rem_cb(struct path *path, void *data)
+int flt_rem_cb(struct rpath *path, void *data)
 {
 	struct filter *flt;
 	struct chain *inchain = NULL;
 	struct chain *exchain = NULL;
-	struct path *path_go = path;
-	struct path *path_cmp = path->p_parent;
+	struct rpath *path_go = path;
+	struct rpath *path_cmp = path->p_parent;
 	struct ops *ops;
 	int remove = 0;
 	int aux = 0;
@@ -620,7 +620,7 @@ int flt_rem_cb(struct path *path, void *data)
 	return RFS_ERR_OK;
 }
 
-int flt_set_ops_cb(struct path *path, void *data)
+int flt_set_ops_cb(struct rpath *path, void *data)
 {
 	struct filter *flt;
 	struct ops *ops;

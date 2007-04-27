@@ -1,6 +1,6 @@
 #include "redir.h"
 
-static kmem_cache_t *rfile_cache = NULL;
+static struct kmem_cache *rfile_cache = NULL;
 unsigned long long rfile_cnt = 0;
 spinlock_t rfile_cnt_lock = SPIN_LOCK_UNLOCKED;
 extern atomic_t rfiles_freed;
@@ -207,7 +207,7 @@ int rfs_open(struct inode *inode, struct file *file)
 	struct rinode *rinode = NULL;
 	const struct file_operations *fop = NULL;
 	struct rfile *rfile = NULL;
-	struct path *path = NULL;
+	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
 	int rv = 0;
@@ -275,7 +275,7 @@ int rfs_open(struct inode *inode, struct file *file)
 int rfs_release(struct inode *inode, struct file *file)
 {
 	struct rfile *rfile = NULL;
-	struct path *path = NULL;
+	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
 	int rv = 0;
@@ -335,7 +335,7 @@ int rfs_release(struct inode *inode, struct file *file)
 int rfs_readdir(struct file *file, void *buf, filldir_t filler)
 {
 	struct rfile *rfile = NULL;
-	struct path *path = NULL;
+	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
 	int rv = 0;
@@ -380,7 +380,7 @@ int rfs_readdir(struct file *file, void *buf, filldir_t filler)
 ssize_t rfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 {
 	struct rfile *rfile = NULL;
-	struct path *path = NULL;
+	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
 	ssize_t rv = 0;
@@ -441,7 +441,7 @@ ssize_t rfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 ssize_t rfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
 {
 	struct rfile *rfile = NULL;
-	struct path *path = NULL;
+	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
 	ssize_t rv = 0;

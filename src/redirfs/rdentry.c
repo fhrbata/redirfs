@@ -1,6 +1,6 @@
 #include "redir.h"
 
-static kmem_cache_t *rdentry_cache = NULL;
+static struct kmem_cache *rdentry_cache = NULL;
 unsigned long long rdentry_cnt = 0;
 spinlock_t rdentry_cnt_lock = SPIN_LOCK_UNLOCKED;
 extern struct file_operations rfs_file_ops;
@@ -13,7 +13,7 @@ struct rdentry *rdentry_alloc(struct dentry* dentry)
 	unsigned long flags;
 
 
-	rdentry = kmem_cache_alloc(rdentry_cache, SLAB_KERNEL);
+	rdentry = kmem_cache_alloc(rdentry_cache, GFP_KERNEL);
 	if (!rdentry)
 		return ERR_PTR(RFS_ERR_NOMEM);
 
@@ -223,7 +223,7 @@ void rdentry_del(struct dentry *dentry)
 int rfs_d_revalidate(struct dentry *dentry, struct nameidata *nd)
 {
 	struct rdentry *rdentry = NULL;
-	struct path *path = NULL;
+	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct inode *inode = NULL;
 	struct rfs_args args;
@@ -285,7 +285,7 @@ int rfs_d_revalidate(struct dentry *dentry, struct nameidata *nd)
 int rfs_d_hash(struct dentry *dentry, struct qstr *name)
 {
 	struct rdentry *rdentry;
-	struct path *path = NULL;
+	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct inode *inode = NULL;
 	struct rfs_args args;
@@ -357,7 +357,7 @@ static inline int rfs_d_compare_default(struct qstr *name1, struct qstr *name2)
 int rfs_d_compare(struct dentry *dentry, struct qstr *name1, struct qstr *name2)
 {
 	struct rdentry *rdentry = NULL;
-	struct path *path = NULL;
+	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct inode *inode = NULL;
 	struct rfs_args args;
@@ -422,7 +422,7 @@ int rfs_d_compare(struct dentry *dentry, struct qstr *name1, struct qstr *name2)
 int rfs_d_delete(struct dentry *dentry)
 {
 	struct rdentry *rdentry = NULL;
-	struct path *path = NULL;
+	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct inode *inode = NULL;
 	struct rfs_args args;
@@ -482,7 +482,7 @@ int rfs_d_delete(struct dentry *dentry)
 void rfs_d_release(struct dentry *dentry)
 {
 	struct rdentry *rdentry = NULL;
-	struct path *path = NULL;
+	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct inode *inode = NULL;
 	struct rfs_args args;
@@ -539,7 +539,7 @@ void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 {
 	struct rdentry *rdentry = NULL;
 	struct rinode *rinode = NULL;
-	struct path *path = NULL;
+	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
 	int cnt = 0;

@@ -91,7 +91,7 @@ int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_a
 	return 0;
 }
 
-int rfs_replace_ops(struct path *path_old, struct path *path_new)
+int rfs_replace_ops(struct rpath *path_old, struct rpath *path_new)
 {
 	struct rdentry *rdentry;
 	struct rinode *rinode;
@@ -165,12 +165,12 @@ int rfs_replace_ops(struct path *path_old, struct path *path_new)
 
 int rfs_replace_ops_cb(struct dentry *dentry, void *data)
 {
-	struct path *path;
+	struct rpath *path;
 	struct rdentry *rdentry;
 	struct rinode *rinode;
 	struct rfile *rfile;
 
-	path = (struct path *)data;
+	path = (struct rpath *)data;
 	rdentry = rdentry_add(dentry);
 
 	if (IS_ERR(rdentry))
@@ -261,9 +261,9 @@ int rfs_restore_ops_cb(struct dentry *dentry, void *data)
 	struct rfile *rfile;
 	struct rfile *tmp;
 	struct rdentry *rdentry;
-	struct path *path;
+	struct rpath *path;
 
-	path = (struct path *)data;
+	path = (struct rpath *)data;
 	rdentry = rdentry_find(dentry);
 
 	if (!rdentry)
@@ -295,7 +295,7 @@ int rfs_restore_ops_cb(struct dentry *dentry, void *data)
 	return 0; 
 }
 
-int rfs_set_ops(struct dentry *dentry, struct path *path)
+int rfs_set_ops(struct dentry *dentry, struct rpath *path)
 {
 	struct rdentry *rdentry;
 	struct rinode *rinode;
@@ -328,7 +328,7 @@ int rfs_set_ops(struct dentry *dentry, struct path *path)
 
 int rfs_set_ops_cb(struct dentry *dentry, void *data)
 {
-	struct path *path = (struct path *)data;
+	struct rpath *path = (struct rpath *)data;
 	struct rdentry *rdentry = rdentry_find(dentry);
 	struct rinode *rinode;
 	struct rfile *rfile = NULL;

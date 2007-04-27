@@ -1,6 +1,6 @@
 #include "redir.h"
 
-static kmem_cache_t *rinode_cache = NULL;
+static struct kmem_cache *rinode_cache = NULL;
 unsigned long long rinode_cnt = 0;
 spinlock_t rinode_cnt_lock = SPIN_LOCK_UNLOCKED;
 extern atomic_t rinodes_freed;
@@ -12,7 +12,7 @@ struct rinode *rinode_alloc(struct inode *inode)
 	unsigned long flags;
 
 
-	rinode = kmem_cache_alloc(rinode_cache, SLAB_KERNEL);
+	rinode = kmem_cache_alloc(rinode_cache, GFP_KERNEL);
 	if (!rinode)
 		return ERR_PTR(RFS_ERR_NOMEM);
 
@@ -20,7 +20,7 @@ struct rinode *rinode_alloc(struct inode *inode)
 	INIT_LIST_HEAD(&rinode->ri_rdentries);
 	INIT_LIST_HEAD(&rinode->ri_data);
 	rinode->ri_inode = inode;
-	rinode->ri_op_old = inode->i_op;
+	rinode->ri_op_old = (struct inode_operations *)inode->i_op;
 	rinode->ri_fop_old = (struct file_operations *)inode->i_fop;
 	rinode->ri_aop_old = (struct address_space_operations *)inode->i_mapping->a_ops;
 	rinode->ri_path = NULL;
@@ -103,7 +103,7 @@ inline void rinode_put(struct rinode *rinode)
 inline struct rinode *rinode_find(struct inode *inode)
 {
 	struct rinode *rinode = NULL;
-	struct inode_operations *i_op;
+	const struct inode_operations *i_op;
 
 
 	rcu_read_lock();
@@ -161,10 +161,10 @@ void rinode_del(struct inode *inode)
 int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 {
 	struct rinode *parent = NULL;
-	struct path *path = NULL;
+	struct rpath *path = NULL;
 	struct rdentry *rdentry = NULL;
 	struct rinode *rinode = NULL;
-	struct path *path_set = NULL;
+	struct rpath *path_set = NULL;
 	struct chain *chain_set = NULL;
 	struct ops *ops_set = NULL;
 	struct chain *chain = NULL;
@@ -258,10 +258,10 @@ exit:
 int rfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
 {
 	struct rinode *parent = NULL;
-	struct path *path = NULL;
+	struct rpath *path = NULL;
 	struct rdentry *rdentry = NULL;
 	struct rinode *rinode = NULL;
-	struct path *path_set = NULL;
+	struct rpath *path_set = NULL;
 	struct chain *chain_set = NULL;
 	struct ops *ops_set = NULL;
 	struct chain *chain = NULL;
@@ -356,10 +356,10 @@ exit:
 struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nd)
 {
 	struct rinode *parent = NULL;
-	struct path *path = NULL;
+	struct rpath *path = NULL;
 	struct rdentry *rdentry = NULL;
 	struct rinode *rinode = NULL;
-	struct path *path_set = NULL;
+	struct rpath *path_set = NULL;
 	struct chain *chain_set = NULL;
 	struct ops *ops_set = NULL;
 	struct chain *chain = NULL;
@@ -453,10 +453,10 @@ exit:
 int rfs_mknod(struct inode * dir, struct dentry *dentry, int mode, dev_t rdev)
 {
 	struct rinode *parent = NULL;
-	struct path *path = NULL;
+	struct rpath *path = NULL;
 	struct rdentry *rdentry = NULL;
 	struct rinode *rinode = NULL;
-	struct path *path_set = NULL;
+	struct rpath *path_set = NULL;
 	struct chain *chain_set = NULL;
 	struct ops *ops_set = NULL;
 	struct chain *chain = NULL;
@@ -551,7 +551,7 @@ exit:
 int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 {
 	struct rinode *rinode = NULL;
-	struct path *path = NULL;
+	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
 	int submask = mask & ~MAY_APPEND;

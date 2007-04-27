@@ -42,10 +42,10 @@ int path_normalize(const char *path, char *buf, int len)
 	return 0;
 }
 
-struct path *path_alloc(const char *path_name)
+struct rpath *path_alloc(const char *path_name)
 {
 	struct nameidata nd;
-	struct path *path;
+	struct rpath *path;
 	char *path_buf;
 	int path_len;
 
@@ -57,7 +57,7 @@ struct path *path_alloc(const char *path_name)
 
 	path_len = strlen(path_name);
 
-	path = kmalloc(sizeof(struct path), GFP_KERNEL);
+	path = kmalloc(sizeof(struct rpath), GFP_KERNEL);
 	path_buf = kmalloc(path_len + 1, GFP_KERNEL);
 
 	if (!path || !path_buf) {
@@ -92,7 +92,7 @@ struct path *path_alloc(const char *path_name)
 	return path;
 }
 
-struct path *path_get(struct path *path)
+struct rpath *path_get(struct rpath *path)
 {
 	unsigned long flags;
 
@@ -107,7 +107,7 @@ struct path *path_get(struct path *path)
 	return path;
 }
 
-void path_put(struct path *path)
+void path_put(struct rpath *path)
 {
 	unsigned long flags;
 
@@ -132,12 +132,12 @@ void path_put(struct path *path)
 	kfree(path);
 }
 
-struct path *path_find(const char *path_name, int parent)
+struct rpath *path_find(const char *path_name, int parent)
 {
 	struct list_head *end;
 	struct list_head *act;
-	struct path *loop;
-	struct path *found = NULL;
+	struct rpath *loop;
+	struct rpath *found = NULL;
 	int path_len;
 
 	end = &path_list;
@@ -146,7 +146,7 @@ struct path *path_find(const char *path_name, int parent)
 	path_len = strlen(path_name);
 
 	while (act != end) {
-		loop = list_entry(act, struct path, p_sibpath);
+		loop = list_entry(act, struct rpath, p_sibpath);
 
 		if (loop->p_len > path_len) {
 			act = act->next;
@@ -175,11 +175,11 @@ struct path *path_find(const char *path_name, int parent)
 	return found;
 }
 
-struct path *path_add(const char *path_name)
+struct rpath *path_add(const char *path_name)
 {
-	struct path *path;
-	struct path *parent;
-	struct path *loop;
+	struct rpath *path;
+	struct rpath *parent;
+	struct rpath *loop;
 	struct list_head *head;
 	struct list_head *act;
 	struct list_head *tmp;
@@ -204,7 +204,7 @@ struct path *path_add(const char *path_name)
 		head = &path_list;
 
 	list_for_each_safe(act, tmp, head) {
-		loop = list_entry(act, struct path, p_sibpath);
+		loop = list_entry(act, struct rpath, p_sibpath);
 
 		if (loop->p_len < path_len)
 			continue;
@@ -225,13 +225,13 @@ struct path *path_add(const char *path_name)
 	return path;
 }
 
-void path_rem(struct path *path)
+void path_rem(struct rpath *path)
 {
 	struct list_head *act;
 	struct list_head *tmp;
 	struct list_head *dst;
-	struct path *loop;
-	struct path *parent;
+	struct rpath *loop;
+	struct rpath *parent;
 
 	parent = path->p_parent;
 
@@ -241,7 +241,7 @@ void path_rem(struct path *path)
 		dst = &path_list;
 
 	list_for_each_safe(act, tmp, &path->p_subpath) {
-		loop = list_entry(act, struct path, p_sibpath);
+		loop = list_entry(act, struct rpath, p_sibpath);
 		list_move(&loop->p_sibpath, dst);
 		path_put(loop->p_parent);
 		path_get(path->p_parent);
@@ -252,12 +252,12 @@ void path_rem(struct path *path)
 	path_put(path);
 }
 
-int rfs_path_walk(struct path *path, int walkcb(struct path*, void*), void *datacb)
+int rfs_path_walk(struct rpath *path, int walkcb(struct rpath*, void*), void *datacb)
 {
 	struct list_head *act;
 	struct list_head *end;
 	struct list_head *par;
-	struct path *loop;
+	struct rpath *loop;
 	int stop;
 
 
@@ -275,7 +275,7 @@ int rfs_path_walk(struct path *path, int walkcb(struct path*, void*), void *data
 	}
 
 	while (act != end) {
-		loop = list_entry(act, struct path, p_sibpath);
+		loop = list_entry(act, struct rpath, p_sibpath);
 		stop = walkcb(loop, datacb);
 
 		if (stop)
@@ -298,7 +298,7 @@ int rfs_path_walk(struct path *path, int walkcb(struct path*, void*), void *data
 }
 
 #if defined(RFS_DEBUG)
-static int path_dump_cb(struct path *path, void *data)
+static int path_dump_cb(struct rpath *path, void *data)
 {
 	struct filter *flt;
 	int i;
@@ -366,10 +366,10 @@ void path_dump(void)
 enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 {
 	struct filter *flt = (struct filter *)filter;
-	struct path *path = NULL;
-	struct path *parent = NULL;
-	struct path *loop;
-	struct path *tmp;
+	struct rpath *path = NULL;
+	struct rpath *parent = NULL;
+	struct rpath *loop;
+	struct rpath *tmp;
 	struct chain *inchain = NULL;
 	struct chain *exchain = NULL;
 	char *path_name = NULL;
@@ -540,22 +540,22 @@ exit:
 	return retv;
 }
 
-struct path_proc_data {
+struct rpath_proc_data {
 	char *buf;
 	int size;
 	int len;
 
 };
 
-static int path_proc_info_cb(struct path *path, void *data)
+static int path_proc_info_cb(struct rpath *path, void *data)
 {
-	struct path_proc_data *info = NULL;
+	struct rpath_proc_data *info = NULL;
 	struct filter *flt = NULL;
 	char active;
 	int i = 0;
 
 
-	info = (struct path_proc_data *)data;
+	info = (struct rpath_proc_data *)data;
 
 	if ((info->len + strlen(path->p_path) + 1) > info->size)
 		return -1;
@@ -613,7 +613,7 @@ static int path_proc_info_cb(struct path *path, void *data)
 
 int path_proc_info(char *buf, int size)
 {               
-	struct path_proc_data info = {buf, size, 0};
+	struct rpath_proc_data info = {buf, size, 0};
 
 	mutex_lock(&path_list_mutex);
 	rfs_path_walk(NULL, path_proc_info_cb, &info);
@@ -622,7 +622,7 @@ int path_proc_info(char *buf, int size)
 	return info.len;
 }
 
-int path_dpath(struct rdentry *rdentry, struct path *path, char *buffer, int size)
+int path_dpath(struct rdentry *rdentry, struct rpath *path, char *buffer, int size)
 {
 	struct dentry *dentry;
 	char *end;
@@ -670,7 +670,7 @@ int path_dpath(struct rdentry *rdentry, struct path *path, char *buffer, int siz
 enum rfs_err rfs_get_filename(struct dentry *dentry, char *buffer, int size)
 {
 	struct rdentry *rdentry;
-	struct path *path;
+	struct rpath *path;
 	int retv;
 
 	if (!dentry || !buffer)
@@ -698,13 +698,13 @@ enum rfs_err rfs_get_filename(struct dentry *dentry, char *buffer, int size)
 	return retv;
 }
 
-struct path_get_info{
+struct rpath_get_info{
 	struct filter *flt;
 	struct rfs_path_info *paths_info;
 	int count;
 };
 
-static void process_path(struct filter *flt, struct path_get_info *info, char *pathname, int flags){
+static void process_path(struct filter *flt, struct rpath_get_info *info, char *pathname, int flags){
 	if (flt == info->flt){
 		if (info->paths_info != NULL){
 			info->paths_info[info->count].path = pathname;
@@ -714,15 +714,15 @@ static void process_path(struct filter *flt, struct path_get_info *info, char *p
 	}
 }
 
-static int path_get_infos_cb(struct path *path, void *data)
+static int path_get_infos_cb(struct rpath *path, void *data)
 {
-	struct path_get_info *info;
+	struct rpath_get_info *info;
 	int i;
 	char *pathname = NULL;
 	int pathnamememlen;
 	int startcount = 0;
 
-	info = (struct path_get_info *) data;
+	info = (struct rpath_get_info *) data;
 
 	if (info->paths_info != NULL){
 		pathnamememlen = strlen(path->p_path) + 1;
@@ -768,7 +768,7 @@ static int path_get_infos_cb(struct path *path, void *data)
 int path_get_infos(rfs_filter filter, struct rfs_path_info **paths_info, int *count)
 {
 	int retval;
-	struct path_get_info info;
+	struct rpath_get_info info;
 	char *tmp;
 
 	info.flt = filter;
