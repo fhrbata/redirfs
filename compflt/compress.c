@@ -1,117 +1,111 @@
 #include <linux/crypto.h>
 #include "compflt.h"
 
-char *comp_methods[] = { "deflate", "lzf", "bzip2", "rle", NULL };
-int cmethod = 0; // deflate is default
+// cryptoapi doesnt provide a way to iterate over all registered methods.
+static char *cflt_method_known[] = { "", "deflate", "lzf", "bzip2", "rle", "null", NULL };
+unsigned int cflt_cmethod = 0;
 
-struct crypto_tfm *comp_init(unsigned int mid)
+struct crypto_comp *cflt_comp_init(unsigned int mid)
 {
-        struct crypto_tfm *tfm = NULL;
+        struct crypto_comp *tfm = NULL;
 
-        debug_printk("compflt: [f:comp_init]\n");
+        cflt_debug_printk("compflt: [f:comp_init]\n");
 
-        // initialize compression algorithm
-        if (!crypto_alg_available(comp_methods[mid], 0)) {
+        // initialize compression method
+        if (!crypto_has_alg(cflt_method_known[mid], 0, 0)) {
                 printk(KERN_ERR "compflt: compression method %s "
-                                "unavailable\n", comp_methods[mid]);
+                                "unavailable\n", cflt_method_known[mid]);
                 return NULL;
         }
 
-        tfm = crypto_alloc_tfm(comp_methods[mid], 0);
+        tfm = crypto_alloc_comp(cflt_method_known[mid], 0, 0);
         if (tfm == NULL) {
                 printk(KERN_ERR "compflt: failed to alloc %s "
-                                "compression method\n", comp_methods[mid]);
+                                "compression method\n", cflt_method_known[mid]);
                 return NULL;
         }
 
         return tfm;
 }
 
-inline void comp_deinit(struct crypto_tfm *tfm)
+inline void cflt_comp_deinit(struct crypto_comp *tfm)
 {
-        crypto_free_tfm(tfm);
+        crypto_free_comp(tfm);
 }
 
-char* decomp_block(struct crypto_tfm *tfm, struct block *blk, char *block_c)
+int cflt_decomp_block(struct crypto_comp *tfm, struct cflt_block *blk)
 {
-        char *block_u = NULL;
+        int rv = 0;
 
-        debug_printk("compflt: [f:decomp_block]\n");
+        cflt_debug_printk("compflt: [f:decomp_block]\n");
 
-        // we use COMPFLT_BLOCK_SIZE_U instead of blk->size_u , because we might
-        // be adding data to the block (write operation)
-        block_u = kmalloc(COMPFLT_BLOCK_SIZE_U, GFP_KERNEL);
-        if (!block_u) {
-                printk(KERN_ERR "compflt: failed to allocate %i bytes\n", blk->size_u);
-                return NULL;
+        blk->data_u = kmalloc(blk->par->blksize, GFP_KERNEL);
+
+        if (!blk->data_u)
+                return -ENOMEM;
+
+	memset(blk->data_u, 0, blk->par->blksize);
+
+	if ((rv = crypto_comp_decompress(tfm, blk->data_c, blk->size_c, blk->data_u, &blk->size_u))) {
+                printk(KERN_ERR "compflt: failed to decompress data block error: %i\n", rv);
+                kfree(blk->data_u);
+                return rv;
         }
 
-	memset(block_u, 0, COMPFLT_BLOCK_SIZE_U);
-	if (crypto_comp_decompress(tfm, block_c, blk->size_c, block_u, &blk->size_u)) {
-                printk(KERN_ERR "compflt: failed to decompress data block\n");
-                kfree(block_u);
-                return NULL;
-        }
+        cflt_debug_printk("compflt: [f:decomp_block] decompressed %i bytes | ratio=%i:%i\n", blk->size_c, blk->size_c, blk->size_u);
 
-        debug_printk("compflt: [f:decomp_block] decompressed %i bytes | ratio=%i:%i\n", blk->size_c, blk->size_c, blk->size_u);
-
-        return block_u;
+        return rv;
 }
 
-char* comp_block(struct crypto_tfm *tfm, struct block *blk, char *block_u)
+int cflt_comp_block(struct crypto_comp *tfm, struct cflt_block *blk)
 {
-        char *block_c = NULL;
+        int rv = 0;
         unsigned int size_c;
 
-        debug_printk("compflt: [f:comp_block]\n");
+        cflt_debug_printk("compflt: [f:comp_block]\n");
 
-        size_c = 2*COMPFLT_BLOCK_SIZE_U;
-        block_c = kmalloc(size_c, GFP_KERNEL);
-        if (!block_c) {
-                printk(KERN_ERR "compflt: failed to allocate %i bytes\n", size_c);
-                return NULL;
+        size_c = 2*blk->par->blksize;
+        blk->data_c = kmalloc(size_c, GFP_KERNEL);
+        if (!blk->data_c)
+                return -ENOMEM;
+
+	memset(blk->data_c, 0, size_c);
+        if((rv = crypto_comp_compress(tfm, blk->data_u, blk->size_u, blk->data_c, &size_c))) {
+                printk(KERN_ERR "compflt: failed to compress data block error: %i\n", rv);
+                kfree(blk->data_c);
+                return rv;
         }
 
-	memset(block_c, 0, size_c);
-        if(crypto_comp_compress(tfm, block_u, blk->size_u, block_c, &size_c)) {
-                printk(KERN_ERR "compflt: failed to compress data block\n");
-                kfree(block_c);
-                return NULL;
-        }
-
-        debug_printk("compflt: [f:comp_block] compressed %i bytes | ratio=%i:%i\n", blk->size_u, size_c, blk->size_u);
+        cflt_debug_printk("compflt: [f:comp_block] compressed %i bytes | ratio=%i:%i\n", blk->size_u, size_c, blk->size_u);
 
         blk->size_c = size_c;
 
-        return block_c;
+        return rv;
 }
 
-inline int comp_method(void)
-{
-        return cmethod;
-}
-
-int comp_proc_get(char* buf, int bsize)
+int cflt_comp_proc_method(char* buf, int bsize)
 {
         int len = 0;
 
-        if (strlen(comp_methods[cmethod]) > bsize)
+        if (strlen(cflt_method_known[cflt_cmethod]) > bsize)
                 return 0;
 
-        len = sprintf(buf, "%s\n", comp_methods[cmethod]);
+        len = sprintf(buf, "%s\n", cflt_method_known[cflt_cmethod]);
         return len;
 }
 
-void comp_proc_set(char* buf)
+int cflt_comp_method_set(char* buf)
 {
-        char **p = comp_methods;
-        int i = 0;
+        char **p = cflt_method_known;
+        int i = 1;
 
+        p++; // skip 1st 'dummy' entry
         while (*p) {
-                if(!strcmp(*p, buf)) {
-                        if (crypto_alg_available(*p, 0)) {
-                                cmethod = i;
+                if(!strcmp(*p, buf) && strlen(*p) == strlen(buf)) {
+                        if (crypto_has_alg(*p, 0, 0)) {
+                                cflt_cmethod = i;
                                 printk(KERN_INFO "compflt: compression method set to '%s'\n", *p);
+                                return 0;
                         }
                         else {
                                 printk(KERN_INFO "compflt: compression method '%s' unavailable\n", *p);
@@ -120,31 +114,33 @@ void comp_proc_set(char* buf)
                 }
                 p++; i++;
         }
+
+        return -1;
 }
 
-int comp_stat(char *buf, int bsize)
+int cflt_comp_proc_stat(char *buf, int bsize)
 {
         int len = 0;
-        struct fheader *fh;
-        struct block *blk;
+        struct cflt_file *fh;
+        struct cflt_block *blk;
         long u, c, overhead;
 
-        if (len + 60 > bsize)
+        if (len + 68 > bsize)
                 return len;
-        len += sprintf(buf, "%-12s%-12s%-12s%-12s%-11s\n", "[ino]", "[alg]", "[comp]", "[decomp]", "[ohead]");
+        len += sprintf(buf, "%-10s%-12s%-10s%-12s%-12s%-11s\n", "ino", "alg", "blksize", "comp", "ohead", "decomp");
 
-        list_for_each_entry_reverse(fh, &fheader_list, all) {
-                if (len + 60 > bsize)
+        list_for_each_entry_reverse(fh, &cflt_file_list, all) {
+                if (len + 68 > bsize)
                         return len;
 
                 u = c = 0;
-                overhead = COMPFLT_FH_SIZE;
-                list_for_each_entry(blk, &(fh->map.file), file) {
-                        overhead += COMPFLT_BH_SIZE;
+                overhead = CFLT_FH_SIZE;
+                list_for_each_entry(blk, &fh->blks, file) {
+                        overhead += CFLT_BH_SIZE;
                         u += blk->size_u;
                         c += blk->size_c;
                 }
-                len += sprintf(buf+len, "%-12li%-12s%-12li%-12li%-11li\n", fh->ino, comp_methods[fh->method], c, u, overhead);
+                len += sprintf(buf+len, "%-10li%-12s%-10i%-12li%-12li%-11li\n", fh->ino, cflt_method_known[fh->method], fh->blksize, c, overhead, u);
         }
 
         return len;

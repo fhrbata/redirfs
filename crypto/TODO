@@ -1,8 +1,6 @@
-- port bzip2lib to 2.6.18 [1]
+- bugfix rle:decompress
+- port bzip2lib to 2.6.18 [1][2]
 - make a bzip2 cryptoapi module
-- use the lzf compression module from suspend2 [2][3]
-- test/benchmark module
 
-[1] http://shepard.kicks-ass.net/~cc/
-[2] http://lwn.net/Articles/144031/
-[3] http://www.suspend2.net/
+[1] http://kerneltrap.org/node/325
+[2] http://shepard.kicks-ass.net/~cc/

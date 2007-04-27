@@ -5,196 +5,225 @@
 
 #define CACHE_NAME "compflt_block"
 
-static kmem_cache_t *block_cache = NULL;
-spinlock_t block_cache_l = SPIN_LOCK_UNLOCKED;
+static struct kmem_cache *cflt_block_cache = NULL;
+spinlock_t cflt_block_cache_l = SPIN_LOCK_UNLOCKED;
 
-static struct list_head block_list;
-rwlock_t block_list_l = RW_LOCK_UNLOCKED;
-
-int block_cache_init(void)
+int cflt_block_cache_init(void)
 {
-        debug_printk("compflt: [f:block_cache_init]\n");
+        cflt_debug_printk("compflt: [f:cflt_block_cache_init]\n");
 
-        block_cache = kmem_cache_create(CACHE_NAME, sizeof(struct block), 0, 0, NULL, NULL);
+        cflt_block_cache = kmem_cache_create(CACHE_NAME, sizeof(struct cflt_block), 0, 0, NULL, NULL);
 
-        if (!block_cache) {
-                printk(KERN_ERR "compflt: failed to allocate block cache\n");
+        if (!cflt_block_cache)
                 return -ENOMEM;
-        }
-
-        INIT_LIST_HEAD(&block_list);
 
         return 0;
 }
 
-void block_cache_deinit(void)
+void cflt_block_cache_deinit(void)
 {
-        struct block *blk;
-        struct block *tmp;
+        cflt_debug_printk("compflt: [f:cflt_block_cache_deinit]\n");
 
-        debug_printk("compflt: [f:block_cache_deinit]\n");
-
-        read_lock(&block_list_l);
-        list_for_each_entry_safe(blk, tmp, &block_list, all) {
-                block_deinit(blk);
-        }
-        read_unlock(&block_list_l);
-
-        spin_lock(&block_cache_l);
-        if(kmem_cache_destroy(block_cache))
-                printk(KERN_ERR "compflt: failed to destroy block cache\n");
-        block_cache = NULL;
-        spin_unlock(&block_cache_l);
+        spin_lock(&cflt_block_cache_l);
+        kmem_cache_destroy(cflt_block_cache);
+        spin_unlock(&cflt_block_cache_l);
+        cflt_block_cache = NULL;
 }
 
-struct block* block_init(void)
+struct cflt_block* cflt_block_init(void)
 {
-        struct block *blk;
+        struct cflt_block *blk;
 
-        debug_printk("compflt: [f:block_init]\n");
+        cflt_debug_printk("compflt: [f:cflt_block_init]\n");
 
-        spin_lock(&block_cache_l);
-        blk = kmem_cache_alloc(block_cache, SLAB_KERNEL);
-        spin_unlock(&block_cache_l);
+        spin_lock(&cflt_block_cache_l);
+        blk = kmem_cache_alloc(cflt_block_cache, GFP_KERNEL);
+        spin_unlock(&cflt_block_cache_l);
 
         if (!blk) {
                 printk(KERN_ERR "compflt: failed to allocate a block\n");
                 return NULL;
         }
 
-        blk->data_u = NULL;
-        blk->type = 1;
+        blk->data_u = blk->data_c = NULL;
+        blk->par = NULL;
+        blk->type = CFLT_BLK_NORM;
         blk->dirty = 0;
-        blk->off_u = 0;
-        blk->off_c = 0;
-        blk->off_next = 0;
-        blk->size_u = 0;
-        blk->size_c = 0;
+        blk->off_u = blk->off_c = blk->off_next = 0;
+        blk->size_u = blk->size_c = 0;
 
-        write_lock(&block_list_l);
-        list_add(&blk->all, &block_list);
-        write_unlock(&block_list_l);
         INIT_LIST_HEAD(&blk->file);
 
         return blk;
 }
 
-void block_deinit(struct block *blk)
+void cflt_block_deinit(struct cflt_block *blk)
 {
-        debug_printk("compflt: [f:block_deinit]\n");
+        cflt_debug_printk("compflt: [f:cflt_block_deinit]\n");
 
-        list_del(&blk->all);
         list_del(&blk->file);
-        spin_lock(&block_cache_l);
-        kmem_cache_free(block_cache, blk);
-        spin_unlock(&block_cache_l);
+        spin_lock(&cflt_block_cache_l);
+        kmem_cache_free(cflt_block_cache, blk);
+        spin_unlock(&cflt_block_cache_l);
 }
 
-// sets off to the start of the next header (or 0 if last)
-int block_read_header(struct file *f, struct block *blk, loff_t *off)
+// sets 'off' to the start of the next header (or 0 if last)
+int cflt_block_read_header(struct file *f, struct cflt_block *blk, loff_t *off)
 {
         int rv = 0;
+        int boff = 0;
+        char buf[CFLT_BH_SIZE]; // max size
 
+        cflt_debug_printk("compflt: [f:cflt_block_read_header]\n");
+
+        memset(buf, 0, sizeof(buf));
         blk->off_c = *off;
 
-        // TODO: do all this in one read
-        rv = orig_read(f, (u8*)&blk->type, sizeof(u8), off);
+        rv = cflt_orig_read(f, buf, sizeof(buf), off);
         if (!rv) {
-                return -1; // eof
+                printk(KERN_ERR "compflt: failed to read header\n");
+                return -1;
         }
 
-        // TODO: handle 'free' blocks
-        if (!blk->type)
-                return -1;
+        memcpy((char*)&blk->type, buf+boff, sizeof(u8));
+        boff += sizeof(u8);
 
-        orig_read(f, (char*)&blk->off_u, sizeof(u32), off);
-        orig_read(f, (char*)&blk->off_next, sizeof(u32), off);
-        orig_read(f, (char*)&blk->size_c, sizeof(u32), off);
-        orig_read(f, (char*)&blk->size_u, sizeof(u32), off);
+        // reset is type-specific
+        switch (blk->type) {
+        case CFLT_BLK_FREE:
+                // TODO: free block
+                break;
+        case CFLT_BLK_NORM:
+                memcpy(&blk->off_u, buf+boff, sizeof(u32));
+                boff += sizeof(u32);
+                memcpy(&blk->off_next, buf+boff, sizeof(u32));
+                boff += sizeof(u32);
+                memcpy(&blk->size_c, buf+boff, sizeof(u32));
+                boff += sizeof(u32);
+                memcpy(&blk->size_u, buf+boff, sizeof(u32));
+                break;
+        default:
+                // TODO
+                break;
+        }
+
+        cflt_debug_block(blk);
 
         *off = blk->off_next;
-
         return 0;
 }
 
-int block_write_header(struct file *f, struct block *blk)
+int cflt_block_write_header(struct file *f, struct cflt_block *blk)
 {
         loff_t off;
+        char buf[CFLT_BH_SIZE]; // max size
+        int boff = 0;
+        int rv = 0;
+
+        cflt_debug_printk("compflt: [f:cflt_block_write_header]\n");
 
         if (!blk->dirty)
                 return 0;
-        
+
+        switch (blk->type) {
+        case CFLT_BLK_FREE:
+                // TODO: free block
+                break;
+        case CFLT_BLK_NORM:
+                memcpy(buf+boff, &blk->type, sizeof(u8));
+                boff += sizeof(u8);
+                memcpy(buf+boff, &blk->off_u, sizeof(u32));
+                boff += sizeof(u32);
+                memcpy(buf+boff, &blk->off_next, sizeof(u32));
+                boff += sizeof(u32);
+                memcpy(buf+boff, &blk->size_c, sizeof(u32));
+                boff += sizeof(u32);
+                memcpy(buf+boff, &blk->size_u, sizeof(u32));
+                break;
+        default:
+                // TODO
+                break;
+        }
+
         off = blk->off_c;
-        // TODO: do all this in one write
-        orig_write(f, (char*)&blk->type, sizeof(u8), &off);
-        orig_write(f, (char*)&blk->off_u, sizeof(u32), &off);
-        orig_write(f, (char*)&blk->off_next, sizeof(u32), &off);
-        orig_write(f, (char*)&blk->size_c, sizeof(u32), &off);
-        orig_write(f, (char*)&blk->size_u, sizeof(u32), &off);
+        rv = cflt_orig_write(f, buf, sizeof(buf), &off);
+        if (!rv) {
+                printk(KERN_ERR "compflt: failed to write header\n");
+                return -1;
+        }
         blk->dirty = 0;
 
         return 0;
 }
 
-static char* block_read_c(struct file *f, struct block *blk)
+void cflt_block_write_headers(struct file *f, struct cflt_file *fh)
 {
-        char *block_c = NULL;
-        loff_t off_data = blk->off_c + COMPFLT_BH_SIZE;
+        struct cflt_block *blk;
 
-        debug_printk("compflt: [f:block_read_c]\n");
+        cflt_debug_printk("compflt: [f:cflt_block_write_headers]\n");
 
-        block_c = kmalloc(blk->size_c, GFP_KERNEL);
-        if (!block_c)
-                return NULL;
-
-        orig_read(f, block_c, blk->size_c, &off_data);
-
-        return block_c;
+        list_for_each_entry(blk, &fh->blks, file) {
+                // TODO: check for err
+                cflt_block_write_header(f, blk);
+        }
 }
 
-int block_read(struct file *f, struct block *blk, struct crypto_tfm *tfm)
+static int cflt_block_read_c(struct file *f, struct cflt_block *blk)
 {
-        char *block_c = NULL;
+        loff_t off_data = blk->off_c + CFLT_BH_SIZE;
 
-        debug_printk("compflt: [f:block_read]\n");
+        cflt_debug_printk("compflt: [f:cflt_block_read_c]\n");
 
-        if(!(block_c = block_read_c(f, blk))) {
-                printk(KERN_ERR "compflt: failed to read data block\n");
-                return -1;
-        }
+        blk->data_c = kmalloc(blk->size_c, GFP_KERNEL);
+        if (!blk->data_c)
+                return -ENOMEM;
 
-        blk->data_u = decomp_block(tfm, blk, block_c);
-        if(!blk->data_u)
-                return -1;
+        cflt_orig_read(f, blk->data_c, blk->size_c, &off_data);
 
-        kfree(block_c);
         return 0;
 }
 
-int block_write(struct file *f, struct block *blk, struct crypto_tfm *tfm)
+int cflt_block_read(struct file *f, struct cflt_block *blk, struct crypto_comp *tfm)
 {
-        char *block_c;
+        int err = 0;
+
+        cflt_debug_printk("compflt: [f:cflt_block_read]\n");
+
+        if ((err = cflt_block_read_c(f, blk))) {
+                printk(KERN_ERR "compflt: failed to read block error: %i\n", err);
+                return err;
+        }
+
+        if ((err = cflt_decomp_block(tfm, blk))) {
+                printk(KERN_ERR "compflt: failed to decompress block error: %i\n", err);
+                return err;
+        }
+
+        kfree(blk->data_c);
+        return err;
+}
+
+int cflt_block_write(struct file *f, struct cflt_block *blk, struct crypto_comp *tfm)
+{
+        int err = 0;
         loff_t off_data;
         size_t old = blk->size_c;
 
-        debug_printk("compflt: [f:block_write]\n");
+        cflt_debug_printk("compflt: [f:cflt_block_write]\n");
 
-        block_c = comp_block(tfm, blk, blk->data_u);
-        if(!block_c)
-                return -1;
+        err = cflt_comp_block(tfm, blk);
+        if(err)
+                return err;
 
         if (blk->size_c != old) {
                 // TODO: manage block size changes
-                // this will be handled in cblock
                 blk->dirty = 1;
         }
 
-        off_data = blk->off_c + COMPFLT_BH_SIZE;
+        off_data = blk->off_c + CFLT_BH_SIZE;
+        cflt_orig_write(f, blk->data_c, blk->size_c, &off_data);
 
-        orig_write(f, block_c, blk->size_c, &off_data);
-
-        kfree(block_c);
-
-        return 0;
+        kfree(blk->data_c);
+        return err;
 }
 
