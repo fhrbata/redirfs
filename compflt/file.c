@@ -204,12 +204,12 @@ struct cflt_file *cflt_file_get_header(struct file *f)
         return fh;
 }
 
-// TODO: make some limitation for the block size
-// like divisibility by 512 and minimal size ...
 int cflt_file_blksize_set(unsigned int new)
 {
-        cflt_blksize = new;
-        printk(KERN_INFO "compflt: block size set to %i bytes\n", new);
+        if (new >= CFLT_BLKSIZE_MIN && new <= CFLT_BLKSIZE_MAX && !(new%CFLT_BLKSIZE_MOD)) {
+                cflt_blksize = new;
+                printk(KERN_INFO "compflt: block size set to %i bytes\n", new);
+        }
 
         return 0;
 }

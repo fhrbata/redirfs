@@ -98,9 +98,9 @@ int cflt_block_read_header(struct file *f, struct cflt_block *blk, loff_t *off)
                 boff += sizeof(u32);
                 memcpy(&blk->off_next, buf+boff, sizeof(u32));
                 boff += sizeof(u32);
-                memcpy(&blk->size_c, buf+boff, sizeof(u32));
-                boff += sizeof(u32);
-                memcpy(&blk->size_u, buf+boff, sizeof(u32));
+                memcpy(&blk->size_c, buf+boff, sizeof(u16));
+                boff += sizeof(u16);
+                memcpy(&blk->size_u, buf+boff, sizeof(u16));
                 break;
         default:
                 // TODO
@@ -136,9 +136,9 @@ int cflt_block_write_header(struct file *f, struct cflt_block *blk)
                 boff += sizeof(u32);
                 memcpy(buf+boff, &blk->off_next, sizeof(u32));
                 boff += sizeof(u32);
-                memcpy(buf+boff, &blk->size_c, sizeof(u32));
-                boff += sizeof(u32);
-                memcpy(buf+boff, &blk->size_u, sizeof(u32));
+                memcpy(buf+boff, &blk->size_c, sizeof(u16));
+                boff += sizeof(u16);
+                memcpy(buf+boff, &blk->size_u, sizeof(u16));
                 break;
         default:
                 // TODO
