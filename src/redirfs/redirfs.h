@@ -113,6 +113,7 @@ enum rfs_op_id {
 
 	RFS_REG_FOP_OPEN,
 	RFS_REG_FOP_RELEASE,
+	RFS_REG_FOP_LLSEEK,
 	RFS_REG_FOP_READ,
 	RFS_REG_FOP_WRITE,
 
@@ -122,26 +123,31 @@ enum rfs_op_id {
 
 	RFS_CHR_FOP_OPEN,
 	RFS_CHR_FOP_RELEASE,
+	RFS_CHR_FOP_LLSEEK,
 	RFS_CHR_FOP_READ,
 	RFS_CHR_FOP_WRITE,
 
 	RFS_BLK_FOP_OPEN,
 	RFS_BLK_FOP_RELEASE,
+	RFS_BLK_FOP_LLSEEK,
 	RFS_BLK_FOP_READ,
 	RFS_BLK_FOP_WRITE,
 
 	RFS_FIFO_FOP_OPEN,
 	RFS_FIFO_FOP_RELEASE,
+	RFS_FIFO_FOP_LLSEEK,
 	RFS_FIFO_FOP_READ,
 	RFS_FIFO_FOP_WRITE,
 
 	RFS_LNK_FOP_OPEN,
 	RFS_LNK_FOP_RELEASE,
+	RFS_LNK_FOP_LLSEEK,
 	RFS_LNK_FOP_READ,
 	RFS_LNK_FOP_WRITE,
 
 	RFS_SOCK_FOP_OPEN,
 	RFS_SOCK_FOP_RELEASE,
+	RFS_SOCK_FOP_LLSEEK,
 	RFS_SOCK_FOP_READ,
 	RFS_SOCK_FOP_WRITE,
 
@@ -235,6 +241,12 @@ union rfs_op_args {
 		void *buf;
 		filldir_t filldir;
 	} f_readdir;
+
+	struct {
+                struct file *file;
+                loff_t offset;
+                int origin;
+	} f_llseek;
 
 	struct {
 		struct file *file;

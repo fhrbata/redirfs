@@ -377,6 +377,65 @@ int rfs_readdir(struct file *file, void *buf, filldir_t filler)
 	return rv;
 }
 
+loff_t rfs_llseek(struct file *file, loff_t offset, int origin)
+{
+	struct rfile *rfile = NULL;
+	struct rpath *path = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	loff_t rv = 0;
+	int cnt = 0;
+	umode_t mode;
+
+	rfile = rfile_find(file);
+	if (!rfile) {
+		if (file->f_op && file->f_op->llseek)
+			return file->f_op->llseek(file, offset, origin);
+	}
+
+	spin_lock(&rfile->rf_lock);
+	path = path_get(rfile->rf_path);
+	chain = chain_get(rfile->rf_chain);
+	spin_unlock(&rfile->rf_lock);
+
+	args.args.f_llseek.file = file;
+	args.args.f_llseek.offset = offset;
+	args.args.f_llseek.origin = origin;
+
+	mode = file->f_dentry->d_inode->i_mode;
+
+	if (S_ISREG(mode))
+		args.type.id = RFS_REG_FOP_LLSEEK;
+	else if (S_ISLNK(mode))
+		args.type.id = RFS_LNK_FOP_LLSEEK;
+	else if (S_ISCHR(mode))
+		args.type.id = RFS_CHR_FOP_LLSEEK;
+	else if (S_ISBLK(mode))
+		args.type.id = RFS_BLK_FOP_LLSEEK;
+	else if (S_ISFIFO(mode))
+		args.type.id = RFS_FIFO_FOP_LLSEEK;
+	else if (S_ISSOCK(mode))
+		args.type.id = RFS_SOCK_FOP_LLSEEK;
+	else
+		BUG();
+
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+		if (rfile->rf_op_old && rfile->rf_op_old->llseek)
+			rv = rfile->rf_op_old->llseek(file, offset, origin);
+
+		args.retv.rv_loff = rv;
+	}
+	
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rv = args.retv.rv_loff;
+
+	rfile_put(rfile);
+	path_put(path);
+	chain_put(chain);
+
+	return rv;
+}
+
 ssize_t rfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 {
 	struct rfile *rfile = NULL;
@@ -509,6 +568,11 @@ static void rfile_set_reg_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.write = rfs_write;
 	else
 		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
+
+	if (ops[RFS_REG_FOP_LLSEEK])
+		rfile->rf_op_new.llseek = rfs_llseek;
+	else
+		rfile->rf_op_new.llseek = rfile->rf_op_old ? rfile->rf_op_old->llseek : NULL;
 }
 
 static void rfile_set_dir_ops(struct rfile *rfile, char *ops)
@@ -530,6 +594,11 @@ static void rfile_set_chr_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.write = rfs_write;
 	else
 		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
+
+	if (ops[RFS_CHR_FOP_LLSEEK])
+		rfile->rf_op_new.llseek = rfs_llseek;
+	else
+		rfile->rf_op_new.llseek = rfile->rf_op_old ? rfile->rf_op_old->llseek : NULL;
 }
 
 static void rfile_set_blk_ops(struct rfile *rfile, char *ops)
@@ -543,6 +612,11 @@ static void rfile_set_blk_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.write = rfs_write;
 	else
 		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
+
+	if (ops[RFS_BLK_FOP_LLSEEK])
+		rfile->rf_op_new.llseek = rfs_llseek;
+	else
+		rfile->rf_op_new.llseek = rfile->rf_op_old ? rfile->rf_op_old->llseek : NULL;
 }
 
 static void rfile_set_fifo_ops(struct rfile *rfile, char *ops)
@@ -556,6 +630,11 @@ static void rfile_set_fifo_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.write = rfs_write;
 	else
 		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
+
+	if (ops[RFS_FIFO_FOP_LLSEEK])
+		rfile->rf_op_new.llseek = rfs_llseek;
+	else
+		rfile->rf_op_new.llseek = rfile->rf_op_old ? rfile->rf_op_old->llseek : NULL;
 }
 
 static void rfile_set_lnk_ops(struct rfile *rfile, char *ops)
@@ -569,6 +648,11 @@ static void rfile_set_lnk_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.write = rfs_write;
 	else
 		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
+
+	if (ops[RFS_LNK_FOP_LLSEEK])
+		rfile->rf_op_new.llseek = rfs_llseek;
+	else
+		rfile->rf_op_new.llseek = rfile->rf_op_old ? rfile->rf_op_old->llseek : NULL;
 }
 
 static void rfile_set_sock_ops(struct rfile *rfile, char *ops)
@@ -582,6 +666,11 @@ static void rfile_set_sock_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.write = rfs_write;
 	else
 		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
+
+	if (ops[RFS_SOCK_FOP_LLSEEK])
+		rfile->rf_op_new.llseek = rfs_llseek;
+	else
+		rfile->rf_op_new.llseek = rfile->rf_op_old ? rfile->rf_op_old->llseek : NULL;
 }
 
 void rfile_set_ops(struct rfile *rfile, struct ops *ops)
