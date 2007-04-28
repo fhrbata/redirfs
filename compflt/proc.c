@@ -111,6 +111,7 @@ static int cflt_proc_blksize_write(struct file *f, const char *buf, unsigned lon
 
 int cflt_proc_init(void)
 {
+        debug_printk("compflt: [f:cflt_proc_init]\n");
         pf_dir = proc_mkdir(dirname, cflt_proc_root);
         if (!pf_dir)
                 return -1;
@@ -140,6 +141,7 @@ int cflt_proc_init(void)
 
 void cflt_proc_deinit(void)
 {
+        debug_printk("compflt: [f:cflt_proc_deinit]\n");
         remove_proc_entry("stat", pf_dir);
         remove_proc_entry("method", pf_dir);
         remove_proc_entry("blksize", pf_dir);

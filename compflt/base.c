@@ -5,7 +5,7 @@
 #include "compflt.h"
 #include "path.h"
 
-char version[] = "pre7";
+char version[] = "pre8";
 
 static char *in_cmethod = CFLT_DEFAULT_METHOD;
 module_param(in_cmethod, charp, 0000);
@@ -20,10 +20,10 @@ static enum rfs_retv cflt_f_pre_open(rfs_context context, struct rfs_args *args)
         cflt_debug_printk("compflt: [pre_open i=%li\n", inode->i_ino);
 
         if (f->f_flags & O_TRUNC) {
-                fh = cflt_file_find(inode->i_ino);
+                fh = cflt_file_find(inode);
                 if (fh) {
                         cflt_file_clr_blks(fh);
-                        cflt_file_reset(fh, inode->i_ino);
+                        cflt_file_reset(fh, inode);
                 }
         }
 
@@ -38,7 +38,7 @@ static enum rfs_retv cflt_f_post_release(rfs_context context, struct rfs_args *a
 
         cflt_debug_printk("compflt: [post_release] i=%li\n", inode->i_ino);
 
-        fh = cflt_file_find(inode->i_ino);
+        fh = cflt_file_find(inode);
         if (fh && fh->compressed)
                 cflt_file_write(f, fh);
 
@@ -58,7 +58,7 @@ static enum rfs_retv cflt_f_pre_read(rfs_context context, struct rfs_args *args)
 
         cflt_debug_printk("compflt: [pre_read] i=%li | pos=%i len=%i\n", f->f_dentry->d_inode->i_ino, (int)*pos, count);
 
-        fh = cflt_file_get_header(f);
+        fh = cflt_file_get_header(f->f_dentry->d_inode);
 
         if (!fh)
                 return RFS_CONTINUE;
@@ -96,7 +96,7 @@ static enum rfs_retv cflt_f_pre_write(rfs_context context, struct rfs_args *args
 
         cflt_debug_printk("compflt: [pre_write] i=%li | pos=%i len=%i\n", f->f_dentry->d_inode->i_ino, (int) *pos, count);
 
-        fh = cflt_file_get_header(f);
+        fh = cflt_file_get_header(f->f_dentry->d_inode);
         if (!fh)
                 return RFS_CONTINUE;
 
@@ -208,13 +208,13 @@ static void __exit compflt_exit(void)
 {
         enum rfs_err err;
 
-        cflt_proc_deinit();
-        cflt_file_cache_deinit();
-        cflt_block_cache_deinit();
-
 	err = rfs_unregister_filter(compflt);
 	if (err != RFS_ERR_OK)
                 printk(KERN_ERR "compflt: unregistration failed: error %d\n", err);
+
+        cflt_proc_deinit();
+        cflt_file_cache_deinit();
+        cflt_block_cache_deinit();
 }
 
 module_init(compflt_init);

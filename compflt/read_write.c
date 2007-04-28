@@ -108,7 +108,7 @@ int cflt_read(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *size
         size_t size_total = 0;
         int err;
 
-        cflt_debug_printk("compflt: [f:read_u] i=%li\n", fh->ino);
+        cflt_debug_printk("compflt: [f:read_u] i=%li\n", fh->inode->i_ino);
 
         memset(buff_u, 0, *size_req);
 
@@ -151,7 +151,7 @@ int cflt_write(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *siz
         size_t size;
         int size_total = (int)*size_req;
 
-        cflt_debug_printk("compflt: [f:write_u] i=%li\n", fh->ino);
+        cflt_debug_printk("compflt: [f:write_u] i=%li\n", fh->inode->i_ino);
 
         tfm = cflt_comp_init(fh->method);
 

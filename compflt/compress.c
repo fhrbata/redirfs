@@ -140,7 +140,7 @@ int cflt_comp_proc_stat(char *buf, int bsize)
                         u += blk->size_u;
                         c += blk->size_c;
                 }
-                len += sprintf(buf+len, "%-10li%-12s%-10i%-12li%-12li%-11li\n", fh->ino, cflt_method_known[fh->method], fh->blksize, c, overhead, u);
+                len += sprintf(buf+len, "%-10li%-12s%-10i%-12li%-12li%-11li\n", fh->inode->i_ino, cflt_method_known[fh->method], fh->blksize, c, overhead, u);
         }
 
         return len;

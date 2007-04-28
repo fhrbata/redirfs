@@ -12,7 +12,7 @@ void cflt_debug_block(struct cflt_block *blk)
 void cflt_debug_file_header(struct cflt_file *fh)
 {
         printk("compflt: [file] ino=%li compressed=%i dirty=%i method=%i blksize=%i\n",
-                        fh->ino, fh->compressed, fh->dirty, fh->method,
+                        fh->inode->i_ino, fh->compressed, fh->dirty, fh->method,
                         fh->blksize);
 }
 
