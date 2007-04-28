@@ -28,6 +28,7 @@ void flt_put(struct filter *flt)
 
 	spin_lock_irqsave(&flt->f_lock, flags);
 	BUG_ON(!flt->f_count);
+	flt->f_count--;
 	if (!flt->f_count)
 		del = 1;
 	spin_unlock_irqrestore(&flt->f_lock, flags);
