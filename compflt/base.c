@@ -1,6 +1,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
+#include <linux/mutex.h>
 #include "../redirfs/redirfs.h"
 #include "compflt.h"
 #include "path.h"
@@ -10,6 +11,25 @@ char version[] = "pre8";
 static char *in_cmethod = CFLT_DEFAULT_METHOD;
 module_param(in_cmethod, charp, 0000);
 MODULE_PARM_DESC(in_cmethod, "Initial compression method to use");
+
+static enum rfs_retv cflt_f_pre_llseek(rfs_context context, struct rfs_args *args)
+{
+        struct file *f = args->args.f_llseek.file;
+        struct cflt_file *fh;
+
+        fh = cflt_file_get_header(f, f->f_dentry->d_inode);
+
+        if (!fh || !fh->compressed)
+                RFS_CONTINUE;
+
+        cflt_debug_printk("compflt: [pre_llseek]");
+
+        mutex_lock(&f->f_dentry->d_inode->i_mutex);
+        i_size_write(f->f_dentry->d_inode, fh->size);
+        mutex_unlock(&f->f_dentry->d_inode->i_mutex);
+
+        return RFS_CONTINUE;
+}
 
 static enum rfs_retv cflt_f_pre_open(rfs_context context, struct rfs_args *args)
 {
@@ -58,7 +78,7 @@ static enum rfs_retv cflt_f_pre_read(rfs_context context, struct rfs_args *args)
 
         cflt_debug_printk("compflt: [pre_read] i=%li | pos=%i len=%i\n", f->f_dentry->d_inode->i_ino, (int)*pos, count);
 
-        fh = cflt_file_get_header(f->f_dentry->d_inode);
+        fh = cflt_file_get_header(f,f->f_dentry->d_inode);
 
         if (!fh)
                 return RFS_CONTINUE;
@@ -96,7 +116,7 @@ static enum rfs_retv cflt_f_pre_write(rfs_context context, struct rfs_args *args
 
         cflt_debug_printk("compflt: [pre_write] i=%li | pos=%i len=%i\n", f->f_dentry->d_inode->i_ino, (int) *pos, count);
 
-        fh = cflt_file_get_header(f->f_dentry->d_inode);
+        fh = cflt_file_get_header(f, f->f_dentry->d_inode);
         if (!fh)
                 return RFS_CONTINUE;
 
@@ -133,6 +153,7 @@ static struct rfs_filter_info flt_info = {"compflt", 999, 0};
 static struct rfs_op_info ops_info[] = {
         {RFS_REG_FOP_OPEN, cflt_f_pre_open, NULL},
         {RFS_REG_FOP_RELEASE, NULL, cflt_f_post_release},
+        {RFS_REG_FOP_LLSEEK, cflt_f_pre_llseek, NULL},
         {RFS_REG_FOP_READ, cflt_f_pre_read, NULL},
         {RFS_REG_FOP_WRITE, cflt_f_pre_write, NULL},
         {RFS_OP_END, NULL, NULL}

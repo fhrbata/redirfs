@@ -11,9 +11,9 @@ void cflt_debug_block(struct cflt_block *blk)
 
 void cflt_debug_file_header(struct cflt_file *fh)
 {
-        printk("compflt: [file] ino=%li compressed=%i dirty=%i method=%i blksize=%i\n",
+        printk("compflt: [file] ino=%li compressed=%i dirty=%i method=%i blksize=%i size=%li\n",
                         fh->inode->i_ino, fh->compressed, fh->dirty, fh->method,
-                        fh->blksize);
+                        fh->blksize, fh->size);
 }
 
 void cflt_hexdump(void *buf, unsigned int len)

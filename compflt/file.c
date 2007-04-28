@@ -132,6 +132,8 @@ void cflt_file_add_blk(struct cflt_file *fh, struct cflt_block *blk)
                 break;
         }
 
+        fh->size += blk->size_u;
+
 }
 
 void cflt_file_del_blk(struct cflt_file *fh, struct cflt_block *blk)
@@ -139,6 +141,8 @@ void cflt_file_del_blk(struct cflt_file *fh, struct cflt_block *blk)
         cflt_debug_printk("compflt: [f:cflt_file_del_blk] i=%li\n", fh->inode->i_ino);
 
         list_del(&blk->file);
+
+        fh->size -= blk->size_u;
 }
 
 // TODO: change to return int , and move cflt_file to params
@@ -177,12 +181,11 @@ static int cflt_file_read_block_headers(struct file *f, struct cflt_file *fh)
         return err;
 }
 
-struct cflt_file *cflt_file_get_header(struct inode *inode)
+struct cflt_file *cflt_file_get_header(struct file *f, struct inode *inode)
 {
         struct cflt_file *fh = NULL;
 
         cflt_debug_printk("compflt: [f:cflt_file_get] i=%li\n", inode->i_ino);
-
 
         fh = cflt_file_find(inode);
         if (!fh) {

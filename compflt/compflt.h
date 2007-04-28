@@ -27,7 +27,7 @@ struct cflt_block {
         char *data_c;
 };
 
-struct cflt_inode {
+struct cflt_file {
 	struct list_head blks;
 	struct list_head all; // used for statistics
         // struct list_head free;
@@ -44,7 +44,7 @@ extern rfs_filter compflt;
 
 // file.c
 extern struct list_head cflt_file_list;
-struct cflt_file *cflt_file_get_header(struct inode*);
+struct cflt_file *cflt_file_get_header(struct file*, struct inode*);
 void cflt_file_reset(struct cflt_file*, struct inode*);
 void cflt_file_clr_blks(struct cflt_file*);
 int cflt_file_cache_init(void);

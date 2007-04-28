@@ -229,9 +229,6 @@ int cflt_write(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *siz
                 last = blk;
         }
 
-        // update the size of the whole file
-        fh->size = last->off_u + last->size_u;
-
         // size_total *should* be 0 at this point
         *size_req -= size_total;
 
