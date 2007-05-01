@@ -15,11 +15,11 @@ urfs.o: urfs.c
 lib$(NAME): urfs.o
 	$(CC) $^ -Wl,-soname,lib$(NAME).so.$(MAJORVERSION) -o lib$(NAME).so.$(MAJORVERSION).$(SUBVERSION) $(CFLAGS) -shared -lc
 
-redirctl: urfs.o redirctl.c
-	$(CC) $^ -o redirctl
+test: urfs.o test.c
+	$(CC) $^ -o test
 
 clean:
-	rm -f *.o lib$(NAME)* redirctl
+	rm -f *.o lib$(NAME)* test
 
 install:
 	mkdir -p $(INSTPREFIX)/lib/
@@ -30,3 +30,4 @@ install:
 	cp rfs.h $(INSTPREFIX)/include/
 	chmod og+r $(INSTPREFIX)/lib/lib$(NAME).*
 	chmod -R og+r $(INSTPREFIX)/include/$(NAME)
+

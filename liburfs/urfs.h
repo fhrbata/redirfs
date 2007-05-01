@@ -1,36 +1,25 @@
-#ifndef __RFS_H
-#define __RFS_H
+#ifndef __URFS_H
+#define __URFS_H
 
-#define RFS_PATH_SINGLE		1	
-#define RFS_PATH_SUBTREE	2
-#define RFS_PATH_INCLUDE	4	
-#define RFS_PATH_EXCLUDE	8
+#include <errno.h>
+#include "../urfs/urfs_kernel.h"
 
-enum urfs_err{
-  URFS_ERR_OK = 0,
-  URFS_ERR_FAIL = -1,
-  URFS_ERR_CANT_OPEN = -2,
-  URFS_ERR_NOTFOUND = -3,
-  URFS_ERR_NOMEM = -4,
-};
-
-struct urfsconn_t{
+struct urfs_conn{
   int fd;
 };
 
-enum urfs_err urfs_open(struct urfsconn_t *n);
+struct urfs_filter{
+  int id;
+  struct urfs_conn *conn;
+  enum rfs_retv (*f_pre_cbs[RFS_OP_END])(rfs_context, struct rfs_args *);
+  enum rfs_retv (*f_post_cbs[RFS_OP_END])(rfs_context, struct rfs_args *);
+  int (*mod_cb)(union rfs_mod *);
+};
 
-enum urfs_err urfs_close(struct urfsconn_t *n);
-
-enum urfs_err urfs_filters_list(struct urfsconn_t *n, void **data, int *len);
-
-enum urfs_err urfs_filter_list_paths(struct urfsconn_t *n, char *filter_name, void **data, int *len);
-
-enum urfs_err urfs_filter_set_path(struct urfsconn_t *n, char *filter_name, char *path, int flags);
-
-enum urfs_err urfs_activate_filter(struct urfsconn_t *n, char *filter_name);
-
-enum urfs_err urfs_deactivate_filter(struct urfsconn_t *n, char *filter_name);
+int urfs_open(struct urfs_conn *n);
+void urfs_close(struct urfs_conn *n);
+int urfs_filter_alloc(rfs_filter *filter, struct urfs_conn *c);
+void urfs_filter_free(rfs_filter filter);
 
 #endif
 

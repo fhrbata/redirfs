@@ -4,7 +4,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <string.h>
 
 #include <stdio.h>
@@ -12,139 +11,346 @@
 #include "urfs.h"
 #include "../urfs/urfs_kernel.h"
 
-#define NODFILE "/dev/urfs"
+#define NODFILE "/dev/" URFS_NAME
 
-enum urfs_err urfs_open(struct urfsconn_t *n){
-  n->fd = open(NODFILE, O_RDWR);
-  if (n->fd == -1){
-    return(URFS_ERR_CANT_OPEN);
+int urfs_open(struct urfs_conn *c){
+  c->fd = open(NODFILE, O_RDWR);
+  if (c->fd >= 0){
+    return(0);
   }
-  return(URFS_ERR_OK);
+  return(c->fd);
 }
 
-enum urfs_err urfs_close(struct urfsconn_t *n){
-  close(n->fd);
-  return(URFS_ERR_OK);
+void urfs_close(struct urfs_conn *c){
+  close(c->fd);
 }
 
-enum urfs_err urfs_filters_list(struct urfsconn_t *n, void **data, int *len){
-  int retval;
+int urfs_filter_alloc(rfs_filter *filter, struct urfs_conn *c){
+  struct urfs_filter *flt;
 
-  retval = ioctl(n->fd, URFS_CMD_GET_FILTERS_INFO_PREPARE, 0);
+  *filter = malloc(sizeof(struct urfs_filter));
+  if (!(*filter)){
+    return(-1);
+  }
+  flt = (struct urfs_filter *) *filter;
+  flt->conn = c;
+  return(0);
+}
+
+void urfs_filter_free(rfs_filter filter){
+  if (filter){
+    free(filter);
+  }
+}
+
+static int wait_for_msg(struct urfs_conn *c){
+  fd_set inp;
+  int max_fd;
+  int sel;
+  int fd = c->fd;
   
-  if (retval == -1){
-    return(URFS_ERR_FAIL);
+  while(1){
+    FD_ZERO(&inp);
+    FD_SET(fd, &inp);
+    max_fd = fd + 1;
+    sel = select(max_fd, &inp, NULL, NULL, NULL);
+    if (sel < 0){
+      return(sel);
+    }
+    else if (FD_ISSET(fd, &inp)){
+      return(0);
+    }
   }
-
-  if (retval == 0){
-    *len = retval;
-    return(URFS_ERR_OK);
-  }
-
-  *data = (void *) malloc(retval);
-  if (!(*data)){
-    return(URFS_ERR_NOMEM);
-  }
-  *len = retval;
-
-  if (ioctl(n->fd, URFS_CMD_GET_FILTERS_INFO_DATA, *data) == -1){
-    free(*data);
-    return(URFS_ERR_FAIL);
-  }
-  return(URFS_ERR_OK);
 }
 
-enum urfs_err urfs_filter_list_paths(struct urfsconn_t *n, char *filter_name, void **data, int *len){
-  int retval;
-  int namememlen = strlen(filter_name) + 1;
-  char msg[namememlen + sizeof(int)];
+static int imsg_send(struct urfs_conn *c, union imsg *msg){
+  int len = sizeof(union imsg);
+  int err;
+
+  err = write(c->fd, msg, len);
+  if (err != len){
+    return(err);
+  }
+  return(0);
+}
+
+static int omsg_recv(struct urfs_conn *c, union omsg *msg){
+  int len = sizeof(union omsg);
+  int err;
+
+  err = read(c->fd, msg, len);
+  if (err != len){
+    return(err);
+  }
+  return(0);
+}
+
+int urfs_main(struct urfs_conn *c, rfs_filter filter){
+  struct urfs_filter *flt;
+  union imsg imsg;
+  union omsg omsg;
+  int err;
   
-  memcpy(msg, &namememlen, sizeof(int));
-  memcpy(msg + sizeof(int), filter_name, namememlen);
-  retval = ioctl(n->fd, URFS_CMD_GET_FILTER_PATHS_INFO_PREPARE, msg);
-  if (retval < 0){
-    if (errno == ENODEV){
-      return(URFS_ERR_NOTFOUND);
+  flt = (struct urfs_filter *) filter;
+  if (!flt){
+    return(-1);
+  }
+
+  for(;;){
+    if (wait_for_msg(c)){
+      return(RFS_ERR_INVAL);
     }
-    return(URFS_ERR_FAIL);
+    err = omsg_recv(c, &omsg);
+    if (err){
+      return(err);
+    }
+    if (omsg.cmd == URFS_CMD_OP_CALLBACK){
+      printf("event ufilter id: %d, request id: %llu\n", omsg.op_callback.ufilter_id, omsg.op_callback.request_id);
+      imsg.op_callback.cmd = omsg.op_callback.cmd;
+      imsg.op_callback.ufilter_id = omsg.op_callback.ufilter_id;
+      imsg.op_callback.request_id = omsg.op_callback.request_id;
+      imsg.op_callback.context = omsg.op_callback.context;
+      imsg.op_callback.args = omsg.op_callback.args;
+      imsg.op_callback.retval = RFS_CONTINUE;
+      err = imsg_send(c, &imsg);
+      if (err){
+        return(RFS_ERR_INVAL);
+      }
+    }
   }
-
-  if (retval == 0){
-    *len = retval;
-    return(URFS_ERR_OK);
-  }
- 
-  *data = (void *) malloc(retval);
-  if (!(*data)){
-    return(URFS_ERR_NOMEM);
-  }
-  *len = retval;
-
-  if (ioctl(n->fd, URFS_CMD_GET_FILTER_PATHS_INFO_DATA, *data) == -1){
-    free(*data);
-    return(URFS_ERR_FAIL);
-  }
-  return(URFS_ERR_OK);
+  return(0);
 }
 
-enum urfs_err urfs_filter_set_path(struct urfsconn_t *n, char *filter_name, char *path, int flags){
-  int retval;
-  int namememlen = strlen(filter_name) + 1;
-  int pathmemlen = strlen(path) + 1;
-  char msg[namememlen + pathmemlen + sizeof(int) * 3];
-  int offset = 0;
+enum rfs_err rfs_register_filter(rfs_filter *filter, struct rfs_filter_info *filter_info){
+  struct urfs_filter *flt;
+  struct urfs_conn *c;
+  union imsg imsg;
+  union omsg omsg;
+  int err;
+  enum rfs_retv (*op)(rfs_context, struct rfs_args *);
 
-  memcpy(msg + offset, &namememlen, sizeof(int));
-  offset += sizeof(int);
-  memcpy(msg + offset, filter_name, namememlen);
-  offset += namememlen;
-  memcpy(msg + offset, &pathmemlen, sizeof(int));
-  offset += sizeof(int);
-  memcpy(msg + offset, path, pathmemlen);
-  offset += pathmemlen;
-  memcpy(msg + offset, &flags, sizeof(int));
-
-  retval = ioctl(n->fd, URFS_CMD_SET_FILTER_PATH, msg);
-  if (retval < 0){
-    if (errno == ENODEV){
-      return(URFS_ERR_NOTFOUND);
-    }
-    return(URFS_ERR_FAIL);
+  if (!filter_info || !filter_info->name){
+    return(RFS_ERR_INVAL);
   }
-  return(URFS_ERR_OK);
+  flt = (struct urfs_filter *) *filter;
+  if (!flt){
+    return(RFS_ERR_INVAL);
+  }
+  c = flt->conn;
+  if (!c){
+    return(RFS_ERR_INVAL);
+  }
+
+  imsg.cmd = URFS_CMD_FILTER_REGISTER;
+  imsg.filter_register.filter_name_memlen = strlen(filter_info->name) + 1;
+  imsg.filter_register.filter_info = filter_info;
+  err = imsg_send(c, &imsg);
+  if (err){
+    return(RFS_ERR_INVAL);
+  }
+  if (wait_for_msg(c)){
+    return(RFS_ERR_INVAL);
+  }
+  err = omsg_recv(c, &omsg);
+  if (err){
+    return(RFS_ERR_INVAL);
+  }
+  if (omsg.filter_register.err == RFS_ERR_OK){
+    flt->id = omsg.filter_register.ufilter_id;
+    memset(&flt->f_pre_cbs, 0, sizeof(op) * RFS_OP_END);
+    memset(&flt->f_post_cbs, 0, sizeof(op) * RFS_OP_END);
+    flt->mod_cb = NULL;
+  }
+  return(omsg.filter_register.err);
 }
 
-enum urfs_err urfs_activate_filter(struct urfsconn_t *n, char *filter_name){
-  int retval;
-  int namememlen = strlen(filter_name) + 1;
-  char msg[namememlen + sizeof(int)];
-  
-  memcpy(msg, &namememlen, sizeof(int));
-  memcpy(msg + sizeof(int), filter_name, namememlen);
-  retval = ioctl(n->fd, URFS_CMD_ACTIVATE_FILTER, msg);
-  if (retval < 0){
-    if (errno == ENODEV){
-      return(URFS_ERR_NOTFOUND);
-    }
-    return(URFS_ERR_FAIL);
+enum rfs_err rfs_unregister_filter(rfs_filter filter){
+  struct urfs_filter *flt;
+  struct urfs_conn *c;
+  union imsg imsg;
+  union omsg omsg;
+  int err;
+
+  flt = (struct urfs_filter *) filter;
+  if (!flt){
+    return(RFS_ERR_INVAL);
   }
-  return(URFS_ERR_OK);
+  c = flt->conn;
+  if (!c){
+    return(RFS_ERR_INVAL);
+  }
+
+  imsg.cmd = URFS_CMD_FILTER_UNREGISTER;
+  imsg.filter_unregister.ufilter_id = flt->id;
+  err = imsg_send(c, &imsg);
+  if (err){
+    return(RFS_ERR_INVAL);
+  }
+  if (wait_for_msg(c)){
+    return(RFS_ERR_INVAL);
+  }
+  err = omsg_recv(c, &omsg);
+  if (err){
+    return(RFS_ERR_INVAL);
+  }
+  return(omsg.filter_unregister.err);
 }
 
-enum urfs_err urfs_deactivate_filter(struct urfsconn_t *n, char *filter_name){
-  int retval;
-  int namememlen = strlen(filter_name) + 1;
-  char msg[namememlen + sizeof(int)];
-  
-  memcpy(msg, &namememlen, sizeof(int));
-  memcpy(msg + sizeof(int), filter_name, namememlen);
-  retval = ioctl(n->fd, URFS_CMD_DEACTIVATE_FILTER, msg);
-  if (retval < 0){
-    if (errno == ENODEV){
-      return(URFS_ERR_NOTFOUND);
-    }
-    return(URFS_ERR_FAIL);
+enum rfs_err rfs_activate_filter(rfs_filter filter){
+  struct urfs_filter *flt;
+  struct urfs_conn *c;
+  union imsg imsg;
+  union omsg omsg;
+  int err;
+
+  flt = (struct urfs_filter *) filter;
+  if (!flt){
+    return(RFS_ERR_INVAL);
   }
-  return(URFS_ERR_OK);
+  c = flt->conn;
+  if (!c){
+    return(RFS_ERR_INVAL);
+  }
+
+  imsg.cmd = URFS_CMD_FILTER_ACTIVATE;
+  imsg.filter_activate.ufilter_id = flt->id;
+  err = imsg_send(c, &imsg);
+  if (err){
+    return(RFS_ERR_INVAL);
+  }
+  if (wait_for_msg(c)){
+    return(RFS_ERR_INVAL);
+  }
+  err = omsg_recv(c, &omsg);
+  if (err){
+    return(RFS_ERR_INVAL);
+  }
+  return(omsg.filter_activate.err);
+}
+
+enum rfs_err rfs_deactivate_filter(rfs_filter filter){
+  struct urfs_filter *flt;
+  struct urfs_conn *c;
+  union imsg imsg;
+  union omsg omsg;
+  int err;
+
+  flt = (struct urfs_filter *) filter;
+  if (!flt){
+    return(RFS_ERR_INVAL);
+  }
+  c = flt->conn;
+  if (!c){
+    return(RFS_ERR_INVAL);
+  }
+
+  imsg.cmd = URFS_CMD_FILTER_DEACTIVATE;
+  imsg.filter_deactivate.ufilter_id = flt->id;
+  err = imsg_send(c, &imsg);
+  if (err){
+    return(RFS_ERR_INVAL);
+  }
+  if (wait_for_msg(c)){
+    return(RFS_ERR_INVAL);
+  }
+  err = omsg_recv(c, &omsg);
+  if (err){
+    return(RFS_ERR_INVAL);
+  }
+  return(omsg.filter_deactivate.err);
+}
+
+enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info){
+  struct urfs_filter *flt;
+  struct urfs_conn *c;
+  union imsg imsg;
+  union omsg omsg;
+  int err;
+
+  if (!path_info || !path_info->path){
+    return(RFS_ERR_INVAL);
+  }
+  flt = (struct urfs_filter *) filter;
+  if (!flt){
+    return(RFS_ERR_INVAL);
+  }
+  c = flt->conn;
+  if (!c){
+    return(RFS_ERR_INVAL);
+  }
+
+  imsg.cmd = URFS_CMD_FILTER_SET_PATH;
+  imsg.filter_set_path.ufilter_id = flt->id;
+  imsg.filter_set_path.path_memlen = strlen(path_info->path) + 1;
+  imsg.filter_set_path.path_info = path_info;
+  err = imsg_send(c, &imsg);
+  if (err){
+    return(RFS_ERR_INVAL);
+  }
+  if (wait_for_msg(c)){
+    return(RFS_ERR_INVAL);
+  }
+  err = omsg_recv(c, &omsg);
+  if (err){
+    return(RFS_ERR_INVAL);
+  }
+  return(omsg.filter_set_path.err);
+}
+
+enum rfs_err rfs_set_operations(rfs_filter filter, struct rfs_op_info *op_info){
+  struct urfs_filter *flt;
+  struct urfs_conn *c;
+  union imsg imsg;
+  union omsg omsg;
+  int err;
+  char ops_call_flags[RFS_OP_END];
+  char flags;
+  int i;
+
+  if (!op_info){
+    return(RFS_ERR_INVAL);
+  }
+  flt = (struct urfs_filter *) filter;
+  if (!flt){
+    return(RFS_ERR_INVAL);
+  }
+  c = flt->conn;
+  if (!c){
+    return(RFS_ERR_INVAL);
+  }
+
+  memset(ops_call_flags, 0, sizeof(ops_call_flags));
+  for(i = 0; op_info[i].op_id != RFS_OP_END; i++){
+    flags = 0;
+    if (op_info[i].pre_cb){
+      flags |= PRE_CALL_FLAG;
+    }
+    if (op_info[i].post_cb){
+      flags |= POST_CALL_FLAG;
+    }
+    ops_call_flags[op_info[i].op_id] = flags;
+  }
+
+  imsg.cmd = URFS_CMD_FILTER_SET_OPERATIONS;
+  imsg.filter_set_operations.ufilter_id = flt->id;
+  imsg.filter_set_operations.ops_call_flags = ops_call_flags;
+  err = imsg_send(c, &imsg);
+  if (err){
+    return(RFS_ERR_INVAL);
+  }
+  if (wait_for_msg(c)){
+    return(RFS_ERR_INVAL);
+  }
+  err = omsg_recv(c, &omsg);
+  if (err){
+    return(RFS_ERR_INVAL);
+  }
+  if (omsg.filter_set_operations.err == RFS_ERR_OK){
+    for(i = 0; op_info[i].op_id != RFS_OP_END; i++){
+      flt->f_pre_cbs[op_info[i].op_id] = op_info[i].pre_cb;
+      flt->f_post_cbs[op_info[i].op_id] = op_info[i].post_cb;
+    }
+  }
+  return(omsg.filter_set_operations.err);
 }
 
