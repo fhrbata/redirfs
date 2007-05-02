@@ -20,7 +20,7 @@ int process_out_cmd_op_callback(struct ufilter *ufilter, struct request *request
 
   ufilter_request_add(ufilter, request);
   
-  conn_msg_send(c, omsg_list);
+  conn_msg_append(c, omsg_list);
 
   return(0);
 }
@@ -128,7 +128,7 @@ send_error:
   omsg_list->omsg.cmd = imsg->cmd;
   omsg_list->omsg.filter_register.err = err;
   omsg_list->omsg.filter_register.ufilter_id = id;
-  conn_msg_send(c, omsg_list);
+  conn_msg_insert(c, omsg_list);
   return(0);
 }
 
@@ -154,7 +154,7 @@ send_error:
   }
   omsg_list->omsg.cmd = imsg->cmd;
   omsg_list->omsg.filter_unregister.err = err;
-  conn_msg_send(c, omsg_list);
+  conn_msg_insert(c, omsg_list);
   return(0);
 }
 
@@ -180,7 +180,7 @@ send_error:
   }
   omsg_list->omsg.cmd = imsg->cmd;
   omsg_list->omsg.filter_activate.err = err;
-  conn_msg_send(c, omsg_list);
+  conn_msg_insert(c, omsg_list);
   return(0);
 }
 
@@ -203,7 +203,7 @@ send_error:
   }
   omsg_list->omsg.cmd = imsg->cmd;
   omsg_list->omsg.filter_deactivate.err = err;
-  conn_msg_send(c, omsg_list);
+  conn_msg_insert(c, omsg_list);
   return(0);
 }
 
@@ -256,7 +256,7 @@ send_error:
   }
   omsg_list->omsg.cmd = imsg->cmd;
   omsg_list->omsg.filter_set_path.err = err;
-  conn_msg_send(c, omsg_list);
+  conn_msg_insert(c, omsg_list);
   return(0);
 }
 
@@ -328,7 +328,21 @@ send_error:
   }
   omsg_list->omsg.cmd = imsg->cmd;
   omsg_list->omsg.filter_set_operations.err = err;
-  conn_msg_send(c, omsg_list);
+  conn_msg_insert(c, omsg_list);
+  return(0);
+}
+
+static int process_in_cmd_conn_switch_callbacks(struct conn *c, union imsg *imsg){
+  struct omsg_list *omsg_list;
+ 
+  conn_switch_callbacks(c, imsg->conn_switch_callbacks.enable);
+
+  omsg_list = OMSG_LIST_ALLOC;
+  if (!omsg_list){
+    return(-ENOMEM);
+  }
+  omsg_list->omsg.cmd = imsg->cmd;
+  conn_msg_insert(c, omsg_list);
   return(0);
 }
 
@@ -366,6 +380,9 @@ static ssize_t urfs_write(struct file *filp, const char __user *buff, size_t cou
       break;
     case URFS_CMD_FILTER_SET_OPERATIONS:
       err = process_in_cmd_filter_set_operations(c, &imsg);
+      break;
+    case URFS_CMD_CONN_SWITCH_CALLBACKS:
+      err = process_in_cmd_conn_switch_callbacks(c, &imsg);
       break;
     case URFS_CMD_OP_CALLBACK:
       err = process_in_cmd_op_callback(c, &imsg);

@@ -69,6 +69,7 @@ struct conn{
   struct ufilter *ufilter[MAX_UFILTERS_PER_CONN];
   struct list_head msgs_to_send;
   wait_queue_head_t waitq;
+  atomic_t callbacks_enabled;
 };
 
 int conn_alloc_ufilter(struct conn *c, int *ufilter_id);
@@ -76,9 +77,12 @@ void conn_free_ufilter(struct conn *c, int ufilter_id);
 struct ufilter *conn_get_ufilter(struct conn *c, int ufilter_id);
 struct conn *conn_create(void);
 void conn_destroy(struct conn *c);
-void conn_msg_send(struct conn *c, struct omsg_list *omsg_list);
+void conn_msg_append(struct conn *c, struct omsg_list *omsg_list);
+void conn_msg_insert(struct conn *c, struct omsg_list *omsg_list);
 int conn_msg_pending(struct conn *c);
 struct omsg_list *conn_msg_get_next(struct conn *c);
+void conn_switch_callbacks(struct conn *c, int enable);
+int conn_enabled_callbacks(struct conn *c);
 
 int process_out_cmd_op_callback(struct ufilter *ufilter, struct request *request);
 

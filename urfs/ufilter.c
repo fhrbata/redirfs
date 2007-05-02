@@ -29,6 +29,7 @@ unsigned long long ufilter_get_uniqeue_request_id(struct ufilter *ufilter){
 
 enum rfs_retv ufilter_generic_cb(rfs_context context, struct rfs_args *args){
   struct ufilter *ufilter;
+  struct conn *c;
   struct request *request;
   int err;
   enum rfs_retv retval = RFS_CONTINUE;
@@ -39,8 +40,18 @@ enum rfs_retv ufilter_generic_cb(rfs_context context, struct rfs_args *args){
   if (!ufilter){
     goto end;
   }
+  c = ufilter->c;
+  if (!c){
+    goto end;
+  }
+
   dbgmsg(PRINTPREFIX "generic callback called for ufilter %d\n", ufilter->id);
-  
+
+  if (!conn_enabled_callbacks(c)){
+    dbgmsg(PRINTPREFIX "callbacks disabled\n");
+    goto end;
+  }
+
   request = (struct request *) kmalloc(sizeof(struct request), GFP_ATOMIC);
   if (!request){
     goto end;

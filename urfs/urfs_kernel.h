@@ -13,7 +13,8 @@ enum urfs_cmd{
   URFS_CMD_FILTER_ACTIVATE = 3,
   URFS_CMD_FILTER_DEACTIVATE = 4,
   URFS_CMD_FILTER_SET_OPERATIONS = 5,
-  URFS_CMD_OP_CALLBACK = 6,
+  URFS_CMD_CONN_SWITCH_CALLBACKS = 6,
+  URFS_CMD_OP_CALLBACK = 7,
 };
 
 // calls flags
@@ -65,6 +66,10 @@ union imsg{
   } filter_set_operations;
   struct {
     char cmd;
+    int enable;
+  } conn_switch_callbacks;
+  struct {
+    char cmd;
     int ufilter_id;
     unsigned long long request_id;
 #ifdef __KERNEL__
@@ -105,6 +110,9 @@ union omsg{
     char cmd;
     enum rfs_err err;
   } filter_set_operations;
+  struct {
+    char cmd;
+  } conn_switch_callbacks;
   struct {
     char cmd;
     int ufilter_id;

@@ -85,6 +85,40 @@ static int omsg_recv(struct urfs_conn *c, union omsg *msg){
   return(0);
 }
 
+static int send_and_receive(struct urfs_conn *c, union imsg *imsg, union omsg *omsg){
+  int err;
+  
+  err = imsg_send(c, imsg);
+  if (err){
+    return(err);
+  }
+  if (wait_for_msg(c)){
+    return(err);
+  }
+  err = omsg_recv(c, omsg);
+  if (err){
+    return(err);
+  }
+  return(0);
+}
+
+static int switch_callbacks(struct urfs_conn *c, int enable){
+  union imsg imsg;
+  union omsg omsg;
+  int err;
+  
+  imsg.cmd = URFS_CMD_CONN_SWITCH_CALLBACKS;
+  imsg.conn_switch_callbacks.enable = enable;
+  err = send_and_receive(c, &imsg, &omsg);
+  if (err){
+    return(err);
+  }
+  return(0);
+}
+
+#define enable_callbacks(c) switch_callbacks(c, 1)
+#define disable_callbacks(c) switch_callbacks(c, 0)
+
 int urfs_main(struct urfs_conn *c, rfs_filter filter){
   struct urfs_filter *flt;
   union imsg imsg;
@@ -96,13 +130,18 @@ int urfs_main(struct urfs_conn *c, rfs_filter filter){
     return(-1);
   }
 
+  err = enable_callbacks(c);
+  if (err){
+    return(err);
+  }
+
   for(;;){
     if (wait_for_msg(c)){
-      return(RFS_ERR_INVAL);
+      return(-EINVAL);
     }
     err = omsg_recv(c, &omsg);
     if (err){
-      return(err);
+      goto disable_callbacks;
     }
     if (omsg.cmd == URFS_CMD_OP_CALLBACK){
       printf("event ufilter id: %d, request id: %llu\n", omsg.op_callback.ufilter_id, omsg.op_callback.request_id);
@@ -114,11 +153,15 @@ int urfs_main(struct urfs_conn *c, rfs_filter filter){
       imsg.op_callback.retval = RFS_CONTINUE;
       err = imsg_send(c, &imsg);
       if (err){
-        return(RFS_ERR_INVAL);
+        goto disable_callbacks;
       }
     }
   }
-  return(0);
+
+disable_callbacks:
+  disable_callbacks(c);
+
+  return(err);
 }
 
 enum rfs_err rfs_register_filter(rfs_filter *filter, struct rfs_filter_info *filter_info){
@@ -144,14 +187,7 @@ enum rfs_err rfs_register_filter(rfs_filter *filter, struct rfs_filter_info *fil
   imsg.cmd = URFS_CMD_FILTER_REGISTER;
   imsg.filter_register.filter_name_memlen = strlen(filter_info->name) + 1;
   imsg.filter_register.filter_info = filter_info;
-  err = imsg_send(c, &imsg);
-  if (err){
-    return(RFS_ERR_INVAL);
-  }
-  if (wait_for_msg(c)){
-    return(RFS_ERR_INVAL);
-  }
-  err = omsg_recv(c, &omsg);
+  err = send_and_receive(c, &imsg, &omsg);
   if (err){
     return(RFS_ERR_INVAL);
   }
@@ -182,14 +218,7 @@ enum rfs_err rfs_unregister_filter(rfs_filter filter){
 
   imsg.cmd = URFS_CMD_FILTER_UNREGISTER;
   imsg.filter_unregister.ufilter_id = flt->id;
-  err = imsg_send(c, &imsg);
-  if (err){
-    return(RFS_ERR_INVAL);
-  }
-  if (wait_for_msg(c)){
-    return(RFS_ERR_INVAL);
-  }
-  err = omsg_recv(c, &omsg);
+  err = send_and_receive(c, &imsg, &omsg);
   if (err){
     return(RFS_ERR_INVAL);
   }
@@ -214,14 +243,7 @@ enum rfs_err rfs_activate_filter(rfs_filter filter){
 
   imsg.cmd = URFS_CMD_FILTER_ACTIVATE;
   imsg.filter_activate.ufilter_id = flt->id;
-  err = imsg_send(c, &imsg);
-  if (err){
-    return(RFS_ERR_INVAL);
-  }
-  if (wait_for_msg(c)){
-    return(RFS_ERR_INVAL);
-  }
-  err = omsg_recv(c, &omsg);
+  err = send_and_receive(c, &imsg, &omsg);
   if (err){
     return(RFS_ERR_INVAL);
   }
@@ -246,14 +268,7 @@ enum rfs_err rfs_deactivate_filter(rfs_filter filter){
 
   imsg.cmd = URFS_CMD_FILTER_DEACTIVATE;
   imsg.filter_deactivate.ufilter_id = flt->id;
-  err = imsg_send(c, &imsg);
-  if (err){
-    return(RFS_ERR_INVAL);
-  }
-  if (wait_for_msg(c)){
-    return(RFS_ERR_INVAL);
-  }
-  err = omsg_recv(c, &omsg);
+  err = send_and_receive(c, &imsg, &omsg);
   if (err){
     return(RFS_ERR_INVAL);
   }
@@ -283,14 +298,7 @@ enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info){
   imsg.filter_set_path.ufilter_id = flt->id;
   imsg.filter_set_path.path_memlen = strlen(path_info->path) + 1;
   imsg.filter_set_path.path_info = path_info;
-  err = imsg_send(c, &imsg);
-  if (err){
-    return(RFS_ERR_INVAL);
-  }
-  if (wait_for_msg(c)){
-    return(RFS_ERR_INVAL);
-  }
-  err = omsg_recv(c, &omsg);
+  err = send_and_receive(c, &imsg, &omsg);
   if (err){
     return(RFS_ERR_INVAL);
   }
@@ -334,14 +342,7 @@ enum rfs_err rfs_set_operations(rfs_filter filter, struct rfs_op_info *op_info){
   imsg.cmd = URFS_CMD_FILTER_SET_OPERATIONS;
   imsg.filter_set_operations.ufilter_id = flt->id;
   imsg.filter_set_operations.ops_call_flags = ops_call_flags;
-  err = imsg_send(c, &imsg);
-  if (err){
-    return(RFS_ERR_INVAL);
-  }
-  if (wait_for_msg(c)){
-    return(RFS_ERR_INVAL);
-  }
-  err = omsg_recv(c, &omsg);
+  err = send_and_receive(c, &imsg, &omsg);
   if (err){
     return(RFS_ERR_INVAL);
   }

@@ -89,6 +89,7 @@ struct conn *conn_create(void){
   c = (struct conn *) kmalloc(sizeof(struct conn), GFP_KERNEL);
   if (c){
     c->lock = SPIN_LOCK_UNLOCKED;
+    atomic_set(&c->callbacks_enabled, 0);
     spin_lock(&c->lock);
     init_ufilters(c);
     INIT_LIST_HEAD(&c->msgs_to_send);
@@ -108,10 +109,19 @@ void conn_destroy(struct conn *c){
   spin_unlock(&lock);
 }
 
-void conn_msg_send(struct conn *c, struct omsg_list *omsg_list){
+void conn_msg_append(struct conn *c, struct omsg_list *omsg_list){
   INIT_LIST_HEAD(&omsg_list->list);
   spin_lock(&c->lock); 
   list_add_tail(&omsg_list->list, &c->msgs_to_send);
+  dbgmsg(PRINTPREFIX "waking up queue\n");
+  wake_up(&c->waitq);
+  spin_unlock(&c->lock);
+}
+
+void conn_msg_insert(struct conn *c, struct omsg_list *omsg_list){
+  INIT_LIST_HEAD(&omsg_list->list);
+  spin_lock(&c->lock); 
+  list_add(&omsg_list->list, &c->msgs_to_send);
   dbgmsg(PRINTPREFIX "waking up queue\n");
   wake_up(&c->waitq);
   spin_unlock(&c->lock);
@@ -138,3 +148,10 @@ struct omsg_list *conn_msg_get_next(struct conn *c){
   return(omsg_list);
 }
 
+void conn_switch_callbacks(struct conn *c, int enable){
+  atomic_set(&c->callbacks_enabled, enable);
+}
+
+int conn_enabled_callbacks(struct conn *c){
+  return(atomic_read(&c->callbacks_enabled));
+}
