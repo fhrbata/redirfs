@@ -6,6 +6,7 @@
 
 struct urfs_conn{
   int fd;
+  struct urfs_filter *filters[MAX_UFILTERS_PER_CONN];
 };
 
 struct urfs_filter{
@@ -20,6 +21,7 @@ int urfs_open(struct urfs_conn *n);
 void urfs_close(struct urfs_conn *n);
 int urfs_filter_alloc(rfs_filter *filter, struct urfs_conn *c);
 void urfs_filter_free(rfs_filter filter);
+int urfs_main(struct urfs_conn *c, rfs_filter filter);
 
 #endif
 

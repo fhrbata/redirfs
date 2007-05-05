@@ -7,7 +7,7 @@ void ufilter_request_add(struct ufilter *ufilter, struct request *request){
   spin_unlock(&ufilter->lock);
 }
 
-struct request *ufilter_request_get(struct ufilter *ufilter, unsigned long long request_id){
+struct request *ufilter_request_get(struct ufilter *ufilter, unsigned long long request_id, int del){
   struct list_head *ptr;
   struct request *request;
   struct request *retval = NULL;
@@ -15,7 +15,9 @@ struct request *ufilter_request_get(struct ufilter *ufilter, unsigned long long 
   list_for_each(ptr, &ufilter->active_requests){
     request = list_entry(ptr, struct request, list);
     if (request->id == request_id){
-      list_del(ptr);
+      if (del){
+        list_del(ptr);
+      }
       retval = request;
       break;
     }

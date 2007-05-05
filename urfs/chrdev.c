@@ -60,16 +60,171 @@ static int process_in_cmd_op_callback(struct conn *c, union imsg *imsg){
   if (!ufilter){
     return(-EINVAL);
   }
-  request = ufilter_request_get(ufilter, imsg->op_callback.request_id);
+  request = ufilter_request_get(ufilter, imsg->op_callback.request_id, 1);
   if (!request){
     return(-EINVAL);
   }
-
-  // args copy from userspace here
   
   request->retval = imsg->op_callback.retval;
   complete(&request->completion);
 
+  return(0);
+}
+
+static int make_user_ptr(void __user *dst, void *src){
+  return(copy_to_user(dst, &src, sizeof (void *)));
+}
+
+static int copy_inode_to_user(struct urfs_inode *uinode, struct inode *inode){
+  int err;
+
+  err = copy_to_user(&uinode->i_mode, &inode->i_mode, sizeof(umode_t));
+  if (err){
+    return(err);
+  }
+  return(0);
+}
+
+static int copy_qstr_to_user(struct urfs_str *ustr, struct qstr *qstr, unsigned char __user *str){
+  int err;
+
+  err = copy_to_user(&ustr->len, &qstr->len, sizeof(unsigned int));
+  if (err){
+    return(err);
+  }
+  err = copy_to_user(str, qstr->name, qstr->len + 1);
+  if (err){
+    return(err);
+  }
+  err = copy_to_user(&ustr->name, &str, sizeof(unsigned char *));
+  if (err){
+    return(err);
+  }
+  return(0);
+}
+
+static int copy_dentry_to_user(struct urfs_dentry *udentry, struct dentry *dentry, unsigned char __user *str){
+  int err;
+
+  err = copy_qstr_to_user(&udentry->d_name, &dentry->d_name, str);
+  if (err){
+    return(err);
+  }
+  return(0);
+}
+
+static int copy_nameidata_to_user(struct urfs_nameidata *und, struct nameidata *nd, unsigned char __user *str){
+  int err;
+
+  err = copy_dentry_to_user(&und->__dentry, nd->dentry, str);
+  if (err){
+    return(err);
+  }
+  err = make_user_ptr(&und->dentry, &und->__dentry);
+  if (err){
+    return(err);
+  }
+  return(0);
+}
+
+static int copy_file_to_user(struct urfs_file *ufile, struct file *file, unsigned char __user *str){
+  int err;
+
+  err = copy_dentry_to_user(&ufile->__f_dentry, file->f_dentry, str);
+  if (err){
+    return(err);
+  }
+  err = make_user_ptr(&ufile->f_dentry, &ufile->__f_dentry);
+  if (err){
+    return(err);
+  }
+  return(0);
+}
+
+static int process_in_cmd_op_callback_get_args(struct conn *c, union imsg *imsg){
+  struct request *request;
+  struct ufilter *ufilter;
+  int ufilter_id;
+  struct omsg_list *omsg_list;
+  struct urfs_args __user *uargs;
+  struct rfs_args *args;
+  enum rfs_err err;
+  unsigned char __user *str;
+
+  err = RFS_ERR_INVAL;
+  ufilter_id = imsg->op_callback_get_args.ufilter_id;
+  ufilter = conn_get_ufilter(c, ufilter_id);
+  if (!ufilter){
+    goto send_error;
+  }
+  request = ufilter_request_get(ufilter, imsg->op_callback_get_args.request_id, 0);
+  if (!request){
+    goto send_error;
+  }
+
+  args = request->args;
+  uargs = imsg->op_callback_get_args.args;
+  if (!uargs){
+    goto send_error;
+  }
+  str = imsg->op_callback_get_args.str;
+  if (!str){
+    goto send_error;
+  }
+
+  if (copy_to_user(&uargs->type, &args->type, sizeof(struct rfs_op_type))){
+    goto send_error;
+  }
+
+  switch (args->type.id){
+    case RFS_REG_IOP_PERMISSION:
+    case RFS_DIR_IOP_PERMISSION:
+      if (copy_inode_to_user(&uargs->args.i_permission.__inode, args->args.i_permission.inode)){
+        goto send_error;
+      }
+      if (make_user_ptr(&uargs->args.i_permission.inode, &uargs->args.i_permission.__inode)){
+        goto send_error;
+      }
+      if (copy_to_user(&uargs->args.i_permission.mask, &args->args.i_permission.mask, sizeof(int))){
+        goto send_error;
+      }
+      if (copy_nameidata_to_user(&uargs->args.i_permission.__nd, args->args.i_permission.nd, str)){
+        goto send_error;
+      }
+      if (make_user_ptr(&uargs->args.i_permission.nd, &uargs->args.i_permission.__nd)){
+        goto send_error;
+      }
+      break;
+    case RFS_REG_FOP_OPEN:
+    case RFS_DIR_FOP_OPEN:
+      if (copy_inode_to_user(&uargs->args.f_open.__inode, args->args.f_open.inode)){
+        goto send_error;
+      }
+      if (make_user_ptr(&uargs->args.f_open.inode, &uargs->args.f_open.__inode)){
+        goto send_error;
+      }
+      if (copy_file_to_user(&uargs->args.f_open.__file, args->args.f_open.file, str)){
+        goto send_error;
+      }
+      if (make_user_ptr(&uargs->args.f_open.file, &uargs->args.f_open.__file)){
+        goto send_error;
+      }
+      break;
+    default:
+      break;
+  }
+  
+  request->retval = imsg->op_callback.retval;
+  complete(&request->completion);
+
+send_error:
+  omsg_list = OMSG_LIST_ALLOC;
+  if (!omsg_list){
+    return(-ENOMEM);
+  }
+  omsg_list->omsg.cmd = imsg->cmd;
+  omsg_list->omsg.op_callback_get_args.err = err;
+  conn_msg_insert(c, omsg_list);
   return(0);
 }
 
@@ -386,6 +541,9 @@ static ssize_t urfs_write(struct file *filp, const char __user *buff, size_t cou
       break;
     case URFS_CMD_OP_CALLBACK:
       err = process_in_cmd_op_callback(c, &imsg);
+      break;
+    case URFS_CMD_OP_CALLBACK_GET_ARGS:
+      err = process_in_cmd_op_callback_get_args(c, &imsg);
       break;
     default:
       return(-EINVAL);

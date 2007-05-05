@@ -14,10 +14,10 @@
 
 #define PRINTPREFIX URFS_NAME ": "
 
-#if 1
+#if 0
 #define dbgmsg printk
 #else
-#define dbgmsg(a)
+#define dbgmsg(...)
 #endif
 
 // requests
@@ -43,7 +43,7 @@ struct ufilter{
 };
 
 void ufilter_request_add(struct ufilter *ufilter, struct request *request);
-struct request *ufilter_request_get(struct ufilter *ufilter, unsigned long long request_id);
+struct request *ufilter_request_get(struct ufilter *ufilter, unsigned long long request_id, int del);
 enum rfs_retv ufilter_generic_cb(rfs_context context, struct rfs_args *args);
 enum rfs_err ufilter_register(struct ufilter *ufilter, char *filter_name, int priority, int active);
 enum rfs_err ufilter_set_path(struct ufilter *ufilter, char *path, int flags);
@@ -63,7 +63,6 @@ struct omsg_list{
 
 // conn
 
-#define MAX_UFILTERS_PER_CONN 16
 struct conn{
   spinlock_t lock;
   struct ufilter *ufilter[MAX_UFILTERS_PER_CONN];

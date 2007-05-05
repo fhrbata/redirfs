@@ -18,6 +18,7 @@ int urfs_open(struct urfs_conn *c){
   if (c->fd >= 0){
     return(0);
   }
+  memset(&c->filters, 0, sizeof(struct urfs_filter *) * MAX_UFILTERS_PER_CONN);
   return(c->fd);
 }
 
@@ -119,12 +120,36 @@ static int switch_callbacks(struct urfs_conn *c, int enable){
 #define enable_callbacks(c) switch_callbacks(c, 1)
 #define disable_callbacks(c) switch_callbacks(c, 0)
 
+static int get_args(struct urfs_conn *c, int ufilter_id, unsigned long long request_id, struct rfs_args *args, unsigned char *str){
+  union imsg imsg;
+  union omsg omsg;
+  int err;
+
+  imsg.cmd = URFS_CMD_OP_CALLBACK_GET_ARGS;
+  imsg.op_callback_get_args.ufilter_id = ufilter_id;
+  imsg.op_callback_get_args.request_id = request_id;
+  imsg.op_callback_get_args.args = args;
+  imsg.op_callback_get_args.str = str;
+  err = send_and_receive(c, &imsg, &omsg);
+  if (err){
+    return(err);
+  }
+  return(0);
+}
+
 int urfs_main(struct urfs_conn *c, rfs_filter filter){
   struct urfs_filter *flt;
   union imsg imsg;
   union omsg omsg;
   int err;
-  
+  struct rfs_args args;
+  unsigned char str[1024];
+  int ufilter_id;
+  unsigned long long request_id;
+  enum rfs_retv (**ops)(rfs_context, struct rfs_args *);
+  enum rfs_retv (*op)(rfs_context, struct rfs_args *);
+  enum rfs_retv retv;
+
   flt = (struct urfs_filter *) filter;
   if (!flt){
     return(-1);
@@ -144,15 +169,34 @@ int urfs_main(struct urfs_conn *c, rfs_filter filter){
       goto disable_callbacks;
     }
     if (omsg.cmd == URFS_CMD_OP_CALLBACK){
-      printf("event ufilter id: %d, request id: %llu\n", omsg.op_callback.ufilter_id, omsg.op_callback.request_id);
+      ufilter_id = omsg.op_callback.ufilter_id;
+      request_id = omsg.op_callback.request_id;
+      // printf("event ufilter id: %d, request id: %llu\n", ufilter_id, request_id);
+      if (!get_args(c, ufilter_id, request_id, &args, str)){
+        if (c->filters[ufilter_id] != NULL){
+	  if (args.type.call == RFS_PRECALL){
+	    ops = c->filters[ufilter_id]->f_pre_cbs;
+	    op = ops[args.type.id];
+	    if (op){
+	      retv = op(NULL, &args);
+	    }
+	  }
+	  else if (args.type.call == RFS_POSTCALL){
+            ops = c->filters[ufilter_id]->f_pre_cbs;
+	    op = ops[args.type.id];
+	    if (op){
+	      retv = op(NULL, &args);
+	    }
+	  }
+	}
+      }
       imsg.op_callback.cmd = omsg.op_callback.cmd;
-      imsg.op_callback.ufilter_id = omsg.op_callback.ufilter_id;
-      imsg.op_callback.request_id = omsg.op_callback.request_id;
-      imsg.op_callback.context = omsg.op_callback.context;
-      imsg.op_callback.args = omsg.op_callback.args;
-      imsg.op_callback.retval = RFS_CONTINUE;
+      imsg.op_callback.ufilter_id = ufilter_id;
+      imsg.op_callback.request_id = request_id;
+      imsg.op_callback.retval = retv;
       err = imsg_send(c, &imsg);
       if (err){
+        printf("xxx\n");
         goto disable_callbacks;
       }
     }
@@ -193,6 +237,7 @@ enum rfs_err rfs_register_filter(rfs_filter *filter, struct rfs_filter_info *fil
   }
   if (omsg.filter_register.err == RFS_ERR_OK){
     flt->id = omsg.filter_register.ufilter_id;
+    c->filters[flt->id] = flt;
     memset(&flt->f_pre_cbs, 0, sizeof(op) * RFS_OP_END);
     memset(&flt->f_post_cbs, 0, sizeof(op) * RFS_OP_END);
     flt->mod_cb = NULL;
@@ -222,6 +267,7 @@ enum rfs_err rfs_unregister_filter(rfs_filter filter){
   if (err){
     return(RFS_ERR_INVAL);
   }
+  c->filters[flt->id] = NULL;
   return(omsg.filter_unregister.err);
 }
 
@@ -314,6 +360,7 @@ enum rfs_err rfs_set_operations(rfs_filter filter, struct rfs_op_info *op_info){
   char ops_call_flags[RFS_OP_END];
   char flags;
   int i;
+  enum rfs_retv (*op)(rfs_context, struct rfs_args *);
 
   if (!op_info){
     return(RFS_ERR_INVAL);
@@ -347,6 +394,8 @@ enum rfs_err rfs_set_operations(rfs_filter filter, struct rfs_op_info *op_info){
     return(RFS_ERR_INVAL);
   }
   if (omsg.filter_set_operations.err == RFS_ERR_OK){
+    memset(&flt->f_pre_cbs, 0, sizeof(op) * RFS_OP_END);
+    memset(&flt->f_post_cbs, 0, sizeof(op) * RFS_OP_END);
     for(i = 0; op_info[i].op_id != RFS_OP_END; i++){
       flt->f_pre_cbs[op_info[i].op_id] = op_info[i].pre_cb;
       flt->f_post_cbs[op_info[i].op_id] = op_info[i].post_cb;

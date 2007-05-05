@@ -27,7 +27,6 @@ install:
 	ln -s -f lib$(NAME).so.$(MAJORVERSION).$(SUBVERSION) lib$(NAME).so
 	cp lib$(NAME).so* $(INSTPREFIX)/lib/ -P
 	mkdir -p $(INSTPREFIX)/include/
-	cp rfs.h $(INSTPREFIX)/include/
+	cp urfs.h $(INSTPREFIX)/include/
 	chmod og+r $(INSTPREFIX)/lib/lib$(NAME).*
-	chmod -R og+r $(INSTPREFIX)/include/$(NAME)
 
