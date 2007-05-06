@@ -1,12 +1,24 @@
 high:
-- implement f_pre_llseek (compensate for wrong inode->i_size)
-- make it thread/smp safe
-- (struct file).all is only for statistics now ...
+- fragmentation problem
+- cflt_file_cache_deinit - wait_queue
+- cflt_block_cache_deinit - wait_queue
+- cflt_file_deinit
 
 medium:
+- mmap support
 - optimize writes that overwrite whole existing blocks (no need to read them)
 - compress_dir utility
+- keep track if we had read the block headers from file (fh->blk_read?), so we dont read the blocks from the file multiple times (ex. same inode different files)
 
 low:
+- normalize function prototypes (ex. struct file* as last)
 - renaming cflt_file to cflt_inode makes more sense (the data is inode-specific)
+- add 'likely' where appropriate
+
+feature:
 - consider using configfs for setting methods/block_size/etc.
+
+
+=== free blocks ===
+
+on write if > the 

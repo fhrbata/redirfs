@@ -6,7 +6,7 @@
 #define CACHE_NAME "compflt_block"
 
 static struct kmem_cache *cflt_block_cache = NULL;
-spinlock_t cflt_block_cache_l = SPIN_LOCK_UNLOCKED;
+//spinlock_t cflt_block_cache_l = SPIN_LOCK_UNLOCKED;
 
 int cflt_block_cache_init(void)
 {
@@ -24,9 +24,9 @@ void cflt_block_cache_deinit(void)
 {
         cflt_debug_printk("compflt: [f:cflt_block_cache_deinit]\n");
 
-        spin_lock(&cflt_block_cache_l);
+        //spin_lock(&cflt_block_cache_l);
         kmem_cache_destroy(cflt_block_cache);
-        spin_unlock(&cflt_block_cache_l);
+        //spin_unlock(&cflt_block_cache_l);
         cflt_block_cache = NULL;
 }
 
@@ -36,9 +36,9 @@ struct cflt_block* cflt_block_init(void)
 
         cflt_debug_printk("compflt: [f:cflt_block_init]\n");
 
-        spin_lock(&cflt_block_cache_l);
+        //spin_lock(&cflt_block_cache_l);
         blk = kmem_cache_alloc(cflt_block_cache, GFP_KERNEL);
-        spin_unlock(&cflt_block_cache_l);
+        //spin_unlock(&cflt_block_cache_l);
 
         if (!blk) {
                 printk(KERN_ERR "compflt: failed to allocate a block\n");
@@ -48,7 +48,7 @@ struct cflt_block* cflt_block_init(void)
         blk->data_u = blk->data_c = NULL;
         blk->par = NULL;
         blk->type = CFLT_BLK_NORM;
-        blk->dirty = 0;
+        atomic_set(&blk->dirty, 0);
         blk->off_u = blk->off_c = blk->off_next = 0;
         blk->size_u = blk->size_c = 0;
 
@@ -61,10 +61,9 @@ void cflt_block_deinit(struct cflt_block *blk)
 {
         cflt_debug_printk("compflt: [f:cflt_block_deinit]\n");
 
-        list_del(&blk->file);
-        spin_lock(&cflt_block_cache_l);
+        //spin_lock(&cflt_block_cache_l);
         kmem_cache_free(cflt_block_cache, blk);
-        spin_unlock(&cflt_block_cache_l);
+        //spin_unlock(&cflt_block_cache_l);
 }
 
 // sets 'off' to the start of the next header (or 0 if last)
@@ -81,17 +80,27 @@ int cflt_block_read_header(struct file *f, struct cflt_block *blk, loff_t *off)
 
         rv = cflt_orig_read(f, buf, sizeof(buf), off);
         if (!rv) {
-                printk(KERN_ERR "compflt: failed to read header\n");
+                // isnt really an error
+                //printk(KERN_ERR "compflt: failed to read block header\n");
                 return -1;
         }
 
         memcpy((char*)&blk->type, buf+boff, sizeof(u8));
         boff += sizeof(u8);
 
-        // reset is type-specific
+        // rest is block-type specific
         switch (blk->type) {
         case CFLT_BLK_FREE:
-                // TODO: free block
+                // 0 1   2      6      10   12 13
+                // +---------------------------+
+                // | T | 0000 | OFFN | SC | 00 |
+                // +---------------------------+
+                blk->off_u = 0;
+                boff += sizeof(u32);
+                memcpy(&blk->off_next, buf+boff, sizeof(u32));
+                boff += sizeof(u32);
+                memcpy(&blk->size_c, buf+boff, sizeof(u16));
+                blk->size_u = 0;
                 break;
         case CFLT_BLK_NORM:
                 memcpy(&blk->off_u, buf+boff, sizeof(u32));
@@ -122,16 +131,30 @@ int cflt_block_write_header(struct file *f, struct cflt_block *blk)
 
         cflt_debug_printk("compflt: [f:cflt_block_write_header]\n");
 
-        if (!blk->dirty)
+        if (!atomic_read(&blk->dirty))
                 return 0;
 
+        memcpy(buf+boff, &blk->type, sizeof(u8));
+        boff += sizeof(u8);
+
+        // rest is block-type specific
         switch (blk->type) {
         case CFLT_BLK_FREE:
-                // TODO: free block
+                // +---------------------------+
+                // | T | 0000 | OFFN | SC | 00 |
+                // +---------------------------+
+                memset(buf+boff, 0, sizeof(u32));
+                boff += sizeof(u32);
+                memcpy(buf+boff, &blk->off_next, sizeof(u32));
+                boff += sizeof(u32);
+                memcpy(buf+boff, &blk->size_c, sizeof(u16));
+                boff += sizeof(u16);
+                memset(buf+boff, 0, sizeof(u16));
                 break;
         case CFLT_BLK_NORM:
-                memcpy(buf+boff, &blk->type, sizeof(u8));
-                boff += sizeof(u8);
+                // +---------------------------+
+                // | T | OFFU | OFFN | SC | SU |
+                // +---------------------------+
                 memcpy(buf+boff, &blk->off_u, sizeof(u32));
                 boff += sizeof(u32);
                 memcpy(buf+boff, &blk->off_next, sizeof(u32));
@@ -141,7 +164,7 @@ int cflt_block_write_header(struct file *f, struct cflt_block *blk)
                 memcpy(buf+boff, &blk->size_u, sizeof(u16));
                 break;
         default:
-                // TODO
+                BUG();
                 break;
         }
 
@@ -151,21 +174,9 @@ int cflt_block_write_header(struct file *f, struct cflt_block *blk)
                 printk(KERN_ERR "compflt: failed to write header\n");
                 return -1;
         }
-        blk->dirty = 0;
+        atomic_set(&blk->dirty, 0);
 
         return 0;
-}
-
-void cflt_block_write_headers(struct file *f, struct cflt_file *fh)
-{
-        struct cflt_block *blk;
-
-        cflt_debug_printk("compflt: [f:cflt_block_write_headers]\n");
-
-        list_for_each_entry(blk, &fh->blks, file) {
-                // TODO: check for err
-                cflt_block_write_header(f, blk);
-        }
 }
 
 static int cflt_block_read_c(struct file *f, struct cflt_block *blk)
@@ -173,10 +184,6 @@ static int cflt_block_read_c(struct file *f, struct cflt_block *blk)
         loff_t off_data = blk->off_c + CFLT_BH_SIZE;
 
         cflt_debug_printk("compflt: [f:cflt_block_read_c]\n");
-
-        blk->data_c = kmalloc(blk->size_c, GFP_KERNEL);
-        if (!blk->data_c)
-                return -ENOMEM;
 
         cflt_orig_read(f, blk->data_c, blk->size_c, &off_data);
 
@@ -188,6 +195,10 @@ int cflt_block_read(struct file *f, struct cflt_block *blk, struct crypto_comp *
         int err = 0;
 
         cflt_debug_printk("compflt: [f:cflt_block_read]\n");
+
+        blk->data_c = kmalloc(blk->size_c, GFP_KERNEL);
+        if (!blk->data_c)
+                return -ENOMEM;
 
         if ((err = cflt_block_read_c(f, blk))) {
                 printk(KERN_ERR "compflt: failed to read block error: %i\n", err);
@@ -212,12 +223,12 @@ int cflt_block_write(struct file *f, struct cflt_block *blk, struct crypto_comp 
         cflt_debug_printk("compflt: [f:cflt_block_write]\n");
 
         err = cflt_comp_block(tfm, blk);
-        if(err)
+        if (err)
                 return err;
 
         if (blk->size_c != old) {
                 // TODO: manage block size changes
-                blk->dirty = 1;
+                atomic_set(&blk->dirty, 1);
         }
 
         off_data = blk->off_c + CFLT_BH_SIZE;

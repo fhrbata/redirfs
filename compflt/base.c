@@ -17,17 +17,22 @@ static enum rfs_retv cflt_f_pre_llseek(rfs_context context, struct rfs_args *arg
         struct file *f = args->args.f_llseek.file;
         struct cflt_file *fh;
 
-        fh = cflt_file_get_header(f, f->f_dentry->d_inode);
-
-        if (!fh || !fh->compressed)
-                RFS_CONTINUE;
-
         cflt_debug_printk("compflt: [pre_llseek]");
 
+        fh = cflt_file_get(f->f_dentry->d_inode, f);
+
+        if (unlikely(!fh))
+                RFS_CONTINUE;
+
+        if (!atomic_read(&fh->compressed))
+                goto end;
+
         mutex_lock(&f->f_dentry->d_inode->i_mutex);
-        i_size_write(f->f_dentry->d_inode, fh->size);
+        i_size_write(f->f_dentry->d_inode, fh->size_u);
         mutex_unlock(&f->f_dentry->d_inode->i_mutex);
 
+end:
+        cflt_file_put(fh);
         return RFS_CONTINUE;
 }
 
@@ -40,10 +45,11 @@ static enum rfs_retv cflt_f_pre_open(rfs_context context, struct rfs_args *args)
         cflt_debug_printk("compflt: [pre_open i=%li\n", inode->i_ino);
 
         if (f->f_flags & O_TRUNC) {
-                fh = cflt_file_find(inode);
+                fh = cflt_file_get(inode, NULL);
                 if (fh) {
                         cflt_file_clr_blks(fh);
                         cflt_file_reset(fh, inode);
+                        cflt_file_put(fh);
                 }
         }
 
@@ -58,11 +64,17 @@ static enum rfs_retv cflt_f_post_release(rfs_context context, struct rfs_args *a
 
         cflt_debug_printk("compflt: [post_release] i=%li\n", inode->i_ino);
 
-        fh = cflt_file_find(inode);
-        if (fh && fh->compressed)
-                cflt_file_write(f, fh);
+        fh = cflt_file_get(inode, NULL);
+        if (!fh)
+                return RFS_CONTINUE;
 
-        cflt_block_write_headers(f, fh);
+        if (atomic_read(&fh->compressed)) {
+                cflt_file_write(f, fh);
+                cflt_file_write_block_headers(f, fh);
+        }
+
+        cflt_file_put(fh);
+        //cflt_file_deinit(fh);
 
         return RFS_CONTINUE;
 }
@@ -73,36 +85,39 @@ static enum rfs_retv cflt_f_pre_read(rfs_context context, struct rfs_args *args)
         size_t count = args->args.f_read.count;
         loff_t *pos = args->args.f_read.pos;
         char __user *dst = args->args.f_read.buf;
-        size_t *rv = &args->retv.rv_ssize;
+        size_t *op_rv = &args->retv.rv_ssize;
         struct cflt_file *fh;
+        enum rfs_retv rv = RFS_CONTINUE;
 
         cflt_debug_printk("compflt: [pre_read] i=%li | pos=%i len=%i\n", f->f_dentry->d_inode->i_ino, (int)*pos, count);
 
-        fh = cflt_file_get_header(f,f->f_dentry->d_inode);
-
+        fh = cflt_file_get(f->f_dentry->d_inode, f);
         if (!fh)
                 return RFS_CONTINUE;
 
-        if (!fh->compressed) {
+        if (!atomic_read(&fh->compressed)) {
                 printk(KERN_INFO "compflt: file not compressed\n");
-                return RFS_CONTINUE;
+                goto end;
         }
 
         if (!cflt_cmethod) {
                 printk(KERN_ERR "compflt: no compression method set\n");
-                return RFS_CONTINUE;
+                goto end;
         }
 
         if (cflt_read(f, fh, *pos, &count, dst)) {
-                return RFS_CONTINUE;
+                goto end;
         }
 
-        *rv = count;
-        *pos += *rv;
+        *op_rv = count;
+        *pos += *op_rv;
 
-        cflt_debug_printk("compflt: [pre_read] returning: count=%i pos=%i\n", *rv, (int)*pos);
+        cflt_debug_printk("compflt: [pre_read] returning: count=%i pos=%i\n", *op_rv, (int)*pos);
 
-        return RFS_STOP;
+        rv = RFS_STOP;
+end:
+        cflt_file_put(fh);
+        return rv;
 }
 
 static enum rfs_retv cflt_f_pre_write(rfs_context context, struct rfs_args *args)
@@ -111,38 +126,44 @@ static enum rfs_retv cflt_f_pre_write(rfs_context context, struct rfs_args *args
         unsigned char *src = (unsigned char *) args->args.f_write.buf;
         size_t count = args->args.f_write.count;
         loff_t *pos = args->args.f_write.pos;
-        size_t *rv = &args->retv.rv_ssize;
+        size_t *op_rv = &args->retv.rv_ssize;
         struct cflt_file *fh;
+        enum rfs_retv rv = RFS_CONTINUE;
 
         cflt_debug_printk("compflt: [pre_write] i=%li | pos=%i len=%i\n", f->f_dentry->d_inode->i_ino, (int) *pos, count);
 
-        fh = cflt_file_get_header(f, f->f_dentry->d_inode);
+        fh = cflt_file_get(f->f_dentry->d_inode, f);
         if (!fh)
                 return RFS_CONTINUE;
 
-        if (!fh->compressed && fh->size != 0) {
+        cflt_debug_file_header(fh);
+
+        if (!atomic_read(&fh->compressed) && fh->size_u != 0) {
                 printk(KERN_INFO "compflt: file not compressed\n");
-                return RFS_CONTINUE;
+                goto end;
         }
 
         if (!cflt_cmethod) {
                 printk(KERN_ERR "compflt: no compression method set\n");
-                return RFS_CONTINUE;
+                goto end;
         }
 
         if (f->f_flags & O_APPEND)
-                *pos = fh->size;
+                *pos = fh->size_u;
 
         if (cflt_write(f, fh, *pos, &count, src)) {
                 return RFS_CONTINUE;
         }
 
-        *rv = count;
-        *pos += *rv;
+        *op_rv = count;
+        *pos += *op_rv;
 
-        cflt_debug_printk("compflt: [pre_write] returning: count=%i pos=%i\n", *rv, (int)*pos);
+        cflt_debug_printk("compflt: [pre_write] returning: count=%i pos=%i\n", *op_rv, (int)*pos);
 
-        return RFS_STOP;
+        rv = RFS_STOP;
+end:
+        cflt_file_put(fh);
+        return rv;
 }
 
 // ====================================

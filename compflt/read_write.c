@@ -114,6 +114,7 @@ int cflt_read(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *size
 
         tfm = cflt_comp_init(fh->method);
 
+        //spin_lock(&fh->lock);
         list_for_each_entry(blk, &fh->blks, file) {
                 cflt_debug_block(blk);
 
@@ -121,6 +122,10 @@ int cflt_read(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *size
                         continue;
 
                 cflt_debug_printk("compflt: [f:read_u] match\n");
+
+                blk->data_u = kmalloc(blk->par->blksize, GFP_KERNEL);
+                if (!blk->data_u)
+                        return -ENOMEM;
 
                 if ((err = cflt_block_read(f, blk, tfm)))
                         return err;
@@ -132,6 +137,8 @@ int cflt_read(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *size
                 kfree(blk->data_u);
                 size_total += size;
         }
+        //spin_unlock(&fh->lock);
+
         cflt_comp_deinit(tfm);
         *size_req = size_total;
 
@@ -155,6 +162,7 @@ int cflt_write(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *siz
 
         tfm = cflt_comp_init(fh->method);
 
+        //spin_lock(&fh->lock);
         list_for_each_entry(blk, &fh->blks, file) {
                 cflt_debug_block(blk);
 
@@ -164,6 +172,10 @@ int cflt_write(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *siz
                         continue;
 
                 cflt_debug_printk("compflt: [f:write_u] match\n");
+
+                blk->data_u = kmalloc(blk->par->blksize, GFP_KERNEL);
+                if (!blk->data_u)
+                        return -ENOMEM;
 
                 if ((err = cflt_block_read(f, blk, tfm)))
                         return err;
@@ -179,14 +191,19 @@ int cflt_write(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *siz
                 // update uncompressed size
                 if (off_dst + size > blk->size_u) {
                         blk->size_u = off_dst + size;
-                        blk->dirty = 1;
+                        atomic_set(&blk->dirty, 1);
                 }
 
-                if((err = cflt_block_write(f, blk, tfm)))
+                // updates blk->size_c
+                if ((err = cflt_block_write(f, blk, tfm))) {
+                        kfree(blk->data_u);
                         return err;
+                }
+                kfree(blk->data_u);
 
-                fh->compressed = 1;
+                atomic_set(&fh->compressed, 1);
         }
+        //spin_unlock(&fh->lock);
 
         while (size_total > 0) {
                 cflt_debug_printk("compflt: [f:write_u] newblk remaining=%i\n", size_total);
@@ -195,7 +212,7 @@ int cflt_write(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *siz
                 if (!blk)
                         return -1;
 
-                if (last) {
+                if (likely(last)) {
                         last->off_next = last->off_c+CFLT_BH_SIZE+last->size_c;
                         blk->off_u = last->off_u+last->size_u;
                         blk->off_c = last->off_next;
@@ -204,7 +221,7 @@ int cflt_write(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *siz
                         blk->off_c = CFLT_FH_SIZE;
                 }
 
-                blk->dirty = 1;
+                atomic_set(&blk->dirty, 1);
 
                 cflt_file_add_blk(fh, blk);
 
@@ -212,7 +229,7 @@ int cflt_write(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *siz
                 cflt_debug_printk("compflt: [f:write_u] memcpy %i@%i -> %i\n", blk->size_u, (int)off_src, (int)off_dst);
 
                 blk->data_u = kmalloc(blk->size_u, GFP_KERNEL);
-                if(!blk->data_u)
+                if (!blk->data_u)
                         return -ENOMEM;
 
                 memcpy(blk->data_u, buff_in+off_src, blk->size_u);
@@ -224,7 +241,7 @@ int cflt_write(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *siz
                 }
 
                 kfree(blk->data_u);
-                fh->compressed = 1;
+                atomic_set(&fh->compressed, 1);
                 size_total -= blk->size_u;
                 last = blk;
         }

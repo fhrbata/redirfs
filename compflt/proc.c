@@ -16,7 +16,7 @@ static int cflt_proc_stat_read(char *buf, char **start, off_t off, int count, in
 {
         int len = 0;
 
-        len = cflt_comp_proc_stat(buf, PAGE_SIZE);
+        len = cflt_file_proc_stat(buf, PAGE_SIZE);
 
         if (len <= off+count)
                 *eof = 1;

@@ -1,6 +1,8 @@
 - bugfix rle:decompress
-- port bzip2lib to 2.6.18 [1][2]
+- port bzip2lib to 2.6.18 [0][1]
 - make a bzip2 cryptoapi module
 
-[1] http://kerneltrap.org/node/325
-[2] http://shepard.kicks-ass.net/~cc/
+[0] http://kerneltrap.org/node/325
+[1] http://shepard.kicks-ass.net/~cc/
+[2] http://lwn.net/Articles/144031/
+[3] http://www.suspend2.net/

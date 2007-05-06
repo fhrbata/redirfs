@@ -6,17 +6,17 @@ cp $file $tmpf
 
 awk -- '
 BEGIN {
-        print "==== per-file stats ===";
+        print "==== per-inode stats ===";
 }
-/^[^[]/ {
-        compt=$3+$5;
+/^[0-9]/ {
+        compt=$4+$5;
         per_alg_compt[$2] += compt;
-        per_alg_decomp[$2] += $4;
-	ratio=100 - compt/$4*100;
-        print "<" $1 ">" "\t" $2 "\t" $4 " -> " compt " (" ratio "%)";
+        per_alg_decomp[$2] += $6;
+	ratio=100 - compt/$6*100;
+        print "<" $1 ">" "\t" $2 "\t" $6 " -> " compt " (" ratio "%)";
 }
 END {
-        print "==== per-alg stats ===";
+        print "\n==== per-alg stats ===";
         for (alg in per_alg_compt) {
                 compt = per_alg_compt[alg];
                 decomp = per_alg_decomp[alg];

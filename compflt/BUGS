@@ -1,3 +1,0 @@
---------
-BUG: Seeks containing SEEK_END have wrong results, because it bases the seek on the size of the file , which doesnt correspond to the real uncompressed size.
---------
