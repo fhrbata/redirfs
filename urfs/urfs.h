@@ -9,27 +9,51 @@
 #include <linux/poll.h>
 #include <linux/completion.h>
 #include <linux/vmalloc.h>
+#include <linux/mm.h>
+#include <asm/mman.h>
 #include <asm/uaccess.h>
 #include "urfs_kernel.h"
 
 #define PRINTPREFIX URFS_NAME ": "
 
-#if 0
+#if 1
 #define dbgmsg printk
 #else
 #define dbgmsg(...)
 #endif
 
-// requests
+// request
+
+union request_data{
+  struct {
+    rfs_context context;
+    struct rfs_args *args;
+    struct urfs_args __user *uargs;
+    enum rfs_retv retval;
+    unsigned char *buf; // stored read or write buffer
+  } op_callback;
+};
 
 struct request{
   struct list_head list;
   unsigned long long id;
   struct completion completion;
-  rfs_context context;
-  struct rfs_args *args;
-  enum rfs_retv retval;
+  spinlock_t lock;
+  struct list_head useralloc_chunks;
+  union request_data data;
 };
+
+struct useralloc_chunk{
+  struct list_head list;
+  void __user *ptr;
+  unsigned long size;
+};
+
+void __user *request_useralloc(struct request *request, unsigned long size);
+void request_userfree(struct request *request, void __user *ptr);
+void request_userfreeall(struct request *request);
+struct request *request_create(unsigned long long request_id);
+void request_destroy(struct request *request);
 
 // ufilter
 

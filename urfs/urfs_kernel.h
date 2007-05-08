@@ -43,9 +43,26 @@ union urfs_op_args{
     struct urfs_file __file;
     struct urfs_file *file;
   } f_open;
+  struct {
+#ifdef __KERNEL__
+    char __user *buf;
+#else
+    char *buf;
+#endif
+    size_t count;
+  } f_read;
+  struct {
+#ifdef __KERNEL__
+    char __user *buf;
+#else
+    char *buf;
+#endif
+    size_t count;
+  } f_write;
 };
 
 union urfs_op_retv{
+  ssize_t rv_ssize;
 };
 
 #define __RFS_OP_TYPE_ONLY

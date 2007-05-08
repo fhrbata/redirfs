@@ -4,29 +4,35 @@ void ufilter_request_add(struct ufilter *ufilter, struct request *request){
   INIT_LIST_HEAD(&request->list);
   spin_lock(&ufilter->lock); 
   list_add_tail(&request->list, &ufilter->active_requests);
+  dbgmsg(PRINTPREFIX "adding request with id: %llu\n", request->id);
   spin_unlock(&ufilter->lock);
 }
 
 struct request *ufilter_request_get(struct ufilter *ufilter, unsigned long long request_id, int del){
-  struct list_head *ptr;
   struct request *request;
   struct request *retval = NULL;
 
-  list_for_each(ptr, &ufilter->active_requests){
-    request = list_entry(ptr, struct request, list);
+  spin_lock(&ufilter->lock); 
+  list_for_each_entry(request, &ufilter->active_requests, list){
     if (request->id == request_id){
-      if (del){
-        list_del(ptr);
-      }
       retval = request;
       break;
     }
   }
+  if (retval && del){
+    list_del(&retval->list);
+  }
+  spin_unlock(&ufilter->lock);
   return(retval);
 }
 
-unsigned long long ufilter_get_uniqeue_request_id(struct ufilter *ufilter){
-  return((ufilter->next_request_id)++);
+static unsigned long long ufilter_get_unique_request_id(struct ufilter *ufilter){
+  unsigned long long retval;
+  
+  spin_lock(&ufilter->lock); 
+  retval = (ufilter->next_request_id)++;
+  spin_unlock(&ufilter->lock);
+  return(retval);
 }
 
 enum rfs_retv ufilter_generic_cb(rfs_context context, struct rfs_args *args){
@@ -35,6 +41,7 @@ enum rfs_retv ufilter_generic_cb(rfs_context context, struct rfs_args *args){
   struct request *request;
   int err;
   enum rfs_retv retval = RFS_CONTINUE;
+  unsigned char *buf;
 
   if (rfs_get_context_flt_private_data(context, (void **) &ufilter)){
     goto end;
@@ -54,29 +61,67 @@ enum rfs_retv ufilter_generic_cb(rfs_context context, struct rfs_args *args){
     goto end;
   }
 
-  request = (struct request *) kmalloc(sizeof(struct request), GFP_ATOMIC);
-  if (!request){
-    goto end;
+  request = request_create(ufilter_get_unique_request_id(ufilter));
+  dbgmsg(PRINTPREFIX "request id: %llu\n", request->id);
+  request->data.op_callback.context = NULL;
+  request->data.op_callback.args = args;
+ 
+  // in case of read and write we need to copy buffer from original user space to kernel
+  switch (args->type.id){
+    case RFS_REG_FOP_READ:
+      buf = kmalloc(args->args.f_read.count, GFP_ATOMIC);
+      if (!buf){
+        goto destroy_request;
+      }
+      if (copy_from_user(buf, args->args.f_read.buf, args->args.f_read.count)){
+        goto destroy_request;
+      }
+      request->data.op_callback.buf = buf;
+      break;
+    case RFS_REG_FOP_WRITE:
+      buf = kmalloc(args->args.f_write.count, GFP_ATOMIC);
+      if (!buf){
+        goto destroy_request;
+      }
+      if (copy_from_user(buf, args->args.f_write.buf, args->args.f_write.count)){
+        goto destroy_request;
+      }
+      request->data.op_callback.buf = buf;
+      break;
+    default:
+      break;
   }
 
-  init_completion(&request->completion);
-  request->id = ufilter_get_uniqeue_request_id(ufilter);
-  dbgmsg(PRINTPREFIX "request id: %llu\n", request->id);
-  request->context = context;
-  request->args = args;
- 
   err = process_out_cmd_op_callback(ufilter, request);
   if (err){
-    goto free_request;
+    goto destroy_request;
   }
 
   dbgmsg(PRINTPREFIX "waiting for completion\n");
   wait_for_completion(&request->completion);
-  dbgmsg(PRINTPREFIX "complete\n");
-  retval = request->retval;
+  dbgmsg(PRINTPREFIX "complete request_id: %llu\n", request->id);
+  retval = request->data.op_callback.retval;
+
+  // in case of read and write we need to copy buffer back to original userspace
+  switch (args->type.id){
+    case RFS_REG_FOP_READ:
+      if (copy_to_user(args->args.f_read.buf, request->data.op_callback.buf, args->args.f_read.count)){
+        goto destroy_request;
+      }
+      kfree(request->data.op_callback.buf);
+      break;
+    case RFS_REG_FOP_WRITE:
+      if (copy_to_user(args->args.f_write.buf, request->data.op_callback.buf, args->args.f_write.count)){
+        goto destroy_request;
+      }
+      kfree(request->data.op_callback.buf);
+      break;
+    default:
+      break;
+  }
   
-free_request:
-  kfree(request);
+destroy_request:
+  request_destroy(request);
 
 end:
   return(retval);

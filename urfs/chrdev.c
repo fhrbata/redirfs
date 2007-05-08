@@ -14,9 +14,7 @@ int process_out_cmd_op_callback(struct ufilter *ufilter, struct request *request
   omsg_list->omsg.cmd = URFS_CMD_OP_CALLBACK;
   omsg_list->omsg.op_callback.ufilter_id = ufilter->id;
   omsg_list->omsg.op_callback.request_id = request->id;
-  omsg_list->omsg.op_callback.context = request->context;
-  
-  // args copy to userspace here
+  omsg_list->omsg.op_callback.context = request->data.op_callback.context;
 
   ufilter_request_add(ufilter, request);
   
@@ -53,19 +51,47 @@ static int process_in_cmd_op_callback(struct conn *c, union imsg *imsg){
   struct request *request;
   struct ufilter *ufilter;
   int ufilter_id;
+  struct rfs_args *args;
+  struct urfs_args __user *uargs;
 
   ufilter_id = imsg->op_callback.ufilter_id;
   dbgmsg(PRINTPREFIX "ufilter_id: %d\n", ufilter_id);
   ufilter = conn_get_ufilter(c, ufilter_id);
   if (!ufilter){
+    dbgmsg(PRINTPREFIX "cannot find ufilter\n");
     return(-EINVAL);
   }
   request = ufilter_request_get(ufilter, imsg->op_callback.request_id, 1);
   if (!request){
+    dbgmsg(PRINTPREFIX "cannot find request\n");
     return(-EINVAL);
   }
-  
-  request->retval = imsg->op_callback.retval;
+ 
+  args = request->data.op_callback.args;
+  uargs = request->data.op_callback.uargs;
+  if (!uargs){
+    return(-EINVAL);
+  }
+
+  // here copy args back to kernel
+  // in case of read and write we need to copy buffer from ufilter userspace to kernel
+  switch (args->type.id){
+    case RFS_REG_FOP_READ:
+      if (copy_from_user(request->data.op_callback.buf, uargs->args.f_read.buf, args->args.f_read.count)){
+	return(-EINVAL);
+      }
+      break;
+    case RFS_REG_FOP_WRITE:
+      if (copy_from_user(request->data.op_callback.buf, uargs->args.f_write.buf, args->args.f_write.count)){
+        return(-EINVAL);
+      }
+      break;
+    default:
+      break;
+  }
+
+  request->data.op_callback.retval = imsg->op_callback.retval;
+  request_userfreeall(request); // free all memory allocated to pass to ufilter
   complete(&request->completion);
 
   return(0);
@@ -75,7 +101,7 @@ static int make_user_ptr(void __user *dst, void *src){
   return(copy_to_user(dst, &src, sizeof (void *)));
 }
 
-static int copy_inode_to_user(struct urfs_inode *uinode, struct inode *inode){
+static int copy_inode_to_user(struct request *request, struct urfs_inode *uinode, struct inode *inode){
   int err;
 
   err = copy_to_user(&uinode->i_mode, &inode->i_mode, sizeof(umode_t));
@@ -85,17 +111,25 @@ static int copy_inode_to_user(struct urfs_inode *uinode, struct inode *inode){
   return(0);
 }
 
-static int copy_qstr_to_user(struct urfs_str *ustr, struct qstr *qstr, unsigned char __user *str){
+static int copy_qstr_to_user(struct request *request, struct urfs_str *ustr, struct qstr *qstr){
   int err;
+  unsigned char __user *str;
 
   err = copy_to_user(&ustr->len, &qstr->len, sizeof(unsigned int));
   if (err){
     return(err);
   }
+  
+  str = request_useralloc(request, qstr->len + 1);
+  if (!str){
+    return(err);
+  }
+
   err = copy_to_user(str, qstr->name, qstr->len + 1);
   if (err){
     return(err);
   }
+
   err = copy_to_user(&ustr->name, &str, sizeof(unsigned char *));
   if (err){
     return(err);
@@ -103,20 +137,20 @@ static int copy_qstr_to_user(struct urfs_str *ustr, struct qstr *qstr, unsigned 
   return(0);
 }
 
-static int copy_dentry_to_user(struct urfs_dentry *udentry, struct dentry *dentry, unsigned char __user *str){
+static int copy_dentry_to_user(struct request *request, struct urfs_dentry *udentry, struct dentry *dentry){
   int err;
 
-  err = copy_qstr_to_user(&udentry->d_name, &dentry->d_name, str);
+  err = copy_qstr_to_user(request, &udentry->d_name, &dentry->d_name);
   if (err){
     return(err);
   }
   return(0);
 }
 
-static int copy_nameidata_to_user(struct urfs_nameidata *und, struct nameidata *nd, unsigned char __user *str){
+static int copy_nameidata_to_user(struct request *request, struct urfs_nameidata *und, struct nameidata *nd){
   int err;
 
-  err = copy_dentry_to_user(&und->__dentry, nd->dentry, str);
+  err = copy_dentry_to_user(request, &und->__dentry, nd->dentry);
   if (err){
     return(err);
   }
@@ -127,10 +161,10 @@ static int copy_nameidata_to_user(struct urfs_nameidata *und, struct nameidata *
   return(0);
 }
 
-static int copy_file_to_user(struct urfs_file *ufile, struct file *file, unsigned char __user *str){
+static int copy_file_to_user(struct request *request, struct urfs_file *ufile, struct file *file){
   int err;
 
-  err = copy_dentry_to_user(&ufile->__f_dentry, file->f_dentry, str);
+  err = copy_dentry_to_user(request, &ufile->__f_dentry, file->f_dentry);
   if (err){
     return(err);
   }
@@ -149,7 +183,7 @@ static int process_in_cmd_op_callback_get_args(struct conn *c, union imsg *imsg)
   struct urfs_args __user *uargs;
   struct rfs_args *args;
   enum rfs_err err;
-  unsigned char __user *str;
+  unsigned char __user *buf;
 
   err = RFS_ERR_INVAL;
   ufilter_id = imsg->op_callback_get_args.ufilter_id;
@@ -162,24 +196,24 @@ static int process_in_cmd_op_callback_get_args(struct conn *c, union imsg *imsg)
     goto send_error;
   }
 
-  args = request->args;
+  args = request->data.op_callback.args;
   uargs = imsg->op_callback_get_args.args;
   if (!uargs){
     goto send_error;
   }
-  str = imsg->op_callback_get_args.str;
-  if (!str){
-    goto send_error;
-  }
+  request->data.op_callback.uargs = uargs;
 
   if (copy_to_user(&uargs->type, &args->type, sizeof(struct rfs_op_type))){
+    goto send_error;
+  }
+  if (copy_to_user(&uargs->retv, &args->retv, sizeof(union urfs_op_retv))){
     goto send_error;
   }
 
   switch (args->type.id){
     case RFS_REG_IOP_PERMISSION:
     case RFS_DIR_IOP_PERMISSION:
-      if (copy_inode_to_user(&uargs->args.i_permission.__inode, args->args.i_permission.inode)){
+      if (copy_inode_to_user(request, &uargs->args.i_permission.__inode, args->args.i_permission.inode)){
         goto send_error;
       }
       if (make_user_ptr(&uargs->args.i_permission.inode, &uargs->args.i_permission.__inode)){
@@ -188,7 +222,7 @@ static int process_in_cmd_op_callback_get_args(struct conn *c, union imsg *imsg)
       if (copy_to_user(&uargs->args.i_permission.mask, &args->args.i_permission.mask, sizeof(int))){
         goto send_error;
       }
-      if (copy_nameidata_to_user(&uargs->args.i_permission.__nd, args->args.i_permission.nd, str)){
+      if (copy_nameidata_to_user(request, &uargs->args.i_permission.__nd, args->args.i_permission.nd)){
         goto send_error;
       }
       if (make_user_ptr(&uargs->args.i_permission.nd, &uargs->args.i_permission.__nd)){
@@ -197,25 +231,54 @@ static int process_in_cmd_op_callback_get_args(struct conn *c, union imsg *imsg)
       break;
     case RFS_REG_FOP_OPEN:
     case RFS_DIR_FOP_OPEN:
-      if (copy_inode_to_user(&uargs->args.f_open.__inode, args->args.f_open.inode)){
+      if (copy_inode_to_user(request, &uargs->args.f_open.__inode, args->args.f_open.inode)){
         goto send_error;
       }
       if (make_user_ptr(&uargs->args.f_open.inode, &uargs->args.f_open.__inode)){
         goto send_error;
       }
-      if (copy_file_to_user(&uargs->args.f_open.__file, args->args.f_open.file, str)){
+      if (copy_file_to_user(request, &uargs->args.f_open.__file, args->args.f_open.file)){
         goto send_error;
       }
       if (make_user_ptr(&uargs->args.f_open.file, &uargs->args.f_open.__file)){
         goto send_error;
       }
       break;
+    case RFS_REG_FOP_READ:
+      if (copy_to_user(&uargs->args.f_read.count, &args->args.f_read.count, sizeof(size_t))){
+        goto send_error;
+      }
+      buf = request_useralloc(request, args->args.f_read.count);
+      if (!buf){
+        goto send_error;
+      }
+      if (copy_to_user(buf, request->data.op_callback.buf, args->args.f_read.count)){
+        goto send_error;
+      }
+      if (copy_to_user(&uargs->args.f_read.buf, &buf, sizeof(unsigned char *))){
+        goto send_error;
+      } 
+      break;
+    case RFS_REG_FOP_WRITE:
+      if (copy_to_user(&uargs->args.f_write.count, &args->args.f_write.count, sizeof(size_t))){
+        goto send_error;
+      }
+      buf = request_useralloc(request, args->args.f_write.count);
+      if (!buf){
+        goto send_error;
+      }
+      if (copy_to_user(buf, request->data.op_callback.buf, args->args.f_write.count)){
+        goto send_error;
+      }
+      if (copy_to_user(&uargs->args.f_write.buf, &buf, sizeof(unsigned char *))){
+        goto send_error;
+      }
+      break;
     default:
       break;
   }
-  
-  request->retval = imsg->op_callback.retval;
-  complete(&request->completion);
+ 
+  err = RFS_ERR_OK;
 
 send_error:
   omsg_list = OMSG_LIST_ALLOC;

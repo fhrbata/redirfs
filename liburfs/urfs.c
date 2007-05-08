@@ -134,7 +134,7 @@ static int get_args(struct urfs_conn *c, int ufilter_id, unsigned long long requ
   if (err){
     return(err);
   }
-  return(0);
+  return(omsg.op_callback_get_args.err != RFS_ERR_OK);
 }
 
 int urfs_main(struct urfs_conn *c, rfs_filter filter){
@@ -182,7 +182,7 @@ int urfs_main(struct urfs_conn *c, rfs_filter filter){
 	    }
 	  }
 	  else if (args.type.call == RFS_POSTCALL){
-            ops = c->filters[ufilter_id]->f_pre_cbs;
+            ops = c->filters[ufilter_id]->f_post_cbs;
 	    op = ops[args.type.id];
 	    if (op){
 	      retv = op(NULL, &args);
@@ -196,7 +196,7 @@ int urfs_main(struct urfs_conn *c, rfs_filter filter){
       imsg.op_callback.retval = retv;
       err = imsg_send(c, &imsg);
       if (err){
-        printf("xxx\n");
+        printf("op_callback reply err\n");
         goto disable_callbacks;
       }
     }
