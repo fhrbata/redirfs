@@ -5,15 +5,29 @@
 
 void cflt_debug_block(struct cflt_block *blk)
 {
-        printk("compflt: [block] %i@%i -> %i@%i\n",
-        (int)blk->size_c, (int)blk->off_c, (int)blk->size_u, (int)blk->off_u);
+        printk("[block] %i@%i -> %i@%i F=%i\n",
+        (int)blk->size_c, (int)blk->off_c, (int)blk->size_u, (int)blk->off_u,
+        (blk->type == CFLT_BLK_FREE));
 }
 
 void cflt_debug_file_header(struct cflt_file *fh)
 {
-        printk("compflt: [file] ino=%li compressed=%i dirty=%i method=%i blksize=%i size=%i\n",
-                        fh->inode->i_ino, fh->compressed, atomic_read(&fh->dirty), fh->method,
-                        fh->blksize, (int)fh->size_u);
+        printk("[file] ino=%li compressed=%i dirty=%i method=%i blksize=%i size=%i\n",
+                        fh->inode->i_ino, atomic_read(&fh->compressed),
+                        atomic_read(&fh->dirty), fh->method, fh->blksize,
+                        (int)fh->size_u);
+}
+
+void cflt_debug_file(struct cflt_file *fh)
+{
+        struct cflt_block *blk;
+
+        printk("---------- file ----------\n");
+        cflt_debug_file_header(fh);
+        list_for_each_entry(blk, &fh->blks, file) {
+                cflt_debug_block(blk);
+        }
+        printk("---------- ^^^^ ----------\n");
 }
 
 void cflt_hexdump(void *buf, unsigned int len)

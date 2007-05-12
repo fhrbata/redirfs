@@ -3,7 +3,6 @@
 #include "../redirfs/redir.h"
 #include "compflt.h"
 
-// TODO: read might not get the whole size in 1 go
 ssize_t cflt_orig_read(struct file *f, char __user *buf, size_t len, loff_t *off)
 {
         int rv;
@@ -17,12 +16,11 @@ ssize_t cflt_orig_read(struct file *f, char __user *buf, size_t len, loff_t *off
         set_fs(KERNEL_DS);
         rv = rfile->rf_op_old->read(f, buf, len, off);
         rfile_put(rfile);
-	//cflt_hexdump(buf, rv); // DEBUG
+	cflt_hexdump(buf, rv); // DEBUG
 	set_fs(orig_fs);
 	return rv;
 }
 
-// TODO: write might not put the whole size in 1 go
 ssize_t cflt_orig_write(struct file *f, const char __user *buf, size_t len, loff_t *off)
 {
 	int rv;
@@ -31,7 +29,7 @@ ssize_t cflt_orig_write(struct file *f, const char __user *buf, size_t len, loff
         BUG_ON(!rfile);
 
 	cflt_debug_printk("compflt: [f:orig_write] %i@%i\n", len, (int) *off);
-	//cflt_hexdump((char*)buf, len); // DEBUG
+	cflt_hexdump((char*)buf, len); // DEBUG
 
 	orig_fs = get_fs();
 	set_fs(KERNEL_DS);
@@ -118,7 +116,8 @@ int cflt_read(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *size
         list_for_each_entry(blk, &fh->blks, file) {
                 cflt_debug_block(blk);
 
-                if (!cflt_read_match(blk, off_req, *size_req))
+                if (blk->type == CFLT_BLK_FREE ||
+                    !cflt_read_match(blk, off_req, *size_req))
                         continue;
 
                 cflt_debug_printk("compflt: [f:read_u] match\n");
@@ -151,7 +150,6 @@ int cflt_write(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *siz
 
         struct crypto_comp *tfm;
         struct cflt_block *blk = NULL;
-        struct cflt_block *last = NULL;
 
         loff_t off_src;
         loff_t off_dst;
@@ -164,14 +162,14 @@ int cflt_write(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *siz
 
         //spin_lock(&fh->lock);
         list_for_each_entry(blk, &fh->blks, file) {
-                cflt_debug_block(blk);
-
-                last = blk;
+                if (blk->type == CFLT_BLK_FREE)
+                        continue;
 
                 if (!cflt_write_match(blk, off_req, *size_req))
                         continue;
 
-                cflt_debug_printk("compflt: [f:write_u] match\n");
+                cflt_debug_printk("compflt: [f:write_u] match:\n");
+                cflt_debug_block(blk);
 
                 blk->data_u = kmalloc(blk->par->blksize, GFP_KERNEL);
                 if (!blk->data_u)
@@ -212,20 +210,11 @@ int cflt_write(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *siz
                 if (!blk)
                         return -1;
 
-                if (likely(last)) {
-                        last->off_next = last->off_c+CFLT_BH_SIZE+last->size_c;
-                        blk->off_u = last->off_u+last->size_u;
-                        blk->off_c = last->off_next;
-                }
-                else {
-                        blk->off_c = CFLT_FH_SIZE;
-                }
-
-                atomic_set(&blk->dirty, 1);
-
-                cflt_file_add_blk(fh, blk);
+                blk->off_u = off_req + *size_req - size_total;
+                blk->par = fh; // needs to be set for cflt_write_params
 
                 cflt_write_params(blk, off_req, *size_req, &off_src, &off_dst, (size_t*)&blk->size_u);
+
                 cflt_debug_printk("compflt: [f:write_u] memcpy %i@%i -> %i\n", blk->size_u, (int)off_src, (int)off_dst);
 
                 blk->data_u = kmalloc(blk->size_u, GFP_KERNEL);
@@ -239,11 +228,11 @@ int cflt_write(struct file *f, struct cflt_file *fh, loff_t off_req, size_t *siz
                         kfree(blk->data_u);
                         return err;
                 }
-
                 kfree(blk->data_u);
+
                 atomic_set(&fh->compressed, 1);
+                cflt_file_add_blk(fh, blk);
                 size_total -= blk->size_u;
-                last = blk;
         }
 
         // size_total *should* be 0 at this point

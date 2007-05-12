@@ -1,24 +1,16 @@
 high:
-- fragmentation problem
-- cflt_file_cache_deinit - wait_queue
-- cflt_block_cache_deinit - wait_queue
-- cflt_file_deinit
 
 medium:
 - mmap support
-- optimize writes that overwrite whole existing blocks (no need to read them)
 - compress_dir utility
-- keep track if we had read the block headers from file (fh->blk_read?), so we dont read the blocks from the file multiple times (ex. same inode different files)
+- cleanup the cflt_file_handle_block function
+- remove *fh from those cflt_file_* functions that can expect blk->par to be set
+- debug output cleanup
+- optimize writes that overwrite whole existing blocks (no need to read them)
 
 low:
-- normalize function prototypes (ex. struct file* as last)
+- add description to functions
 - renaming cflt_file to cflt_inode makes more sense (the data is inode-specific)
-- add 'likely' where appropriate
 
 feature:
-- consider using configfs for setting methods/block_size/etc.
-
-
-=== free blocks ===
-
-on write if > the 
+- use configfs for setting methods/block_size/etc.

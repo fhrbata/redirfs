@@ -5,7 +5,7 @@
 
 #define CFLT_MAGIC "\x06\x10\x19\x82"
 #define CFLT_FH_SIZE 9
-#define CFLT_BH_SIZE 13
+#define CFLT_BH_SIZE 9
 #define CFLT_BLKSIZE_MIN 512
 #define CFLT_BLKSIZE_MAX 32768
 #define CFLT_BLKSIZE_MOD 512
@@ -18,13 +18,11 @@ struct cflt_block {
         unsigned int type; // u8 (0 == free , 1 == normal)
 	unsigned int off_u; // u32
 	unsigned int off_c; // not written to file
-	unsigned int off_next; // u32
 	unsigned int size_u; // u16
-	unsigned int size_c; // u16
+	unsigned int size_c; // u16 (size without header)
         struct cflt_file *par; // parent cflt_file
         char *data_u;
         char *data_c;
-        // ===
         atomic_t dirty;
 };
 
@@ -32,7 +30,6 @@ struct cflt_file {
 	struct list_head all; // used for statistics
         // ===
 	struct list_head blks;
-        struct list_head free;
 	struct inode *inode;
 	unsigned int method; // u8
         unsigned int blksize; // u32
@@ -40,7 +37,8 @@ struct cflt_file {
         atomic_t compressed;
         atomic_t dirty;
         atomic_t cnt;
-        //spinlock_t lock;
+        wait_queue_head_t ref_w;
+        spinlock_t lock;
 };
 
 // base.c
@@ -53,7 +51,12 @@ void cflt_file_put(struct cflt_file*);
 int cflt_file_read_block_headers(struct file*, struct cflt_file*);
 void cflt_file_write_block_headers(struct file*, struct cflt_file*);
 
-void cflt_file_reset(struct cflt_file*, struct inode*);
+void cflt_file_add_blk(struct cflt_file*, struct cflt_block*);
+void cflt_file_del_blk(struct cflt_block *blk);
+
+int cflt_file_place_block(struct cflt_block*, unsigned int);
+
+void cflt_file_truncate(struct cflt_file*);
 void cflt_file_clr_blks(struct cflt_file*);
 int cflt_file_cache_init(void);
 void cflt_file_cache_deinit(void);
@@ -61,9 +64,7 @@ struct cflt_file *cflt_file_find(struct inode*);
 int cflt_file_read(struct file*, struct cflt_file*);
 void cflt_file_write(struct file*, struct cflt_file*);
 int cflt_file_blksize_set(unsigned int);
-void cflt_file_add_blk(struct cflt_file*, struct cflt_block*);
 int cflt_file_proc_blksize(char*, int);
-
 
 int cflt_file_proc_stat(char*, int);
 
@@ -101,12 +102,14 @@ void cflt_proc_deinit(void);
 // debug.c
 #ifdef CFLT_DEBUG
         #define cflt_debug_printk printk
-        void cflt_debug_block(struct cflt_block*);
+        void cflt_debug_file(struct cflt_file*);
         void cflt_debug_file_header(struct cflt_file*);
+        void cflt_debug_block(struct cflt_block*);
         void cflt_hexdump(void*, unsigned int);
 #else
         #define cflt_debug_printk(format, args...) ;
-        #define cflt_debug_block(blk) ;
+        #define cflt_debug_file(fh) ;
         #define cflt_debug_file_header(fh) ;
+        #define cflt_debug_block(blk) ;
         #define cflt_hexdump(buf, len) ;
 #endif

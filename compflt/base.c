@@ -6,27 +6,34 @@
 #include "compflt.h"
 #include "path.h"
 
-char version[] = "pre8";
+char version[] = "0";
 
 static char *in_cmethod = CFLT_DEFAULT_METHOD;
 module_param(in_cmethod, charp, 0000);
 MODULE_PARM_DESC(in_cmethod, "Initial compression method to use");
+
+static int in_blksize = CFLT_DEFAULT_BLKSIZE;
+module_param(in_blksize, int, 0000);
+MODULE_PARM_DESC(in_blksize, "Initial block size to use");
 
 static enum rfs_retv cflt_f_pre_llseek(rfs_context context, struct rfs_args *args)
 {
         struct file *f = args->args.f_llseek.file;
         struct cflt_file *fh;
 
-        cflt_debug_printk("compflt: [pre_llseek]");
+        cflt_debug_printk("compflt: [pre_llseek] i=%li\n",
+                        f->f_dentry->d_inode->i_ino);
 
         fh = cflt_file_get(f->f_dentry->d_inode, f);
+        if (!fh)
+                return RFS_CONTINUE;
 
-        if (unlikely(!fh))
-                RFS_CONTINUE;
+        cflt_debug_file_header(fh);
 
         if (!atomic_read(&fh->compressed))
                 goto end;
 
+        cflt_debug_printk("compflt: setting inode->i_size to %i\n", fh->size_u);
         mutex_lock(&f->f_dentry->d_inode->i_mutex);
         i_size_write(f->f_dentry->d_inode, fh->size_u);
         mutex_unlock(&f->f_dentry->d_inode->i_mutex);
@@ -48,7 +55,7 @@ static enum rfs_retv cflt_f_pre_open(rfs_context context, struct rfs_args *args)
                 fh = cflt_file_get(inode, NULL);
                 if (fh) {
                         cflt_file_clr_blks(fh);
-                        cflt_file_reset(fh, inode);
+                        cflt_file_truncate(fh);
                         cflt_file_put(fh);
                 }
         }
@@ -74,7 +81,6 @@ static enum rfs_retv cflt_f_post_release(rfs_context context, struct rfs_args *a
         }
 
         cflt_file_put(fh);
-        //cflt_file_deinit(fh);
 
         return RFS_CONTINUE;
 }
@@ -94,6 +100,8 @@ static enum rfs_retv cflt_f_pre_read(rfs_context context, struct rfs_args *args)
         fh = cflt_file_get(f->f_dentry->d_inode, f);
         if (!fh)
                 return RFS_CONTINUE;
+
+        cflt_debug_file(fh);
 
         if (!atomic_read(&fh->compressed)) {
                 printk(KERN_INFO "compflt: file not compressed\n");
@@ -130,7 +138,7 @@ static enum rfs_retv cflt_f_pre_write(rfs_context context, struct rfs_args *args
         struct cflt_file *fh;
         enum rfs_retv rv = RFS_CONTINUE;
 
-        cflt_debug_printk("compflt: [pre_write] i=%li | pos=%i len=%i\n", f->f_dentry->d_inode->i_ino, (int) *pos, count);
+        cflt_debug_printk("compflt: [pre_write] i=%li | pos=%i len=%i\n", f->f_dentry->d_inode->i_ino, (int)*pos, count);
 
         fh = cflt_file_get(f->f_dentry->d_inode, f);
         if (!fh)
@@ -148,8 +156,11 @@ static enum rfs_retv cflt_f_pre_write(rfs_context context, struct rfs_args *args
                 goto end;
         }
 
-        if (f->f_flags & O_APPEND)
+        if (f->f_flags & O_APPEND) {
                 *pos = fh->size_u;
+                // we write all over the file
+                f->f_flags &= ~O_APPEND;
+        }
 
         if (cflt_write(f, fh, *pos, &count, src)) {
                 return RFS_CONTINUE;
@@ -158,6 +169,7 @@ static enum rfs_retv cflt_f_pre_write(rfs_context context, struct rfs_args *args
         *op_rv = count;
         *pos += *op_rv;
 
+        cflt_debug_file(fh);
         cflt_debug_printk("compflt: [pre_write] returning: count=%i pos=%i\n", *op_rv, (int)*pos);
 
         rv = RFS_STOP;
@@ -190,24 +202,6 @@ static int __init compflt_init(void)
                 goto error;
         }
 
-        err = rfs_set_operations(compflt, ops_info);
-        if (err != RFS_ERR_OK) {
-                printk(KERN_ERR "compflt: set operations failed: error %d\n", err);
-                goto error;
-        }
-
-        err = rfs_set_path(compflt, &path_info);
-        if (err != RFS_ERR_OK) {
-                printk(KERN_ERR "compflt: include path failed: error %d\n", err);
-                goto error;
-        }
-
-        err = rfs_activate_filter(compflt);
-        if (err != RFS_ERR_OK) {
-                printk(KERN_ERR "compflt: filter activation failed: error %d\n", err);
-                goto error;
-        }
-
         err = cflt_block_cache_init();
         if (err) {
                 printk(KERN_ERR "compflt: block cache initialization failed: error %d\n", err);
@@ -226,6 +220,24 @@ static int __init compflt_init(void)
                 goto error;
         }
 
+        err = rfs_set_operations(compflt, ops_info);
+        if (err != RFS_ERR_OK) {
+                printk(KERN_ERR "compflt: set operations failed: error %d\n", err);
+                goto error;
+        }
+
+        err = rfs_set_path(compflt, &path_info);
+        if (err != RFS_ERR_OK) {
+                printk(KERN_ERR "compflt: include path failed: error %d\n", err);
+                goto error;
+        }
+
+        err = rfs_activate_filter(compflt);
+        if (err != RFS_ERR_OK) {
+                printk(KERN_ERR "compflt: filter activation failed: error %d\n", err);
+                goto error;
+        }
+
         printk(KERN_INFO "compflt: loaded version %s\n", version);
 
         cflt_comp_method_set(in_cmethod);
@@ -234,8 +246,7 @@ static int __init compflt_init(void)
         if (!cflt_cmethod)
                 printk(KERN_WARNING "compflt: failed to set initial compress method\n");
 
-        // not rly needed
-        cflt_file_blksize_set(CFLT_DEFAULT_BLKSIZE);
+        cflt_file_blksize_set(in_blksize);
 
         return 0;
 

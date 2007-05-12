@@ -1,10 +1,11 @@
 CFLAGS += -g
 KDIR = /lib/modules/$(shell uname -r)/build
 
-#obj-m += redirfs/ compflt/ crypto/
 obj-m += compflt/ crypto/
 
-#CFLAGS += -DCFLT_DEBUG
+ifdef CFLT_DEBUG
+CFLAGS += -DCFLT_DEBUG
+endif
 
 all:
 	make -C ${KDIR} M=$(shell pwd) modules
