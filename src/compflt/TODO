@@ -1,0 +1,16 @@
+high:
+
+medium:
+- mmap support
+- compress_dir utility
+- cleanup the cflt_file_handle_block function
+- remove *fh from those cflt_file_* functions that can expect blk->par to be set
+- debug output cleanup
+- optimize writes that overwrite whole existing blocks (no need to read them)
+
+low:
+- add description to functions
+- renaming cflt_file to cflt_inode makes more sense (the data is inode-specific)
+
+feature:
+- use configfs for setting methods/block_size/etc.
