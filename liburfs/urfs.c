@@ -5,8 +5,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <stdio.h>
+#include <signal.h>
 
 #include "urfs.h"
 #include "../urfs/urfs_kernel.h"
@@ -137,6 +136,64 @@ static int get_args(struct urfs_conn *c, int ufilter_id, unsigned long long requ
   return(omsg.op_callback_get_args.err != RFS_ERR_OK);
 }
 
+static int set_signal_handler(int signal, void (*handler)(int)){
+  struct sigaction sa;
+  int err;
+
+  memset(&sa, 0, sizeof(struct sigaction));
+  sa.sa_handler = handler;
+  sa.sa_flags = 0;
+  sigemptyset(&sa.sa_mask);
+
+  err = sigaction(signal, &sa, NULL);
+
+  return(err);
+}
+
+static int term_flag;
+
+static void main_loop_term(int signal){
+  term_flag = 1;
+}
+
+static int set_signal_handlers(){
+  int err;
+
+  err = set_signal_handler(SIGHUP, main_loop_term);
+  if (err){
+    return(err);
+  }
+  err = set_signal_handler(SIGINT, main_loop_term);
+  if (err){
+    return(err);
+  }
+  err = set_signal_handler(SIGTERM, main_loop_term);
+  if (err){
+    return(err);
+  }
+  return(err);
+}
+
+static int unset_signal_handlers(){
+  int err;
+
+  err = set_signal_handler(SIGHUP, SIG_DFL);
+  if (err){
+    return(err);
+  }
+  err = set_signal_handler(SIGINT, SIG_DFL);
+  if (err){
+    return(err);
+  }
+  err = set_signal_handler(SIGTERM, SIG_DFL);
+  if (err){
+    return(err);
+  }
+  return(err);
+}
+
+#define check_intr() {if (errno == EINTR){err = 0; break;}}
+
 int urfs_main(struct urfs_conn *c, rfs_filter filter){
   struct urfs_filter *flt;
   union imsg imsg;
@@ -160,12 +217,18 @@ int urfs_main(struct urfs_conn *c, rfs_filter filter){
     return(err);
   }
 
+  term_flag = 0;
+  set_signal_handlers();
+
   for(;;){
-    if (wait_for_msg(c)){
-      return(-EINVAL);
+    err = wait_for_msg(c);
+    if (err){
+      check_intr();
+      goto disable_callbacks;
     }
     err = omsg_recv(c, &omsg);
     if (err){
+      check_intr();
       goto disable_callbacks;
     }
     if (omsg.cmd == URFS_CMD_OP_CALLBACK){
@@ -196,13 +259,14 @@ int urfs_main(struct urfs_conn *c, rfs_filter filter){
       imsg.op_callback.retval = retv;
       err = imsg_send(c, &imsg);
       if (err){
-        printf("op_callback reply err\n");
+        check_intr();
         goto disable_callbacks;
       }
     }
   }
 
 disable_callbacks:
+  unset_signal_handlers();
   disable_callbacks(c);
 
   return(err);
