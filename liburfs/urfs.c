@@ -192,7 +192,7 @@ static int unset_signal_handlers(){
   return(err);
 }
 
-#define check_intr() {if (errno == EINTR){err = 0; break;}}
+#define check_intr() {if (errno == EINTR && term_flag){err = 0; break;}}
 
 int urfs_main(struct urfs_conn *c, rfs_filter filter){
   struct urfs_filter *flt;
