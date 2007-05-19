@@ -35,6 +35,19 @@ static unsigned long long ufilter_get_unique_request_id(struct ufilter *ufilter)
   return(retval);
 }
 
+static void cleanup_requests(struct ufilter *ufilter){
+  struct request *req;
+
+  spin_lock(&ufilter->lock);
+  while (!list_empty(&ufilter->active_requests)){
+    req = list_entry(ufilter->active_requests.next, struct request, list);
+    list_del(ufilter->active_requests.next);
+    request_userfreeall(req);
+    request_destroy(req);
+  }
+  spin_unlock(&ufilter->lock);
+}
+
 enum rfs_retv ufilter_generic_cb(rfs_context context, struct rfs_args *args){
   struct ufilter *ufilter;
   struct conn *c;
@@ -162,6 +175,7 @@ enum rfs_err ufilter_unregister(struct ufilter *ufilter){
   enum rfs_err err;
 
   err = rfs_unregister_filter(ufilter->flt);
+  cleanup_requests(ufilter);
   return(err);
 }
 

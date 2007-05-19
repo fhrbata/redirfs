@@ -99,11 +99,22 @@ struct conn *conn_create(void){
   return(c);
 }
 
+static void cleanup_messages_to_send(struct conn *c){
+  struct omsg_list *omsg_list;
+
+  while(!list_empty(&c->msgs_to_send)){
+    omsg_list = list_entry(c->msgs_to_send.next, struct omsg_list, list);
+    list_del(c->msgs_to_send.next);
+    OMSG_LIST_FREE(omsg_list);
+  }
+}
+
 void conn_destroy(struct conn *c){
   spinlock_t lock;
 
   spin_lock(&c->lock);
   cleanup_ufilters(c);
+  cleanup_messages_to_send(c);
   memcpy(&lock, &c->lock, sizeof(spinlock_t));
   kfree(c);
   spin_unlock(&lock);
