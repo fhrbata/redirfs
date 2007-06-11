@@ -136,6 +136,9 @@ void chain_get_ops(struct chain *chain, char *ops)
 {
 	int i, j;
 
+	if (!chain)
+		return;
+
 	for (i = 0; i < chain->c_flts_nr; i++) {
 		for (j = 0; j < RFS_OP_END; j++) {
 			if (chain->c_flts[i]->f_pre_cbs[j])
@@ -159,7 +162,7 @@ struct chain *chain_copy(struct chain *src)
 		return dst;
 
 	for (i = 0; i < src->c_flts_nr; i++)
-		dst->c_flts[i] = src->c_flts[i];
+		dst->c_flts[i] = flt_get(src->c_flts[i]);
 
 	return dst;
 }

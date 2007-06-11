@@ -513,6 +513,7 @@ int flt_rem_cb(struct rpath *path, void *data)
 	struct rpath *path_cmp = path->p_parent;
 	struct ops *ops;
 	int remove = 0;
+	int inch_modified = 0;
 	int aux = 0;
 	int retv;
 
@@ -539,6 +540,7 @@ int flt_rem_cb(struct rpath *path, void *data)
 	if (chain_find_flt(path->p_exchain, flt) == -1 &&
 	    chain_find_flt(path->p_inchain, flt) != -1) {
 
+		inch_modified = 1;
 		inchain = chain_rem_flt(path->p_inchain, flt);
 		if (IS_ERR(inchain))
 			return PTR_ERR(inchain);
@@ -597,7 +599,7 @@ int flt_rem_cb(struct rpath *path, void *data)
 			remove = 1;
 	}
 
-	if (!inchain && (path->p_flags & RFS_PATH_SUBTREE))
+	if (!inch_modified && (path->p_flags & RFS_PATH_SUBTREE))
 		return RFS_ERR_OK;
 
 	if (!remove) {

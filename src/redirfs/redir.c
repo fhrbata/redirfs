@@ -486,11 +486,11 @@ int rfs_walk_dcache(struct dentry *root,
 			dentry = sib->e_dentry;
 			itmp = dentry->d_inode;
 
-			if (dcb(dentry, dcb_data))
-				goto err;
-
-			if (!itmp || !S_ISDIR(itmp->i_mode))
+			if (!itmp || !S_ISDIR(itmp->i_mode)) {
+				if (dcb(dentry, dcb_data))
+					goto err;
 				goto next_sib;
+			}
 
 			subdir = kmalloc(sizeof(struct entry), GFP_KERNEL);
 			if (!subdir) 

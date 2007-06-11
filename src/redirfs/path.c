@@ -244,7 +244,7 @@ void path_rem(struct rpath *path)
 		loop = list_entry(act, struct rpath, p_sibpath);
 		list_move(&loop->p_sibpath, dst);
 		path_put(loop->p_parent);
-		path_get(path->p_parent);
+		loop->p_parent = path_get(path->p_parent);
 	}
 
 	list_del(&path->p_sibpath);
@@ -322,7 +322,7 @@ static int path_dump_cb(struct rpath *path, void *data)
 		for (i = 0; i < path->p_exchain->c_flts_nr; i++) {
 			flt = path->p_exchain->c_flts[i];
 			active = atomic_read(&flt->f_active) ? 'y' : 'n';
-			rfs_debug(" -> %s(g,+,%c,%d)", flt->f_name, active, flt->f_priority);
+			rfs_debug(" -> %s(g,-,%c,%d)", flt->f_name, active, flt->f_priority);
 		}
 	}
 	rfs_debug("\n");
@@ -342,7 +342,7 @@ static int path_dump_cb(struct rpath *path, void *data)
 		for (i = 0; i < path->p_exchain_local->c_flts_nr; i++) {
 			flt = path->p_exchain_local->c_flts[i];
 			active = atomic_read(&flt->f_active) ? 'y' : 'n';
-			rfs_debug(" -> %s(l,+,%c,%d)", flt->f_name, active, flt->f_priority);
+			rfs_debug(" -> %s(l,-,%c,%d)", flt->f_name, active, flt->f_priority);
 		}
 	}
 	rfs_debug("\n");
