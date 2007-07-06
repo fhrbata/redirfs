@@ -1,40 +1,12 @@
 #if !defined(_REDIRFS_H)
 #define _REDIRFS_H
 
-#ifdef __KERNEL__
-
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/namei.h>
-
-#endif // __KERNEL__
-
-#define REDIRCTL_NAME "redirctl"
-
-enum redirctl_cmd{
-  REDIRCTL_CMD_GET_FILTERS_INFO_PREPARE = 0,
-  REDIRCTL_CMD_GET_FILTERS_INFO_DATA = 1,
-  REDIRCTL_CMD_GET_FILTER_PATHS_INFO_PREPARE = 2,
-  REDIRCTL_CMD_GET_FILTER_PATHS_INFO_DATA = 3,
-  REDIRCTL_CMD_SET_FILTER_PATH = 4,
-  REDIRCTL_CMD_ACTIVATE_FILTER = 5,
-  REDIRCTL_CMD_DEACTIVATE_FILTER = 6,
-};
-
-#ifdef __KERNEL__
-
-enum rfs_err {
-	RFS_ERR_OK = 0,
-	RFS_ERR_INVAL = -EINVAL,
-	RFS_ERR_NOMEM = -ENOMEM,
-	RFS_ERR_NOENT = -ENOENT,
-	RFS_ERR_NAMETOOLONG = -ENAMETOOLONG,
-	RFS_ERR_EXIST = -EEXIST,
-	RFS_ERR_NODATA = -ENODATA,
-	RFS_ERR_NOTDIR = -ENOTDIR,
-	RFS_ERR_OPNOTSUPP = -EOPNOTSUPP,
-};
+#include <linux/sysfs.h>
+#include <linux/kobject.h>
 
 enum rfs_op_id {
 	RFS_NONE_DOP_D_REVALIDATE,
@@ -286,14 +258,10 @@ struct rfs_args {
 	struct rfs_op_type type;
 };
 
-#endif // __KERNEL__
-
 #define RFS_PATH_SINGLE		1	
 #define RFS_PATH_SUBTREE	2
 #define RFS_PATH_INCLUDE	4	
 #define RFS_PATH_EXCLUDE	8
-
-#ifdef __KERNEL__
 
 struct rfs_path_info {
 	char *path;
@@ -306,50 +274,64 @@ struct rfs_op_info {
 	enum rfs_retv (*post_cb)(rfs_context, struct rfs_args *);
 };
 
+struct rfs_flt_attribute {
+	struct attribute attr;
+	ssize_t (*show)(rfs_filter filter, struct rfs_flt_attribute *attr, char *buf);
+	ssize_t (*store)(rfs_filter filter, struct rfs_flt_attribute *attr, const char *buf, size_t size);
+};
+
+enum rfs_ctl_id {
+	RFS_CTL_ACTIVATE,
+	RFS_CTL_DEACTIVATE,
+	RFS_CTL_SETPATH
+};
+
+union rfs_ctl_data {
+	struct rfs_path_info path_info;
+};
+
+struct rfs_ctl {
+	enum rfs_ctl_id id;
+	union rfs_ctl_data data;
+};
+
 struct rfs_filter_info {
 	char *name;
 	int priority;
 	int active;
+	int (*ctl_cb)(struct rfs_ctl *ctl);
 };
 
-enum rfs_mod_id {
-	RFS_ACTIVATE,
-	RFS_DEACTIVATE,
-	RFS_SET_PATH,
-};
+int rfs_register_filter(rfs_filter *filter, struct rfs_filter_info *filter_info);
+int rfs_set_operations(rfs_filter filter, struct rfs_op_info *op_info);
+int rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info);
+int rfs_unregister_filter(rfs_filter filter);
+int rfs_activate_filter(rfs_filter filter);
+int rfs_deactivate_filter(rfs_filter filter);
+int rfs_attach_data_inode(rfs_filter filter, struct inode *inode, void *data, void (*cb)(void *));
+int rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, void *data, void (*cb)(void *));
+int rfs_attach_data_file(rfs_filter filter, struct file *file, void *data, void (*cb)(void *));
+int rfs_detach_data_inode(rfs_filter *filter, struct inode *inode, void **data);
+int rfs_detach_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data);
+int rfs_detach_data_file(rfs_filter *filter, struct file *file, void **data);
+int rfs_get_data_inode(rfs_filter *filter, struct inode *inode, void **data);
+int rfs_get_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data);
+int rfs_get_data_file(rfs_filter *filter, struct file *file, void **data);
+int rfs_get_filename(struct dentry *dentry, char *buffer, int size);
+int rfs_register_attribute(rfs_filter filter, struct rfs_flt_attribute *attr);
+int rfs_unregister_attribute(rfs_filter filter, struct rfs_flt_attribute *attr);
+int rfs_get_kobject(rfs_filter filter, struct kobject **kobj);
 
-union rfs_mod {
-	enum rfs_mod_id id;
-	struct {
-		enum rfs_mod_id id;
-	} activate;
-	struct {
-		enum rfs_mod_id id;
-	} deactivate;
-	struct {
-		enum rfs_mod_id id;
-		struct rfs_path_info path_info;
-	} set_path;
-};
+#define rfs_flt_attr(__name, __mode, __show, __store) 		\
+struct rfs_flt_attribute rfs_flt_attr_##__name = { 		\
+	.attr = { 						\
+		.name  = __stringify(__name), 			\
+		.mode  = __mode, 				\
+		.owner = THIS_MODULE				\
+	}, 							\
+	.show = __show, 					\
+	.store = __store 					\
+}
 
-enum rfs_err rfs_register_filter(rfs_filter *filter, struct rfs_filter_info *filter_info);
-enum rfs_err rfs_set_operations(rfs_filter filter, struct rfs_op_info *op_info);
-enum rfs_err rfs_set_mod_cb(rfs_filter filter, enum rfs_err (*mod_cb)(union rfs_mod *));
-enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info);
-enum rfs_err rfs_unregister_filter(rfs_filter filter);
-enum rfs_err rfs_activate_filter(rfs_filter filter);
-enum rfs_err rfs_deactivate_filter(rfs_filter filter);
-enum rfs_err rfs_attach_data_inode(rfs_filter filter, struct inode *inode, void *data, void (*cb)(void *));
-enum rfs_err rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, void *data, void (*cb)(void *));
-enum rfs_err rfs_attach_data_file(rfs_filter filter, struct file *file, void *data, void (*cb)(void *));
-enum rfs_err rfs_detach_data_inode(rfs_filter *filter, struct inode *inode, void **data);
-enum rfs_err rfs_detach_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data);
-enum rfs_err rfs_detach_data_file(rfs_filter *filter, struct file *file, void **data);
-enum rfs_err rfs_get_data_inode(rfs_filter *filter, struct inode *inode, void **data);
-enum rfs_err rfs_get_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data);
-enum rfs_err rfs_get_data_file(rfs_filter *filter, struct file *file, void **data);
-enum rfs_err rfs_get_filename(struct dentry *dentry, char *buffer, int size);
-
-#endif
 #endif
 

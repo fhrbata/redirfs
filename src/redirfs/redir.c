@@ -323,7 +323,7 @@ int rfs_set_ops(struct dentry *dentry, struct rpath *path)
 
 	rdentry_put(rdentry);
 
-	return RFS_ERR_OK;
+	return 0;
 }
 
 int rfs_set_ops_cb(struct dentry *dentry, void *data)
@@ -535,40 +535,33 @@ err:
 
 static int __init rfs_init(void)
 {
+	int rv;
 	atomic_set(&rdentries_freed, 0);
 	atomic_set(&rinodes_freed, 0);
 	atomic_set(&rfiles_freed, 0);
 
-	if (rdentry_cache_create())
-		return -1;
+	if ((rv = rdentry_cache_create()))
+		return rv;
 
-	if (rinode_cache_create())
-		goto rdentry_de;
+	if ((rv = rinode_cache_create())) {
+		rdentry_cache_destroy();
+		return rv;
+	}
 
-	if (rfile_cache_create())
-    goto rinode_de;
+	if ((rv = rfile_cache_create())) {
+		rdentry_cache_destroy();
+		rinode_cache_destroy();
+		return rv;
+	}
 
-#ifdef CONFIG_PROC_FS
-	if (rfs_proc_init())
-    goto rfile_de;
-#endif
-  
-	if (redirctl_init())
-    goto rfs_proc_de;
+	if ((rv = rfs_sysfs_init())) {
+		rdentry_cache_destroy();
+		rinode_cache_destroy();
+		rfile_cache_destroy();
+		return rv;
+	}
 
 	return 0;	
-
-rfs_proc_de:
-#ifdef CONFIG_PROC_FS
-	rfs_proc_destroy();
-#endif
-rfile_de:
-  rfile_cache_destroy();
-rinode_de:
-	rinode_cache_destroy();
-rdentry_de:
-  rdentry_cache_destroy();
-  return -1;
 }
 
 static void __exit rfs_exit(void)
@@ -615,10 +608,7 @@ static void __exit rfs_exit(void)
 	wait_event_interruptible(rfiles_wait, atomic_read(&rfiles_freed));
 	rfile_cache_destroy();
 
-#ifdef CONFIG_PROC_FS
-	rfs_proc_destroy();
-#endif
-	redirctl_destroy();
+	rfs_sysfs_destroy();
 }
 
 module_init(rfs_init);

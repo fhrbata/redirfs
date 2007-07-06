@@ -15,7 +15,7 @@ struct rdentry *rdentry_alloc(struct dentry* dentry)
 
 	rdentry = kmem_cache_alloc(rdentry_cache, GFP_KERNEL);
 	if (!rdentry)
-		return ERR_PTR(RFS_ERR_NOMEM);
+		return ERR_PTR(-ENOMEM);
 
 	INIT_LIST_HEAD(&rdentry->rd_rfiles);
 	INIT_LIST_HEAD(&rdentry->rd_data);
@@ -841,7 +841,7 @@ int rdentry_cache_create(void)
 			0, SLAB_RECLAIM_ACCOUNT,
 			NULL, NULL);
 	if (!rdentry_cache)
-		return -1;
+		return -ENOMEM;
 
 	return 0;
 }
@@ -851,7 +851,7 @@ void rdentry_cache_destroy(void)
 	kmem_cache_destroy(rdentry_cache);
 }
 
-enum rfs_err rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, void *data, void (*cb)(void *))
+int rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, void *data, void (*cb)(void *))
 {
 	struct filter *flt;
 	struct rdentry *rdentry;
@@ -861,16 +861,16 @@ enum rfs_err rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, vo
 	flt = (struct filter *)filter;
 
 	if (!flt || !dentry || !cb)
-		return RFS_ERR_INVAL;
+		return -EINVAL;
 
 	data_new = kmalloc(sizeof(struct data), GFP_KERNEL);
 	if (!data_new)
-		return RFS_ERR_NOMEM;
+		return -ENOMEM;
 
 	rdentry = rdentry_find(dentry);
 	if (!rdentry) {
 		kfree(data_new);
-		return RFS_ERR_NODATA;
+		return -ENODATA;
 	}
 
 	spin_lock(&rdentry->rd_lock);
@@ -879,7 +879,7 @@ enum rfs_err rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, vo
 		kfree(data_new);
 		spin_unlock(&rdentry->rd_lock);
 		rdentry_put(rdentry);
-		return RFS_ERR_EXIST;
+		return -EEXIST;
 	}
 
 	INIT_LIST_HEAD(&data_new->list);
@@ -890,10 +890,11 @@ enum rfs_err rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, vo
 	spin_unlock(&rdentry->rd_lock);
 
 	rdentry_put(rdentry);
-	return RFS_ERR_OK;
+
+	return 0;
 }
 
-enum rfs_err rfs_detach_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data)
+int rfs_detach_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data)
 {
 	struct filter *flt;
 	struct rdentry *rdentry;
@@ -902,18 +903,18 @@ enum rfs_err rfs_detach_data_dentry(rfs_filter *filter, struct dentry *dentry, v
 	flt = (struct filter *)filter;
 	
 	if (!flt || !dentry)
-		return RFS_ERR_INVAL;
+		return -EINVAL;
 
 	rdentry = rdentry_find(dentry);
 	if (!rdentry)
-		return RFS_ERR_NODATA;
+		return -ENODATA;
 
 	spin_lock(&rdentry->rd_lock);
 	found = data_find(&rdentry->rd_data, flt);
 	if (!found) {
 		spin_unlock(&rdentry->rd_lock);
 		rdentry_put(rdentry);
-		return RFS_ERR_NODATA;
+		return -ENODATA;
 	}
 
 	list_del(&found->list);
@@ -925,10 +926,10 @@ enum rfs_err rfs_detach_data_dentry(rfs_filter *filter, struct dentry *dentry, v
 
 	rdentry_put(rdentry);
 
-	return RFS_ERR_OK;
+	return 0;
 }
 
-enum rfs_err rfs_get_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data)
+int rfs_get_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data)
 {
 	struct filter *flt;
 	struct rdentry *rdentry;
@@ -937,18 +938,18 @@ enum rfs_err rfs_get_data_dentry(rfs_filter *filter, struct dentry *dentry, void
 	flt = (struct filter *)filter;
 	
 	if (!flt || !dentry)
-		return RFS_ERR_INVAL;
+		return -EINVAL;
 
 	rdentry = rdentry_find(dentry);
 	if (!rdentry)
-		return RFS_ERR_NODATA;
+		return -ENODATA;
 
 	spin_lock(&rdentry->rd_lock);
 	found = data_find(&rdentry->rd_data, flt);
 	if (!found) {
 		spin_unlock(&rdentry->rd_lock);
 		rdentry_put(rdentry);
-		return RFS_ERR_NODATA;
+		return -ENODATA;
 	}
 
 	*data = found->data;
@@ -957,7 +958,7 @@ enum rfs_err rfs_get_data_dentry(rfs_filter *filter, struct dentry *dentry, void
 
 	rdentry_put(rdentry);
 
-	return RFS_ERR_OK;
+	return 0;
 }
 
 EXPORT_SYMBOL(rfs_attach_data_dentry);

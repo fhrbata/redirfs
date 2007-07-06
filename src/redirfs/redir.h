@@ -29,12 +29,13 @@ struct filter {
 	int f_priority;
 	enum rfs_retv (*f_pre_cbs[RFS_OP_END])(rfs_context, struct rfs_args *);
 	enum rfs_retv (*f_post_cbs[RFS_OP_END])(rfs_context, struct rfs_args *);
-	int (*mod_cb)(union rfs_mod *);
 	unsigned long long f_count;
 	atomic_t f_active;
 	atomic_t f_del;
 	wait_queue_head_t f_wait;
 	spinlock_t f_lock;
+	struct kobject f_kobj;
+	int (*f_ctl_cb)(struct rfs_ctl *ctl);
 };
 
 int flt_add_local(struct rpath *path, struct filter *flt);
@@ -47,8 +48,6 @@ struct filter *flt_alloc(struct rfs_filter_info *flt_info);
 int flt_set_ops_cb(struct rpath *path, void *data);
 int flt_proc_info(char *buf, int size);
 int flt_get_by_name(rfs_filter *filter, char *name);
-int flt_get_all_infos(struct rfs_filter_info **filters_info, int *count);
-int flt_execute_mod_cb(struct filter *flt, union rfs_mod *mod);
 
 struct ops {
 	spinlock_t o_lock;
@@ -97,9 +96,6 @@ struct rpath {
 	struct ops *p_ops;
 	struct ops *p_ops_local;
 };
-#if defined(RFS_DEBUG)
-void path_dump(void);
-#endif
 
 int path_del(struct rpath *path);
 struct rpath *path_alloc(const char *path_name);
@@ -109,8 +105,7 @@ void path_add_rdentry(struct rpath *path, struct rdentry *rdentry);
 void path_del_rdentry(struct rpath *path, struct rdentry *rdentry);
 int rfs_path_walk(struct rpath *path, int walkcb(struct rpath*, void*), void *datacb);
 void path_rem(struct rpath *path);
-int path_proc_info(char *buf, int size);
-int path_get_infos(rfs_filter filter, struct rfs_path_info **paths_info, int *count);
+int path_flt_info(struct filter *flt, char *buf, int size);
 
 struct rfile {
 	struct list_head rf_rdentry_list;
@@ -218,11 +213,8 @@ int rfs_walk_dcache(struct dentry *root, int (*)(struct dentry *, void *), void 
 int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_args *args, int *cnt);
 int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_args *args, int *cnt);
 
-int rfs_proc_init(void);
-void rfs_proc_destroy(void);
-
-int redirctl_init(void);
-void redirctl_destroy(void);
+int rfs_sysfs_init(void);
+void rfs_sysfs_destroy(void);
 
 #endif /* _RFS_REDIR_H */
 

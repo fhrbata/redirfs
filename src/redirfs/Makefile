@@ -13,7 +13,7 @@ EXTRA_CFLAGS += -DRFS_DEBUG
 endif
 
 obj-m += redirfs.o
-redirfs-objs := path.o rdentry.o rinode.o redir.o rfile.o chain.o filter.o ops.o proc.o redirctl.o
+redirfs-objs := path.o rdentry.o rinode.o redir.o rfile.o chain.o filter.o ops.o sysfs.o
 
 redirfs.ko: *.c *.h
 	$(MAKE) -C $(KERN_SRC) SUBDIRS=$(RFS_SRC) modules

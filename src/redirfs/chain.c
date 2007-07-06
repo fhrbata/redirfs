@@ -10,7 +10,7 @@ struct chain *chain_alloc(int size)
 	if (!chain || !flts) {
 		kfree(chain);
 		kfree(flts);
-		return ERR_PTR(RFS_ERR_NOMEM);
+		return ERR_PTR(-ENOMEM);
 	}
 
 	chain->c_flts = flts;

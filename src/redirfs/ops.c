@@ -11,7 +11,7 @@ struct ops *ops_alloc(void)
 	if (!ops || !arr) {
 		kfree(ops);
 		kfree(arr);
-		return ERR_PTR(RFS_ERR_NOMEM);
+		return ERR_PTR(-ENOMEM);
 	}
 
 	memset(arr, 0, sizeof(char) * RFS_OP_END);

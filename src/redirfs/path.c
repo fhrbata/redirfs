@@ -11,16 +11,16 @@ int path_normalize(const char *path, char *buf, int len)
 	char *d;
 
 	if (!path)
-		return RFS_ERR_INVAL;
+		return -EINVAL;
 
 	s = path;
 	d = buf;
 	path_len = strlen(path);
 	if (path_len >= len)
-		return RFS_ERR_NAMETOOLONG;
+		return -ENAMETOOLONG;
 
 	if (*s != '/')
-		return RFS_ERR_INVAL;
+		return -EINVAL;
 
 	while (*s == '/')
 		s++;
@@ -50,10 +50,10 @@ struct rpath *path_alloc(const char *path_name)
 	int path_len;
 
 	if (!path_name)
-		return ERR_PTR(RFS_ERR_INVAL);
+		return ERR_PTR(-EINVAL);
 
 	if (path_lookup(path_name, LOOKUP_FOLLOW, &nd))
-		return ERR_PTR(RFS_ERR_NOENT);
+		return ERR_PTR(-ENOENT);
 
 	path_len = strlen(path_name);
 
@@ -64,7 +64,7 @@ struct rpath *path_alloc(const char *path_name)
 		path_release(&nd);
 		kfree(path);
 		kfree(path_buf);
-		return ERR_PTR(RFS_ERR_NOMEM);
+		return ERR_PTR(-ENOMEM);
 	}
 	
 	strncpy(path_buf, path_name, path_len);
@@ -297,73 +297,7 @@ int rfs_path_walk(struct rpath *path, int walkcb(struct rpath*, void*), void *da
 	return 0;
 }
 
-#if defined(RFS_DEBUG)
-static int path_dump_cb(struct rpath *path, void *data)
-{
-	struct filter *flt;
-	int i;
-	char active;
-
-
-	rfs_debug("+++ path: %s +++\n", path->p_path);
-
-	rfs_debug("inchain %p:",path->p_inchain);
-	if (path->p_inchain) {
-		for (i = 0; i < path->p_inchain->c_flts_nr; i++) {
-			flt = path->p_inchain->c_flts[i];
-			active = atomic_read(&flt->f_active) ? 'y' : 'n';
-			rfs_debug(" -> %s(g,+,%c,%d)", flt->f_name, active, flt->f_priority);
-		}
-	}
-	rfs_debug("\n");
-
-	rfs_debug("exchain %p:",path->p_exchain);
-	if (path->p_exchain) {
-		for (i = 0; i < path->p_exchain->c_flts_nr; i++) {
-			flt = path->p_exchain->c_flts[i];
-			active = atomic_read(&flt->f_active) ? 'y' : 'n';
-			rfs_debug(" -> %s(g,-,%c,%d)", flt->f_name, active, flt->f_priority);
-		}
-	}
-	rfs_debug("\n");
-
-	rfs_debug("inchain_local %p:", path->p_inchain_local);
-	if (path->p_inchain_local) {
-		for (i = 0; i < path->p_inchain_local->c_flts_nr; i++) {
-			flt = path->p_inchain_local->c_flts[i];
-			active = atomic_read(&flt->f_active) ? 'y' : 'n';
-			rfs_debug(" -> %s(l,+,%c,%d)", flt->f_name, active, flt->f_priority);
-		}
-	}
-	rfs_debug("\n");
-
-	rfs_debug("exchain_local %p:", path->p_exchain_local);
-	if (path->p_exchain_local) {
-		for (i = 0; i < path->p_exchain_local->c_flts_nr; i++) {
-			flt = path->p_exchain_local->c_flts[i];
-			active = atomic_read(&flt->f_active) ? 'y' : 'n';
-			rfs_debug(" -> %s(l,-,%c,%d)", flt->f_name, active, flt->f_priority);
-		}
-	}
-	rfs_debug("\n");
-
-	rfs_debug("--- path: %s ---\n", path->p_path);
-
-	return 0;
-}
-
-void path_dump(void)
-{
-	rfs_debug("++++++++++ paths dump ++++++++++\n");
-
-	rfs_path_walk(NULL, path_dump_cb, NULL);
-
-	rfs_debug("---------- paths dump ----------\n");
-}
-#endif
-
-
-enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
+int rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 {
 	struct filter *flt = (struct filter *)filter;
 	struct rpath *path = NULL;
@@ -374,25 +308,25 @@ enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 	struct chain *exchain = NULL;
 	char *path_name = NULL;
 	struct nameidata nd;
-	int retv = RFS_ERR_OK;
+	int retv = 0;
 	int path_len;
 
 	if (!flt || !path_info)
-		return RFS_ERR_INVAL;
+		return -EINVAL;
 
 	if (!(path_info->flags & (RFS_PATH_SINGLE | RFS_PATH_SUBTREE)))
-		return RFS_ERR_INVAL;
+		return -EINVAL;
 
 	if (!(path_info->flags & (RFS_PATH_INCLUDE | RFS_PATH_EXCLUDE)))
-		return RFS_ERR_INVAL;
+		return -EINVAL;
 
 	if (path_lookup(path_info->path, LOOKUP_FOLLOW, &nd))
-		return RFS_ERR_NOENT;
+		return -ENOENT;
 
 	if (path_info->flags & RFS_PATH_SUBTREE) {
 		if (!S_ISDIR(nd.dentry->d_inode->i_mode)) {
 			path_release(&nd);
-			return RFS_ERR_NOTDIR;
+			return -ENOTDIR;
 		}
 	}
 
@@ -402,7 +336,7 @@ enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 	path_name = kmalloc(path_len, GFP_KERNEL);
 
 	if (!path_name)
-		return RFS_ERR_NOMEM;
+		return -ENOMEM;
 	
 	retv = path_normalize(path_info->path, path_name, path_len);
 	if (retv) {
@@ -526,9 +460,6 @@ enum rfs_err rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 		path_rem(loop);
 	}
 
-#if defined(RFS_DEBUG)
-	path_dump();
-#endif
 exit:
 	chain_put(inchain);
 	chain_put(exchain);
@@ -541,82 +472,37 @@ exit:
 }
 
 struct rpath_proc_data {
+	struct filter *flt;
 	char *buf;
 	int size;
 	int len;
-
 };
 
-static int path_proc_info_cb(struct rpath *path, void *data)
+static int path_flt_info_cb(struct rpath *path, void *data)
 {
-	struct rpath_proc_data *info = NULL;
-	struct filter *flt = NULL;
-	char active;
-	int i = 0;
+	struct rpath_proc_data *info = (struct rpath_proc_data *)data;
+	
+	if (chain_find_flt(path->p_inchain, info->flt) != -1) 
+		info->len += sprintf(info->buf + info->len, "1:1:%s&", path->p_path);
 
+	if (chain_find_flt(path->p_exchain, info->flt) != -1) 
+		info->len += sprintf(info->buf + info->len, "1:0:%s&", path->p_path);
 
-	info = (struct rpath_proc_data *)data;
+	if (chain_find_flt(path->p_inchain_local, info->flt) != -1) 
+		info->len += sprintf(info->buf + info->len, "0:1:%s&", path->p_path);
 
-	if ((info->len + strlen(path->p_path) + 1) > info->size)
-		return -1;
-
-	info->len += sprintf(info->buf + info->len, "%s", path->p_path);
-
-	if (path->p_inchain) {
-		for (i = 0; i < path->p_inchain->c_flts_nr; i++) {
-			flt = path->p_inchain->c_flts[i];
-			if ((info->len + strlen(flt->f_name) + 16) > info->size)
-				return -1;
-
-			active = atomic_read(&flt->f_active) ? 'y' : 'n';
-			info->len += sprintf(info->buf + info->len, " -> %s(g,+,%c,%d)", flt->f_name, active, flt->f_priority);
-		}
-	}
-
-	if (path->p_exchain) {
-		for (i = 0; i < path->p_exchain->c_flts_nr; i++) {
-			flt = path->p_exchain->c_flts[i];
-			if ((info->len + strlen(flt->f_name) + 16) > info->size)
-				return -1;
-
-			active = atomic_read(&flt->f_active) ? 'y' : 'n';
-			info->len += sprintf(info->buf + info->len, " -> %s(g,-,%c,%d)", flt->f_name, active, flt->f_priority);
-		}
-	}
-
-	if (path->p_inchain_local) {
-		for (i = 0; i < path->p_inchain_local->c_flts_nr; i++) {
-			flt = path->p_inchain_local->c_flts[i];
-			if ((info->len + strlen(flt->f_name) + 16) > info->size)
-				return -1;
-
-			active = atomic_read(&flt->f_active) ? 'y' : 'n';
-			info->len += sprintf(info->buf + info->len, " -> %s(l,+,%c,%d)", flt->f_name, active, flt->f_priority);
-		}
-	}
-
-	if (path->p_exchain_local) {
-		for (i = 0; i < path->p_exchain_local->c_flts_nr; i++) {
-			flt = path->p_exchain_local->c_flts[i];
-			if ((info->len + strlen(flt->f_name) + 16) > info->size)
-				return -1;
-
-			active = atomic_read(&flt->f_active) ? 'y' : 'n';
-			info->len += sprintf(info->buf + info->len, " -> %s(l,-,%c,%d)", flt->f_name, active, flt->f_priority);
-		}
-	}
-
-	info->len += sprintf(info->buf + info->len, "\n");
+	if (chain_find_flt(path->p_exchain_local, info->flt) != -1) 
+		info->len += sprintf(info->buf + info->len, "0:0:%s&", path->p_path);
 
 	return 0;
 }               
 
-int path_proc_info(char *buf, int size)
+int path_flt_info(struct filter *flt, char *buf, int size)
 {               
-	struct rpath_proc_data info = {buf, size, 0};
+	struct rpath_proc_data info = {flt, buf, size, 0};
 
 	mutex_lock(&path_list_mutex);
-	rfs_path_walk(NULL, path_proc_info_cb, &info);
+	rfs_path_walk(NULL, path_flt_info_cb, &info);
 	mutex_unlock(&path_list_mutex);
 
 	return info.len;
@@ -633,7 +519,7 @@ int path_dpath(struct rdentry *rdentry, struct rpath *path, char *buffer, int si
 	len = size;
 
 	if (size < 2)
-		return RFS_ERR_NAMETOOLONG;
+		return -ENAMETOOLONG;
 
 	*--end = '\0';
 	size--;
@@ -645,7 +531,7 @@ int path_dpath(struct rdentry *rdentry, struct rpath *path, char *buffer, int si
 		size -= dentry->d_name.len + 1; /* dentry name + slash */
 		if (size < 0) {
 			spin_unlock(&dcache_lock);
-			return RFS_ERR_NAMETOOLONG;
+			return -ENAMETOOLONG;
 		}
 		memcpy(end, dentry->d_name.name, dentry->d_name.len);
 		*--end = '/';
@@ -656,7 +542,7 @@ int path_dpath(struct rdentry *rdentry, struct rpath *path, char *buffer, int si
 	size -= path->p_len;
 	if (size < 0) {
 		spin_unlock(&dcache_lock);
-		return RFS_ERR_NAMETOOLONG;
+		return -ENAMETOOLONG;
 	}
 
 	memcpy(end, path->p_path, path->p_len);
@@ -664,21 +550,21 @@ int path_dpath(struct rdentry *rdentry, struct rpath *path, char *buffer, int si
 
 	spin_unlock(&dcache_lock);
 
-	return RFS_ERR_OK;
+	return 0;
 }
 
-enum rfs_err rfs_get_filename(struct dentry *dentry, char *buffer, int size)
+int rfs_get_filename(struct dentry *dentry, char *buffer, int size)
 {
 	struct rdentry *rdentry;
 	struct rpath *path;
 	int retv;
 
 	if (!dentry || !buffer)
-		return RFS_ERR_INVAL;
+		return -EINVAL;
 
 	rdentry = rdentry_find(dentry);
 	if (!rdentry)
-		return RFS_ERR_NODATA;
+		return -ENODATA;
 
 	spin_lock(&rdentry->rd_lock);
 	path = path_get(rdentry->rd_path);
@@ -696,117 +582,6 @@ enum rfs_err rfs_get_filename(struct dentry *dentry, char *buffer, int size)
 	rdentry_put(rdentry);
 
 	return retv;
-}
-
-struct rpath_get_info{
-	struct filter *flt;
-	struct rfs_path_info *paths_info;
-	int count;
-};
-
-static void process_path(struct filter *flt, struct rpath_get_info *info, char *pathname, int flags){
-	if (flt == info->flt){
-		if (info->paths_info != NULL){
-			info->paths_info[info->count].path = pathname;
-			info->paths_info[info->count].flags = flags;
-		}
-		info->count++;
-	}
-}
-
-static int path_get_infos_cb(struct rpath *path, void *data)
-{
-	struct rpath_get_info *info;
-	int i;
-	char *pathname = NULL;
-	int pathnamememlen;
-	int startcount = 0;
-
-	info = (struct rpath_get_info *) data;
-
-	if (info->paths_info != NULL){
-		pathnamememlen = strlen(path->p_path) + 1;
-        	pathname = (char *) kmalloc(pathnamememlen, GFP_KERNEL);
-		if (!pathname){
-			return(-1);
-		}
-		memcpy(pathname, path->p_path, pathnamememlen);
-		startcount = info->count;
-	}
-
-	if (path->p_inchain){
-		for(i = 0; i < path->p_inchain->c_flts_nr; i++){
-			process_path(path->p_inchain->c_flts[i], info, pathname, RFS_PATH_INCLUDE | RFS_PATH_SUBTREE);
-		}
-	}
-
-	if (path->p_exchain){
-		for(i = 0; i < path->p_exchain->c_flts_nr; i++){
-			process_path(path->p_exchain->c_flts[i], info, pathname, RFS_PATH_EXCLUDE | RFS_PATH_SUBTREE);
-		}
-	}
-
-	if (path->p_inchain_local){
-		for(i = 0; i < path->p_inchain_local->c_flts_nr; i++){
-			process_path(path->p_inchain_local->c_flts[i], info, pathname, RFS_PATH_INCLUDE | RFS_PATH_SINGLE);
-		}
-	}
-
-	if (path->p_exchain_local){
-		for(i = 0; i < path->p_exchain_local->c_flts_nr; i++){
-			process_path(path->p_exchain_local->c_flts[i], info, pathname, RFS_PATH_EXCLUDE | RFS_PATH_SINGLE);
-		}
-	}
-
-	if (info->paths_info != NULL && info->count == startcount){
-		kfree(pathname);
-	}
-
-	return(0);
-}               
-
-int path_get_infos(rfs_filter filter, struct rfs_path_info **paths_info, int *count)
-{
-	int retval;
-	struct rpath_get_info info;
-	char *tmp;
-
-	info.flt = filter;
-	info.count = 0;
-	info.paths_info = NULL;
-	mutex_lock(&path_list_mutex);
-	rfs_path_walk(NULL, path_get_infos_cb, &info);
-	if (info.count > 0){
-		*paths_info = (struct rfs_path_info *) kmalloc(sizeof(struct rfs_path_info) * info.count, GFP_KERNEL);
-		if (!(*paths_info)){
-			retval = -1;
-			goto end;
-		}
-
-		info.count = 0;
-		info.paths_info = *paths_info;
-		if (rfs_path_walk(NULL, path_get_infos_cb, &info) != 0){
-			retval = -1;
-			goto cleanup;
-		}
-	}
-	*count = info.count;
-	retval = 0;
-	goto end;
-cleanup:
-	while(info.count-- > 0){
-		tmp = ((*paths_info)[info.count]).path;
-		if (tmp != NULL){
-			kfree(tmp);
-			tmp = NULL;
-		}
-	}
-	kfree(*paths_info);
-	*paths_info = NULL;
-	*count = 0;
-end:
-	mutex_unlock(&path_list_mutex);
-	return(retval);
 }
 
 EXPORT_SYMBOL(rfs_set_path);

@@ -21,7 +21,7 @@ static struct rfile *rfile_alloc(struct file *file)
 	
 	rfile = kmem_cache_alloc(rfile_cache, GFP_KERNEL);
 	if (!rfile)
-		return ERR_PTR(RFS_ERR_NOMEM);
+		return ERR_PTR(-ENOMEM);
 	
 	INIT_LIST_HEAD(&rfile->rf_rdentry_list);
 	INIT_LIST_HEAD(&rfile->rf_data);
@@ -710,7 +710,7 @@ int rfile_cache_create(void)
 					  0, SLAB_RECLAIM_ACCOUNT,
 					  NULL, NULL);
 	if (!rfile_cache)
-		return -1;
+		return -ENOMEM;
 
 	return 0;
 
@@ -721,7 +721,7 @@ void rfile_cache_destroy(void)
 	kmem_cache_destroy(rfile_cache);
 }
 
-enum rfs_err rfs_attach_data_file(rfs_filter filter, struct file *file, void *data, void (*cb)(void *))
+int rfs_attach_data_file(rfs_filter filter, struct file *file, void *data, void (*cb)(void *))
 {
 	struct filter *flt;
 	struct rfile *rfile;
@@ -731,16 +731,16 @@ enum rfs_err rfs_attach_data_file(rfs_filter filter, struct file *file, void *da
 	flt = (struct filter *)filter;
 
 	if (!flt || !file || !cb)
-		return RFS_ERR_INVAL;
+		return -EINVAL;
 
 	data_new = kmalloc(sizeof(struct data), GFP_KERNEL);
 	if (!data_new)
-		return RFS_ERR_NOMEM;
+		return -ENOMEM;
 
 	rfile = rfile_find(file);
 	if (!rfile) {
 		kfree(data_new);
-		return RFS_ERR_NODATA;
+		return -ENODATA;
 	}
 
 	spin_lock(&rfile->rf_lock);
@@ -749,7 +749,7 @@ enum rfs_err rfs_attach_data_file(rfs_filter filter, struct file *file, void *da
 		kfree(data_new);
 		spin_unlock(&rfile->rf_lock);
 		rfile_put(rfile);
-		return RFS_ERR_EXIST;
+		return -EEXIST;
 	}
 
 	INIT_LIST_HEAD(&data_new->list);
@@ -760,10 +760,10 @@ enum rfs_err rfs_attach_data_file(rfs_filter filter, struct file *file, void *da
 	spin_unlock(&rfile->rf_lock);
 
 	rfile_put(rfile);
-	return RFS_ERR_OK;
+	return 0;
 }
 
-enum rfs_err rfs_detach_data_file(rfs_filter *filter, struct file *file, void **data)
+int rfs_detach_data_file(rfs_filter *filter, struct file *file, void **data)
 {
 	struct filter *flt;
 	struct rfile *rfile;
@@ -772,18 +772,18 @@ enum rfs_err rfs_detach_data_file(rfs_filter *filter, struct file *file, void **
 	flt = (struct filter *)filter;
 	
 	if (!flt || !file)
-		return RFS_ERR_INVAL;
+		return -EINVAL;
 
 	rfile = rfile_find(file);
 	if (!rfile)
-		return RFS_ERR_NODATA;
+		return -ENODATA;
 
 	spin_lock(&rfile->rf_lock);
 	found = data_find(&rfile->rf_data, flt);
 	if (!found) {
 		spin_unlock(&rfile->rf_lock);
 		rfile_put(rfile);
-		return RFS_ERR_NODATA;
+		return -ENODATA;
 	}
 
 	list_del(&found->list);
@@ -795,10 +795,10 @@ enum rfs_err rfs_detach_data_file(rfs_filter *filter, struct file *file, void **
 
 	rfile_put(rfile);
 
-	return RFS_ERR_OK;
+	return 0;
 }
 
-enum rfs_err rfs_get_data_file(rfs_filter *filter, struct file *file, void **data)
+int rfs_get_data_file(rfs_filter *filter, struct file *file, void **data)
 {
 	struct filter *flt;
 	struct rfile *rfile;
@@ -807,18 +807,18 @@ enum rfs_err rfs_get_data_file(rfs_filter *filter, struct file *file, void **dat
 	flt = (struct filter *)filter;
 	
 	if (!flt || !file)
-		return RFS_ERR_INVAL;
+		return -EINVAL;
 
 	rfile = rfile_find(file);
 	if (!rfile)
-		return RFS_ERR_NODATA;
+		return -ENODATA;
 
 	spin_lock(&rfile->rf_lock);
 	found = data_find(&rfile->rf_data, flt);
 	if (!found) {
 		spin_unlock(&rfile->rf_lock);
 		rfile_put(rfile);
-		return RFS_ERR_NODATA;
+		return -ENODATA;
 	}
 
 	*data = found->data;
@@ -827,7 +827,7 @@ enum rfs_err rfs_get_data_file(rfs_filter *filter, struct file *file, void **dat
 
 	rfile_put(rfile);
 
-	return RFS_ERR_OK;
+	return 0;
 }
 
 EXPORT_SYMBOL(rfs_attach_data_file);
