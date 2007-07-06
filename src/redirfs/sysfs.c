@@ -10,21 +10,21 @@ static ssize_t rfs_control_show(rfs_filter filter, struct rfs_flt_attribute *att
 {
 	struct filter *flt = (struct filter *)filter;
 
-	return snprintf(buf, PAGE_SIZE, "%d\n", flt->f_ctl_cb ? 1 : 0);
+	return snprintf(buf, PAGE_SIZE, "%d", flt->f_ctl_cb ? 1 : 0);
 }
 
 static ssize_t rfs_priority_show(rfs_filter filter, struct rfs_flt_attribute *attr, char *buf)
 {
 	struct filter *flt = (struct filter *)filter;
 
-	return snprintf(buf, PAGE_SIZE, "%d\n", flt->f_priority);
+	return snprintf(buf, PAGE_SIZE, "%d", flt->f_priority);
 }
 
 static ssize_t rfs_active_show(rfs_filter filter, struct rfs_flt_attribute *attr, char *buf)
 {
 	struct filter *flt = (struct filter *)filter;
 
-	return snprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&flt->f_active));
+	return snprintf(buf, PAGE_SIZE, "%d", atomic_read(&flt->f_active));
 }
 
 static ssize_t rfs_active_store(rfs_filter filter, struct rfs_flt_attribute *attr, const char *buf, size_t size)
