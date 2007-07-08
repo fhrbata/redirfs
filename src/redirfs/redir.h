@@ -203,7 +203,7 @@ struct data {
 
 struct data *data_find(struct list_head *head, struct filter *flt);
 
-int rfs_replace_ops(struct rpath *path_old, struct rpath *path_new);
+int rfs_replace_ops(struct rpath *path_old, struct rpath *path_new, struct filter *flt);
 int rfs_replace_ops_cb(struct dentry *dentry, void *data);
 int rfs_restore_ops_cb(struct dentry *dentry, void *data);
 int rfs_set_path_cb(struct dentry *dentry, void *data);
@@ -215,6 +215,11 @@ int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_a
 
 int rfs_sysfs_init(void);
 void rfs_sysfs_destroy(void);
+
+struct dcache_data_cb {
+	struct rpath *path;
+	struct filter *filter;
+};
 
 #endif /* _RFS_REDIR_H */
 

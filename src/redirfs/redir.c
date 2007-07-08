@@ -61,6 +61,44 @@ int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_ar
 	return 0;
 }
 
+static void rfs_remove_data(struct list_head *head, struct filter *flt)
+{
+	struct data *data;
+
+	data = data_find(head, flt);
+	if (!data)
+		return;
+
+	data->cb(data->data);
+	list_del(&data->list);
+	flt_put(data->filter);
+	kfree(data);
+}
+
+static void rfs_detach_data(struct rdentry *rdentry, struct filter *flt)
+{
+	struct rinode *rinode = rdentry->rd_rinode;
+	struct rfile *rfile;
+
+	spin_lock(&rdentry->rd_lock);
+	rfs_remove_data(&rdentry->rd_data, flt);
+
+	list_for_each_entry(rfile, &rdentry->rd_rfiles, rf_rdentry_list) {
+		spin_lock(&rfile->rf_lock);
+		rfs_remove_data(&rfile->rf_data, flt);
+		spin_unlock(&rfile->rf_lock);
+	}
+
+	spin_unlock(&rdentry->rd_lock);
+
+	if (!rinode)
+		return;
+
+	spin_lock(&rinode->ri_lock);
+	rfs_remove_data(&rinode->ri_data, flt);
+	spin_unlock(&rinode->ri_lock);
+}
+
 int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_args *args, int *cnt)
 {
 	enum rfs_retv (**ops)(rfs_context, struct rfs_args *);
@@ -91,7 +129,7 @@ int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_a
 	return 0;
 }
 
-int rfs_replace_ops(struct rpath *path_old, struct rpath *path_new)
+int rfs_replace_ops(struct rpath *path_old, struct rpath *path_new, struct filter *flt)
 {
 	struct rdentry *rdentry;
 	struct rinode *rinode;
@@ -116,6 +154,9 @@ int rfs_replace_ops(struct rpath *path_old, struct rpath *path_new)
 		rdentry->rd_root = 1;
 	else 
 		rdentry->rd_root = 0;
+
+	if (flt)
+		rfs_detach_data(rdentry, flt);
 
 	rdentry_set_ops(rdentry, ops);
 
@@ -166,11 +207,15 @@ int rfs_replace_ops(struct rpath *path_old, struct rpath *path_new)
 int rfs_replace_ops_cb(struct dentry *dentry, void *data)
 {
 	struct rpath *path;
+	struct filter *flt;
+	struct dcache_data_cb *data_cb;
 	struct rdentry *rdentry;
 	struct rinode *rinode;
 	struct rfile *rfile;
 
-	path = (struct rpath *)data;
+	data_cb = (struct dcache_data_cb *)data;
+	path = data_cb->path;
+	flt = data_cb->filter;
 	rdentry = rdentry_add(dentry);
 
 	if (IS_ERR(rdentry))
@@ -208,6 +253,9 @@ int rfs_replace_ops_cb(struct dentry *dentry, void *data)
 		return 1;
 	} else
 		rdentry->rd_root = 0;
+
+	if (flt)
+		rfs_detach_data(rdentry, flt);
 
 	rdentry_set_ops(rdentry, path->p_ops);
 
@@ -261,9 +309,13 @@ int rfs_restore_ops_cb(struct dentry *dentry, void *data)
 	struct rfile *rfile;
 	struct rfile *tmp;
 	struct rdentry *rdentry;
+	struct filter *flt;
+	struct dcache_data_cb *data_cb;
 	struct rpath *path;
 
-	path = (struct rpath *)data;
+	data_cb = (struct dcache_data_cb *)data;
+	path = data_cb->path;
+	flt = data_cb->filter;
 	rdentry = rdentry_find(dentry);
 
 	if (!rdentry)
@@ -280,6 +332,9 @@ int rfs_restore_ops_cb(struct dentry *dentry, void *data)
 			}
 		}
 	}
+
+	if (flt)
+		rfs_detach_data(rdentry, flt);
 
 	rdentry_del(dentry);
 
