@@ -740,7 +740,7 @@ int rfs_attach_data_inode(rfs_filter filter, struct inode *inode, void *data, vo
 
 	spin_lock(&rinode->ri_lock);
 	
-	if (chain_find_flt(rinode->ri_chain, flt) != -1) {
+	if (chain_find_flt(rinode->ri_chain, flt) == -1) {
 		spin_unlock(&rinode->ri_lock);
 		rinode_put(rinode);
 		return -ENOENT;

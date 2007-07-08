@@ -745,7 +745,7 @@ int rfs_attach_data_file(rfs_filter filter, struct file *file, void *data, void 
 
 	spin_lock(&rfile->rf_lock);
 
-	if (chain_find_flt(rfile->rf_chain, flt) != -1) {
+	if (chain_find_flt(rfile->rf_chain, flt) == -1) {
 		spin_unlock(&rfile->rf_lock);
 		rfile_put(rfile);
 		return -ENOENT;
