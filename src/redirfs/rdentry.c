@@ -874,6 +874,13 @@ int rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, void *data,
 	}
 
 	spin_lock(&rdentry->rd_lock);
+
+	if (chain_find_flt(rdentry->rd_chain, flt) != -1) {
+		spin_unlock(&rdentry->rd_lock);
+		rdentry_put(rdentry);
+		return -ENOENT;
+	}
+
 	found = data_find(&rdentry->rd_data, flt);
 	if (found) {
 		kfree(data_new);

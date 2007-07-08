@@ -739,6 +739,13 @@ int rfs_attach_data_inode(rfs_filter filter, struct inode *inode, void *data, vo
 	}
 
 	spin_lock(&rinode->ri_lock);
+	
+	if (chain_find_flt(rinode->ri_chain, flt) != -1) {
+		spin_unlock(&rinode->ri_lock);
+		rinode_put(rinode);
+		return -ENOENT;
+	}
+
 	found = data_find(&rinode->ri_data, flt);
 	if (found) {
 		kfree(data_new);
@@ -774,6 +781,7 @@ int rfs_detach_data_inode(rfs_filter *filter, struct inode *inode, void **data)
 		return -ENODATA;
 
 	spin_lock(&rinode->ri_lock);
+
 	found = data_find(&rinode->ri_data, flt);
 	if (!found) {
 		spin_unlock(&rinode->ri_lock);
