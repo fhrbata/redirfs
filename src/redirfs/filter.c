@@ -504,7 +504,7 @@ int flt_add_cb(struct rpath *path, void *data)
 	data_cb.path = path_go;
 	data_cb.filter = NULL;
 
-	retv = rfs_walk_dcache(path->p_dentry, rfs_replace_ops_cb, path_go, NULL, NULL);
+	retv = rfs_walk_dcache(path->p_dentry, rfs_replace_ops_cb, &data_cb, NULL, NULL);
 
 	if (retv)
 		return retv;
