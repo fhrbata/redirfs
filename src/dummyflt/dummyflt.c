@@ -55,7 +55,7 @@ enum rfs_retv dummyflt_permission(rfs_context context, struct rfs_args *args)
 		return RFS_CONTINUE;
 	}
 
-	call = args->type.call == RFS_PRECALL ? "precall" : "postcall",
+	call = args->type.call == RFS_PRECALL ? "precall" : "postcall";
 
 	printk(KERN_ALERT "dummyflt: permission: path: %s, call: %s\n", path, call);
 
@@ -77,7 +77,7 @@ enum rfs_retv dummyflt_open(rfs_context context, struct rfs_args *args)
 		return RFS_CONTINUE;
 	}
 
-	call = args->type.call == RFS_PRECALL ? "precall" : "postcall",
+	call = args->type.call == RFS_PRECALL ? "precall" : "postcall";
 
 	printk(KERN_ALERT "dummyflt: open: path: %s, call: %s\n", path, call);
 
