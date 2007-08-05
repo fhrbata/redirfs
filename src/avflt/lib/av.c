@@ -108,13 +108,13 @@ int av_event(int event, int eon)
 			event_fn = "/sys/fs/redirfs/filters/avflt/events/open";
 			break;
 		case AV_EVENT_EXEC:
-			event_fn = "/sys/fs/redirfs/filters/avflt/events/close";
+			event_fn = "/sys/fs/redirfs/filters/avflt/events/exec";
 			break;
 		case AV_EVENT_CLOSE:
-			event_fn = "/sys/fs/redirfs/filters/avflt/events/open";
+			event_fn = "/sys/fs/redirfs/filters/avflt/events/close";
 			break;
 		case AV_EVENT_CLOSE_MODIFIED:
-			event_fn = "/sys/fs/redirfs/filters/avflt/events/open";
+			event_fn = "/sys/fs/redirfs/filters/avflt/events/close_modified";
 			break;
 		default:
 			return EINVAL;
