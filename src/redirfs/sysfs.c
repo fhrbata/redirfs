@@ -81,10 +81,10 @@ static ssize_t rfs_paths_store(rfs_filter filter, struct rfs_flt_attribute *attr
 	return size;
 }
 
-static rfs_flt_attr(control, 0444, rfs_control_show, NULL);
-static rfs_flt_attr(priority, 0444, rfs_priority_show, NULL);
-static rfs_flt_attr(active, 0644, rfs_active_show, rfs_active_store);
-static rfs_flt_attr(paths, 0644, rfs_paths_show, rfs_paths_store);
+static rfs_flt_attr(control, 0444, rfs_control_show, NULL, NULL);
+static rfs_flt_attr(priority, 0444, rfs_priority_show, NULL, NULL);
+static rfs_flt_attr(active, 0644, rfs_active_show, rfs_active_store, NULL);
+static rfs_flt_attr(paths, 0644, rfs_paths_show, rfs_paths_store, NULL);
 
 static struct attribute *rfs_flt_attrs[] = {
 	&rfs_flt_attr_control.attr,

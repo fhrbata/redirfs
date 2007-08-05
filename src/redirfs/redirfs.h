@@ -278,6 +278,7 @@ struct rfs_flt_attribute {
 	struct attribute attr;
 	ssize_t (*show)(rfs_filter filter, struct rfs_flt_attribute *attr, char *buf);
 	ssize_t (*store)(rfs_filter filter, struct rfs_flt_attribute *attr, const char *buf, size_t size);
+	void *data;
 };
 
 enum rfs_ctl_id {
@@ -322,7 +323,7 @@ int rfs_register_attribute(rfs_filter filter, struct rfs_flt_attribute *attr);
 int rfs_unregister_attribute(rfs_filter filter, struct rfs_flt_attribute *attr);
 int rfs_get_kobject(rfs_filter filter, struct kobject **kobj);
 
-#define rfs_flt_attr(__name, __mode, __show, __store) 		\
+#define rfs_flt_attr(__name, __mode, __show, __store, __data)	\
 struct rfs_flt_attribute rfs_flt_attr_##__name = { 		\
 	.attr = { 						\
 		.name  = __stringify(__name), 			\
@@ -330,7 +331,8 @@ struct rfs_flt_attribute rfs_flt_attr_##__name = { 		\
 		.owner = THIS_MODULE				\
 	}, 							\
 	.show = __show, 					\
-	.store = __store 					\
+	.store = __store, 					\
+	.data = __data						\
 }
 
 #endif
