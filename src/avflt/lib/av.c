@@ -102,6 +102,8 @@ int av_path(const char *path, int include)
 		return errno;
 	}
 
+	close(fd);
+
 	return 0;
 
 }
