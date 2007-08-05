@@ -1,18 +1,28 @@
 CC = gcc
 CFLAGS = -Wall -pedantic
 
-OBJS = \
-       av.o
+LIB_OBJS = \
+	   av.o
 
-all: libav.a
+TEST_OBJS = \
+	    test/av_test.o
+
+	
+all: libav.a test/av_test
 
 av.o: av.c av.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-libav.a: $(OBJS)
+test/av_test.o: test/av_test.c av.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+libav.a: $(LIB_OBJS)
 	$(AR) $(ARFLAGS) $@ $^
+
+test/av_test: $(TEST_OBJS) libav.a
+	$(CC) $(CFLAGS) -o $@ $^
 
 .PHONY: clean
 
 clean:
-	rm -rf libav.a $(OBJS)
+	rm -rf test/av_test libav.a $(LIB_OBJS) $(TEST_OBJS)
