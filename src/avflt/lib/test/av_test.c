@@ -15,6 +15,9 @@ int main(int argc, char *argv[])
 	struct sigaction sa;
 	struct av_con avc;
 	struct av_req avr;
+	const char *fn;
+	const char *en;
+	int event;
 	int rv;
 
 	sa.sa_handler = sighandler;
@@ -43,9 +46,38 @@ int main(int argc, char *argv[])
 			return 1;
 		}
 
-		printf("access control: %s\n", avr.fn);
+		rv = av_get_filename(&avr, &fn);
+		if (rv) {
+			fprintf(stderr, "av_get_filename failed: %s(%d)\n", strerror(rv), rv);
+			return 1;
+		}
 
-		rv = av_access(&avc, &avr, 1); 
+		rv = av_get_event(&avr, &event);
+		if (rv) {
+			fprintf(stderr, "av_get_event failed: %s(%d)\n", strerror(rv), rv);
+			return 1;
+		}
+
+		switch (event) {
+			case AV_EVENT_OPEN:
+				en = "OPEN";
+				break;
+			case AV_EVENT_EXEC:
+				en = "EXEC";
+				break;
+			case AV_EVENT_CLOSE:
+				en = "CLOSE";
+				break;
+			case AV_EVENT_CLOSE_MODIFIED:
+				en = "CLOSE_MODIFIED";
+				break;
+			default:
+				en = "UNKNOWN";
+		}
+
+		printf("access control: %s: %s\n", en, fn);
+
+		rv = av_set_access(&avr, AV_ACCESS_ALLOW); 
 		if (rv) {
 			fprintf(stderr, "av_access failed: %s(%d)\n", strerror(rv), rv);
 			return 1;

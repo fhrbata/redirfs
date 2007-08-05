@@ -63,16 +63,6 @@ int av_reply(struct av_con *avc, struct av_req *avr)
 	return 0;
 }
 
-int av_access(struct av_con *avc, struct av_req *avr, int ava)
-{
-	if (!avc || !avr)
-		return EINVAL;
-
-	avr->ucheck.deny = !ava;
-
-	return 0;
-}
-
 int av_path(const char *path, int include)
 {
 	int fd;
@@ -108,6 +98,52 @@ int av_path(const char *path, int include)
 
 }
 
+int av_event(int event, int eon)
+{
+	const char *event_fn;
+	int fd;
+
+	switch (event) {
+		case AV_EVENT_OPEN:
+			event_fn = "/sys/fs/redirfs/filters/avflt/events/open";
+			break;
+		case AV_EVENT_EXEC:
+			event_fn = "/sys/fs/redirfs/filters/avflt/events/close";
+			break;
+		case AV_EVENT_CLOSE:
+			event_fn = "/sys/fs/redirfs/filters/avflt/events/open";
+			break;
+		case AV_EVENT_CLOSE_MODIFIED:
+			event_fn = "/sys/fs/redirfs/filters/avflt/events/open";
+			break;
+		default:
+			return EINVAL;
+	}
+
+	fd = open(event_fn, O_RDWR);
+	if (fd == -1)
+		return errno;
+
+	if (write(fd, eon ? "1" : "0", 1) == -1) {
+		close(fd);
+		return errno;
+	}
+
+	close(fd);
+
+	return 0;
+}
+
+int av_event_on(int event)
+{
+	return av_event(event, 1);
+}
+
+int av_event_off(int event)
+{
+	return av_event(event, 0);
+}
+
 int av_include(const char *path)
 {
 	return av_path(path, 1);
@@ -116,5 +152,35 @@ int av_include(const char *path)
 int av_exclude(const char *path)
 {
 	return av_path(path, 0);
+}
+
+int av_set_access(struct av_req *avr, int ava)
+{
+	if (!avr)
+		return EINVAL;
+
+	avr->ucheck.deny = !ava;
+
+	return 0;
+}
+
+
+int av_get_filename(struct av_req *avr, const char **fn)
+{
+	if (!avr || !fn)
+		return EINVAL;
+
+	*fn = avr->fn;
+
+	return 0;
+}
+
+int av_get_event(struct av_req *avr, int *event)
+{
+	if (!avr)
+		return EINVAL;
+	*event = avr->ucheck.event;
+
+	return 0;
 }
 
