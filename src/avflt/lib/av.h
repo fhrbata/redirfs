@@ -16,3 +16,5 @@ int av_unregister(struct av_con *avc);
 int av_request(struct av_con *avc, struct av_req *avr);
 int av_reply(struct av_con *avc, struct av_req *avr);
 int av_access(struct av_con *avc, struct av_req *avr, int ava);
+int av_include(const char *path);
+int av_exclude(const char *path);
