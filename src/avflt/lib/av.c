@@ -79,7 +79,7 @@ int av_path(const char *path, int include)
 	size = 4 + strlen(path) + 1;  /* 1:1:%s+0 */
 
 	buf = malloc(sizeof(char) * size);
-	if (buf) {
+	if (!buf) {
 		close(fd);
 		return ENOMEM;
 	}
