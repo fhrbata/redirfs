@@ -149,8 +149,10 @@ again:
 		goto done;
 	}
 
-	if (!avflt_request_max)
+	if (!avflt_request_max) {
+		avflt_request_nr++;
 		goto done;
+	}
 
 	if (avflt_request_nr < avflt_request_max) {
 		avflt_request_nr++;
