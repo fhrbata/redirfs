@@ -187,14 +187,16 @@ again:
 		return 1;
 	}
 
-	if (avflt_reply_nr >= avflt_reply_max) {
-		spin_unlock(&avflt_reply_lock);
-		rv = wait_event_interruptible(avflt_reply_waitq,
-			atomic_read(&avflt_reply_free));
-		if (rv)
-			return rv;
+	if (avflt_reply_max) {
+		if (avflt_reply_nr >= avflt_reply_max) {
+			spin_unlock(&avflt_reply_lock);
+			rv = wait_event_interruptible(avflt_reply_waitq,
+				atomic_read(&avflt_reply_free));
+			if (rv)
+				return rv;
 
-		goto again;
+			goto again;
+		}
 	}
 
 	check->id = avflt_reply_ids;
