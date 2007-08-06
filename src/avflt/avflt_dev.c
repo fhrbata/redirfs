@@ -91,7 +91,7 @@ static ssize_t avflt_dev_read(struct file *file, char __user *buf,
 		return -EFAULT;
 	}
 
-	if (copy_to_user(&ucheck, buf, size)) {
+	if (copy_to_user(buf, &ucheck, size)) {
 		BUG_ON(!avflt_reply_dequeue(check->id));
 		if (avflt_request_queue(check))
 			avflt_check_done(check);
