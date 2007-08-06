@@ -105,6 +105,9 @@ static enum rfs_retv avflt_pre_permission(rfs_context context,
 	if (!args->args.i_permission.nd)
 		return RFS_CONTINUE;
 
+	if (!(args->args.i_permission.mask & MAY_EXEC))
+		return RFS_CONTINUE;
+
 	dentry = args->args.i_permission.nd->dentry;
 
 	return avflt_event(dentry, AV_EVENT_EXEC, args);
