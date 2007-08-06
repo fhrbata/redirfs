@@ -246,7 +246,7 @@ struct avflt_check *avflt_reply_dequeue(int id)
 		wake_up(&avflt_reply_waitq);
 	}
 
-	spin_unlock(&avflt_reply_hashtable);
+	spin_unlock(&avflt_reply_lock);
 
 	return found;
 }
