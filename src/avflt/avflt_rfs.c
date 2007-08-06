@@ -46,8 +46,7 @@ static enum rfs_retv avflt_event(struct dentry *dentry, int event,
 	}
 
 	check = avflt_check_alloc();
-	rv = PTR_ERR(check);
-	if (rv) {
+	if (IS_ERR(check)) {
 		avflt_request_put();
 		args->retv.rv_int = rv;
 		return RFS_STOP;
