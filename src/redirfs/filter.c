@@ -71,6 +71,7 @@ struct filter *flt_alloc(struct rfs_filter_info *flt_info)
 	init_waitqueue_head(&flt->f_wait);
 	memset(&flt->f_pre_cbs, 0, sizeof(op) * RFS_OP_END);
 	memset(&flt->f_post_cbs, 0, sizeof(op) * RFS_OP_END);
+	memset(&flt->f_kobj, 0, sizeof(struct kobject));
 	flt->f_ctl_cb = flt_info->ctl_cb;
 	
 	if (flt_info->active)
