@@ -20,6 +20,7 @@ int main(int argc, char *argv[])
 	int event;
 	int rv;
 
+	memset(&sa, 0, sizeof(struct sigaction));
 	sa.sa_handler = sighandler;
 	sigemptyset(&sa.sa_mask);
 	sigaddset(&sa.sa_mask, SIGTERM);
