@@ -317,8 +317,22 @@ void avflt_check_done(struct avflt_check *check)
 int avflt_pid_add(pid_t pid)
 {
 	pid_t *pids_new;
+	int found = -1;
+	int i;
 
 	spin_lock(&avflt_pids_lock);
+
+	for (i = 0; i < avflt_pids_nr; i++) {
+		if (avflt_pids[i] == pid) {
+			found = i;
+			break;
+		}
+	}
+
+	if (found != -1) {
+		spin_unlock(&avflt_pids_lock);
+		return 0;
+	}
 
 	if (avflt_pids_nr == avflt_pids_size) {
 		pids_new = kmalloc(sizeof(pid_t) * avflt_pids_size * 2,
