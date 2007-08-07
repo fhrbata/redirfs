@@ -359,8 +359,10 @@ void avflt_pid_rem(pid_t pid)
 		}
 	}
 
-	if (found != -1)
+	if (found != -1) {
+		spin_unlock(&avflt_pids_lock);
 		return;
+	}
 
 	memmove(avflt_pids + i, avflt_pids + i + 1, avflt_pids_nr - (i + 1));
 	avflt_pids_nr--;
