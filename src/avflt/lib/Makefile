@@ -20,7 +20,7 @@ libav.a: $(LIB_OBJS)
 	$(AR) $(ARFLAGS) $@ $^
 
 test/av_test: $(TEST_OBJS) libav.a
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ -lpthread
 
 .PHONY: clean
 
