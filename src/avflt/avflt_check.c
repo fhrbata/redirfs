@@ -15,8 +15,7 @@ int avflt_reply_accept = 0;
 static DECLARE_WAIT_QUEUE_HEAD(avflt_request_waitq);
 static DECLARE_WAIT_QUEUE_HEAD(avflt_reply_waitq);
 
-static DECLARE_WAIT_QUEUE_HEAD(avflt_request_available_waitq);
-static atomic_t avflt_request_available = ATOMIC_INIT(0);
+static DECLARE_COMPLETION(avflt_request_available);
 
 static struct kmem_cache *avflt_check_cache = NULL;
 
@@ -91,8 +90,7 @@ int avflt_request_queue(struct avflt_check *check)
 	list_add_tail(&check->list, &avflt_request_list);
 	avflt_check_get(check);
 
-	atomic_set(&avflt_request_available, 1);
-	wake_up(&avflt_request_available_waitq);
+	complete(&avflt_request_available);
 
 	spin_unlock(&avflt_request_lock);
 
@@ -112,10 +110,6 @@ struct avflt_check *avflt_request_dequeue(void)
 	check = list_entry(avflt_request_list.next, struct avflt_check, list);
 	list_del(&check->list);
 
-	if (list_empty(&avflt_request_list))
-		atomic_set(&avflt_request_available, 0);
-
-
 	spin_unlock(&avflt_request_lock);
 
 	return check;
@@ -133,8 +127,7 @@ void avflt_request_put(void)
 
 int avflt_request_available_wait(void)
 {
-	return wait_event_interruptible(avflt_request_available_waitq,
-			atomic_read(&avflt_request_available));
+	return wait_for_completion_interruptible(&avflt_request_available);
 }
 
 int avflt_request_wait(void)
