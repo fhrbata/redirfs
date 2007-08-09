@@ -91,10 +91,10 @@ int avflt_request_queue(struct avflt_check *check)
 	list_add_tail(&check->list, &avflt_request_list);
 	avflt_check_get(check);
 
-	spin_unlock(&avflt_request_lock);
-
 	atomic_set(&avflt_request_available, 1);
 	wake_up(&avflt_request_available_waitq);
+
+	spin_unlock(&avflt_request_lock);
 
 	return 0;
 }
