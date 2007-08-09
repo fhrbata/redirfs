@@ -12,7 +12,7 @@ atomic_t avflt_reply_free = ATOMIC_INIT(0);
 int avflt_request_accept = 0;
 int avflt_reply_accept = 0;
 
-static DECLARE_WAIT_QUEUE_HEAD(avflt_request_waitq);
+DECLARE_WAIT_QUEUE_HEAD(avflt_request_waitq);
 static DECLARE_WAIT_QUEUE_HEAD(avflt_reply_waitq);
 
 static DECLARE_COMPLETION(avflt_request_available);
@@ -156,7 +156,7 @@ again:
 
 	spin_unlock(&avflt_request_lock);
 
-	rv = wait_event_interruptible(avflt_request_waitq,
+	rv = wait_event_interruptible_exclusive(avflt_request_waitq,
 			atomic_read(&avflt_request_free));
 
 	if (rv)
@@ -185,7 +185,7 @@ again:
 	if (avflt_reply_max) {
 		if (avflt_reply_nr >= avflt_reply_max) {
 			spin_unlock(&avflt_reply_lock);
-			rv = wait_event_interruptible(avflt_reply_waitq,
+			rv = wait_event_interruptible_exclusive(avflt_reply_waitq,
 				atomic_read(&avflt_reply_free));
 			if (rv)
 				return rv;
@@ -201,7 +201,7 @@ again:
 	list_for_each_entry(loop, list, list) {
 		if (loop->id == check->id) {
 			spin_unlock(&avflt_reply_lock);
-			rv = wait_event_interruptible(avflt_reply_waitq,
+			rv = wait_event_interruptible_exclusive(avflt_reply_waitq,
 				atomic_read(&avflt_reply_free));
 			if (rv)
 				return rv;
