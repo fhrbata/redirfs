@@ -1,5 +1,8 @@
 #include "avflt.h"
 
+extern int avflt_request_nr;
+extern spinlock_t avflt_request_lock;
+extern wait_queue_head_t avflt_request_waitq;
 static struct class *avflt_class;
 static struct class_device *avflt_class_device;
 static dev_t avflt_dev;
@@ -141,12 +144,28 @@ static ssize_t avflt_dev_write(struct file *file, const char __user *buf,
 	return size;
 }
 
+static unsigned int avflt_dev_poll(struct file *file, struct poll_table_struct *pt)
+{
+	unsigned int mask = 0;
+	poll_wait(file, &avflt_request_waitq, pt);
+
+	spin_lock(&avflt_request_lock);
+	if (avflt_request_nr)
+		mask |= POLLIN | POLLRDNORM;
+	spin_unlock(&avflt_request_lock);
+
+	mask |= POLLOUT | POLLWRNORM;
+
+	return mask;
+}
+
 static struct file_operations avflt_fops = {
 	.owner = THIS_MODULE,
 	.open = avflt_dev_open,
 	.release = avflt_dev_release,
 	.read = avflt_dev_read,
-	.write = avflt_dev_write
+	.write = avflt_dev_write,
+	.poll = avflt_dev_poll,
 };
 
 int avflt_dev_init(void)

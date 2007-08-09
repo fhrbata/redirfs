@@ -3,6 +3,7 @@
 
 #include <linux/device.h>
 #include <linux/uaccess.h>
+#include <linux/poll.h>
 #include "../redirfs/redirfs.h"
 #include "avflt_io.h"
 
