@@ -109,6 +109,7 @@ int main(int argc, char *argv[])
 	sigaddset(&sa.sa_mask, SIGINT);
 	sigaction(SIGTERM, &sa, NULL);
 	sigaction(SIGINT, &sa, NULL);
+	sigaction(SIGUSR1, &sa, NULL);
 
 	rv = av_register(&avc);
 	if (rv) {
