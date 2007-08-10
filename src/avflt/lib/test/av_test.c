@@ -69,7 +69,7 @@ void *check(void *data)
 				en = "UNKNOWN";
 		}
 
-		printf("%ld: access control: %s: %s\n", pthread_self(), en, fn);
+		printf("%lu: access control: %s: %s\n", pthread_self(), en, fn);
 
 		rv = av_set_access(&avr, AV_ACCESS_ALLOW); 
 		if (rv) {
