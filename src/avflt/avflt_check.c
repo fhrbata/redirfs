@@ -279,6 +279,7 @@ void avflt_check_stop(void)
 		list_del(&loop->list);
 		atomic_set(&loop->deny, 0);
 		avflt_check_done(loop);
+		avflt_check_put(loop);
 		avflt_request_nr--;
 	};
 
@@ -294,6 +295,7 @@ void avflt_check_stop(void)
 			list_del(&loop->list);
 			atomic_set(&loop->deny, 0);
 			avflt_check_done(loop);
+			avflt_check_put(loop);
 			avflt_reply_nr--;
 		}
 	}
