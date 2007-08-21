@@ -21,6 +21,7 @@ spinlock_t avflt_rops_lock = SPIN_LOCK_UNLOCKED;
 static struct rfs_op_info avflt_rops[] = {
 	{RFS_REG_FOP_OPEN, NULL, NULL},
 	{RFS_REG_IOP_PERMISSION, NULL, NULL},
+	{RFS_REG_FOP_RELEASE, NULL, NULL},
 	{RFS_OP_END, NULL, NULL}
 };
 
