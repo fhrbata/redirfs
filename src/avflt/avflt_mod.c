@@ -3,7 +3,6 @@
 extern int avflt_open;
 extern int avflt_exec;
 extern int avflt_close;
-extern int avflt_close_modified;
 extern rfs_filter avflt;
 struct kobject *kobj;
 
@@ -60,12 +59,10 @@ module_exit(avflt_exit);
 module_param(avflt_open, int, 0000);
 module_param(avflt_close, int, 0000);
 module_param(avflt_exec, int, 0000);
-module_param(avflt_close_modified, int, 0000);
 
 MODULE_PARM_DESC(avflt_open, "capture file open events (default 1)");
-MODULE_PARM_DESC(avflt_close, "capture file close events (default 0)");
+MODULE_PARM_DESC(avflt_close, "capture file close events (default 1)");
 MODULE_PARM_DESC(avflt_exec, "capture file exec events (default 1)");
-MODULE_PARM_DESC(avflt_close_modified, "capture file close modified events (default 0)");
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Frantisek Hrbata <hrbata@redirfs.org>");

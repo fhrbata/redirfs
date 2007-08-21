@@ -11,7 +11,6 @@ extern spinlock_t avflt_rops_lock;
 extern int avflt_open;
 extern int avflt_exec;
 extern int avflt_close;
-extern int avflt_close_modified;
 
 extern int avflt_request_nr;
 extern int avflt_reply_nr;
@@ -30,7 +29,6 @@ static struct sysfs_ops avflt_queues_ops;
 static avflt_attr(open, 0644);
 static avflt_attr(exec, 0644);
 static avflt_attr(close, 0644);
-static avflt_attr(close_modified, 0644);
 
 static avflt_attr(request, 0444);
 static avflt_attr(reply, 0444);
@@ -41,7 +39,6 @@ static struct attribute *avflt_events_attrs[] = {
 	&avflt_attr_open,
 	&avflt_attr_exec,
 	&avflt_attr_close,
-	&avflt_attr_close_modified,
 	NULL
 };
 
@@ -68,9 +65,6 @@ static ssize_t avflt_events_show(struct kobject *kobj, struct attribute *attr,
 
 	else if (!strcmp(attr->name, "exec"))
 		event = &avflt_exec;
-
-	else if (!strcmp(attr->name, "close_modified"))
-		event = &avflt_close_modified;
 
 	else 
 		return -EINVAL;
@@ -104,9 +98,6 @@ static ssize_t avflt_events_store(struct kobject *kobj, struct attribute *attr,
 
 	else if (!strcmp(attr->name, "exec"))
 		event = &avflt_exec;
-
-	else if (!strcmp(attr->name, "close_modified"))
-		event = &avflt_close_modified;
 
 	else
 		return -EINVAL;

@@ -62,9 +62,6 @@ void *check(void *data)
 			case AV_EVENT_CLOSE:
 				en = "CLOSE";
 				break;
-			case AV_EVENT_CLOSE_MODIFIED:
-				en = "CLOSE_MODIFIED";
-				break;
 			default:
 				en = "UNKNOWN";
 		}
