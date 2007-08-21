@@ -368,7 +368,7 @@ void avflt_pid_rem(pid_t pid)
 		}
 	}
 
-	if (found != -1) {
+	if (found == -1) {
 		spin_unlock(&avflt_pids_lock);
 		return;
 	}
