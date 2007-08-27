@@ -194,14 +194,7 @@ struct dentry *rfs_lookup(struct inode *inode, struct dentry *dentry, struct nam
 struct context {
 };
 
-struct data {
-	struct list_head list;
-	struct filter *filter;
-	void (*cb)(void *data);
-	void *data;
-};
-
-struct data *data_find(struct list_head *head, struct filter *flt);
+struct rfs_priv_data *rfs_find_data(struct list_head *head, struct filter *flt);
 
 int rfs_replace_ops(struct rpath *path_old, struct rpath *path_new, struct filter *flt);
 int rfs_replace_ops_cb(struct dentry *dentry, void *data);

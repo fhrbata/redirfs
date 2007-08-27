@@ -13,23 +13,6 @@ extern spinlock_t rinode_cnt_lock;
 extern unsigned long long rfile_cnt;
 extern spinlock_t rfile_cnt_lock;
 
-struct data *data_find(struct list_head *head, struct filter *flt)
-{
-	struct data *loop;
-	struct data *found;
-
-	found = NULL;
-
-	list_for_each_entry(loop, head, list) {
-		if (loop->filter == flt) {
-			found = loop;
-			break;
-		}
-	}
-
-	return found;
-}
-
 int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_args *args, int *cnt)
 {
 	enum rfs_retv (**ops)(rfs_context, struct rfs_args *);
@@ -61,18 +44,19 @@ int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_ar
 	return 0;
 }
 
-static void rfs_remove_data(struct list_head *head, struct filter *flt)
+static void rfs_remove_data(struct list_head *head, struct filter *filter)
 {
-	struct data *data;
+	struct rfs_priv_data *data;
+	struct filter *flt;
 
-	data = data_find(head, flt);
+	data = rfs_find_data(head, filter);
 	if (!data)
 		return;
 
-	data->cb(data->data);
 	list_del(&data->list);
-	flt_put(data->filter);
-	kfree(data);
+	flt = data->flt;
+	data->cb(data);
+	flt_put(flt);
 }
 
 static void rfs_detach_data(struct rdentry *rdentry, struct filter *flt)

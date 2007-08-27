@@ -57,8 +57,9 @@ inline struct rdentry *rdentry_get(struct rdentry *rdentry)
 inline void rdentry_put(struct rdentry *rdentry)
 {
 	unsigned long flags;
-	struct data *data;
-	struct data *tmp;
+	struct rfs_priv_data *data;
+	struct rfs_priv_data *tmp;
+	struct filter *flt;
 
 	if (!rdentry || IS_ERR(rdentry))
 		return;
@@ -75,10 +76,10 @@ inline void rdentry_put(struct rdentry *rdentry)
 	ops_put(rdentry->rd_ops);
 
 	list_for_each_entry_safe(data, tmp, &rdentry->rd_data, list) {
-		data->cb(data->data);
 		list_del(&data->list);
-		flt_put(data->filter);
-		kfree(data);
+		flt = data->flt;
+		data->cb(data);
+		flt_put(flt);
 	}
 
 	kmem_cache_free(rdentry_cache, rdentry);
@@ -851,27 +852,21 @@ void rdentry_cache_destroy(void)
 	kmem_cache_destroy(rdentry_cache);
 }
 
-int rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, void *data, void (*cb)(void *))
+int rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry,
+		struct rfs_priv_data *data, struct rfs_priv_data **exist)
 {
 	struct filter *flt;
 	struct rdentry *rdentry;
-	struct data *found;
-	struct data *data_new;
+	struct rfs_priv_data *found;
 
 	flt = (struct filter *)filter;
 
-	if (!flt || !dentry || !cb)
+	if (!flt || !dentry || !data)
 		return -EINVAL;
 
-	data_new = kmalloc(sizeof(struct data), GFP_KERNEL);
-	if (!data_new)
-		return -ENOMEM;
-
 	rdentry = rdentry_find(dentry);
-	if (!rdentry) {
-		kfree(data_new);
+	if (!rdentry)
 		return -ENODATA;
-	}
 
 	spin_lock(&rdentry->rd_lock);
 
@@ -881,19 +876,17 @@ int rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, void *data,
 		return -ENOENT;
 	}
 
-	found = data_find(&rdentry->rd_data, flt);
+	found = rfs_find_data(&rdentry->rd_data, flt);
 	if (found) {
-		kfree(data_new);
+		*exist = rfs_get_data(found);
 		spin_unlock(&rdentry->rd_lock);
 		rdentry_put(rdentry);
 		return -EEXIST;
 	}
 
-	INIT_LIST_HEAD(&data_new->list);
-	data_new->data = data;
-	data_new->cb = cb;
-	data_new->filter = flt_get(flt);
-	list_add_tail(&data_new->list, &rdentry->rd_data);
+	rfs_get_data(data);
+	list_add_tail(&data->list, &rdentry->rd_data);
+	*exist = NULL;
 	spin_unlock(&rdentry->rd_lock);
 
 	rdentry_put(rdentry);
@@ -901,11 +894,12 @@ int rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, void *data,
 	return 0;
 }
 
-int rfs_detach_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data)
+int rfs_detach_data_dentry(rfs_filter filter, struct dentry *dentry,
+		struct rfs_priv_data **data)
 {
 	struct filter *flt;
 	struct rdentry *rdentry;
-	struct data *found;
+	struct rfs_priv_data *found;
 
 	flt = (struct filter *)filter;
 	
@@ -917,7 +911,7 @@ int rfs_detach_data_dentry(rfs_filter *filter, struct dentry *dentry, void **dat
 		return -ENODATA;
 
 	spin_lock(&rdentry->rd_lock);
-	found = data_find(&rdentry->rd_data, flt);
+	found = rfs_find_data(&rdentry->rd_data, flt);
 	if (!found) {
 		spin_unlock(&rdentry->rd_lock);
 		rdentry_put(rdentry);
@@ -925,9 +919,8 @@ int rfs_detach_data_dentry(rfs_filter *filter, struct dentry *dentry, void **dat
 	}
 
 	list_del(&found->list);
-	*data = found->data;
-	flt_put(found->filter);
-	kfree(found);
+	flt_put(found->flt);
+	*data = found;
 
 	spin_unlock(&rdentry->rd_lock);
 
@@ -936,11 +929,12 @@ int rfs_detach_data_dentry(rfs_filter *filter, struct dentry *dentry, void **dat
 	return 0;
 }
 
-int rfs_get_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data)
+int rfs_get_data_dentry(rfs_filter filter, struct dentry *dentry,
+		struct rfs_priv_data **data)
 {
 	struct filter *flt;
 	struct rdentry *rdentry;
-	struct data *found;
+	struct rfs_priv_data *found;
 
 	flt = (struct filter *)filter;
 	
@@ -952,14 +946,14 @@ int rfs_get_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data)
 		return -ENODATA;
 
 	spin_lock(&rdentry->rd_lock);
-	found = data_find(&rdentry->rd_data, flt);
+	found = rfs_find_data(&rdentry->rd_data, flt);
 	if (!found) {
 		spin_unlock(&rdentry->rd_lock);
 		rdentry_put(rdentry);
 		return -ENODATA;
 	}
 
-	*data = found->data;
+	*data = rfs_get_data(found);
 
 	spin_unlock(&rdentry->rd_lock);
 

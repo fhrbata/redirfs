@@ -291,6 +291,13 @@ union rfs_ctl_data {
 	struct rfs_path_info path_info;
 };
 
+struct rfs_priv_data {
+	struct list_head list;
+	atomic_t cnt;
+	rfs_filter flt;
+	void (*cb)(struct rfs_priv_data *);
+};
+
 struct rfs_ctl {
 	enum rfs_ctl_id id;
 	union rfs_ctl_data data;
@@ -309,19 +316,26 @@ int rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info);
 int rfs_unregister_filter(rfs_filter filter);
 int rfs_activate_filter(rfs_filter filter);
 int rfs_deactivate_filter(rfs_filter filter);
-int rfs_attach_data_inode(rfs_filter filter, struct inode *inode, void *data, void (*cb)(void *));
-int rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, void *data, void (*cb)(void *));
-int rfs_attach_data_file(rfs_filter filter, struct file *file, void *data, void (*cb)(void *));
-int rfs_detach_data_inode(rfs_filter *filter, struct inode *inode, void **data);
-int rfs_detach_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data);
-int rfs_detach_data_file(rfs_filter *filter, struct file *file, void **data);
-int rfs_get_data_inode(rfs_filter *filter, struct inode *inode, void **data);
-int rfs_get_data_dentry(rfs_filter *filter, struct dentry *dentry, void **data);
-int rfs_get_data_file(rfs_filter *filter, struct file *file, void **data);
+
+int rfs_init_data(struct rfs_priv_data *data, rfs_filter filter, void (*cb)(struct rfs_priv_data *));
+void rfs_put_data(struct rfs_priv_data *data);
+struct rfs_priv_data *rfs_get_data(struct rfs_priv_data *data);
+
+int rfs_attach_data_inode(rfs_filter filter, struct inode *inode, struct rfs_priv_data *data, struct rfs_priv_data **exist);
+int rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, struct rfs_priv_data *data, struct rfs_priv_data **exist);
+int rfs_attach_data_file(rfs_filter filter, struct file *file, struct rfs_priv_data *data, struct rfs_priv_data **exist);
+int rfs_detach_data_inode(rfs_filter filter, struct inode *inode, struct rfs_priv_data **data);
+int rfs_detach_data_dentry(rfs_filter filter, struct dentry *dentry, struct rfs_priv_data **data);
+int rfs_detach_data_file(rfs_filter filter, struct file *file, struct rfs_priv_data **data);
+int rfs_get_data_inode(rfs_filter filter, struct inode *inode, struct rfs_priv_data **data);
+int rfs_get_data_dentry(rfs_filter filter, struct dentry *dentry, struct rfs_priv_data **data);
+int rfs_get_data_file(rfs_filter filter, struct file *file, struct rfs_priv_data **data);
 int rfs_get_filename(struct dentry *dentry, char *buffer, int size);
+
 int rfs_register_attribute(rfs_filter filter, struct rfs_flt_attribute *attr);
 int rfs_unregister_attribute(rfs_filter filter, struct rfs_flt_attribute *attr);
 int rfs_get_kobject(rfs_filter filter, struct kobject **kobj);
+
 
 #define rfs_flt_attr(__name, __mode, __show, __store, __data)	\
 struct rfs_flt_attribute rfs_flt_attr_##__name = { 		\

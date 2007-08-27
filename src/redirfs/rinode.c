@@ -65,8 +65,9 @@ inline struct rinode *rinode_get(struct rinode *rinode)
 inline void rinode_put(struct rinode *rinode)
 {
 	unsigned long flags;
-	struct data *data;
-	struct data *tmp;
+	struct rfs_priv_data *data;
+	struct rfs_priv_data *tmp;
+	struct filter *flt;
 
 	if (!rinode || IS_ERR(rinode))
 		return;
@@ -83,10 +84,10 @@ inline void rinode_put(struct rinode *rinode)
 	BUG_ON(!list_empty(&rinode->ri_rdentries));
 
 	list_for_each_entry_safe(data, tmp, &rinode->ri_data, list) {
-		data->cb(data->data);
 		list_del(&data->list);
-		flt_put(data->filter);
-		kfree(data);
+		flt = data->flt;
+		data->cb(data);
+		flt_put(flt);
 	}
 
 	kmem_cache_free(rinode_cache, rinode);
@@ -716,27 +717,21 @@ void rinode_cache_destroy(void)
 	kmem_cache_destroy(rinode_cache);
 }
 
-int rfs_attach_data_inode(rfs_filter filter, struct inode *inode, void *data, void (*cb)(void *))
+int rfs_attach_data_inode(rfs_filter filter, struct inode *inode,
+		struct rfs_priv_data *data, struct rfs_priv_data **exist)
 {
 	struct filter *flt;
 	struct rinode *rinode;
-	struct data *found;
-	struct data *data_new;
+	struct rfs_priv_data *found;
 
 	flt = (struct filter *)filter;
 
-	if (!flt || !inode || !cb)
+	if (!flt || !inode || !data)
 		return -EINVAL;
 
-	data_new = kmalloc(sizeof(struct data), GFP_KERNEL);
-	if (!data_new)
-		return -ENOMEM;
-
 	rinode = rinode_find(inode);
-	if (!rinode) {
-		kfree(data_new);
+	if (!rinode)
 		return -ENODATA;
-	}
 
 	spin_lock(&rinode->ri_lock);
 	
@@ -746,30 +741,30 @@ int rfs_attach_data_inode(rfs_filter filter, struct inode *inode, void *data, vo
 		return -ENOENT;
 	}
 
-	found = data_find(&rinode->ri_data, flt);
+	found = rfs_find_data(&rinode->ri_data, flt);
 	if (found) {
-		kfree(data_new);
+		*exist = rfs_get_data(found);
 		spin_unlock(&rinode->ri_lock);
 		rinode_put(rinode);
 		return -EEXIST;
 	}
 
-	INIT_LIST_HEAD(&data_new->list);
-	data_new->data = data;
-	data_new->cb = cb;
-	data_new->filter = flt_get(flt);
-	list_add_tail(&data_new->list, &rinode->ri_data);
+	rfs_get_data(data);
+	list_add_tail(&data->list, &rinode->ri_data);
+	*exist = NULL;
 	spin_unlock(&rinode->ri_lock);
 
 	rinode_put(rinode);
+
 	return 0;
 }
 
-int rfs_detach_data_inode(rfs_filter *filter, struct inode *inode, void **data)
+int rfs_detach_data_inode(rfs_filter filter, struct inode *inode,
+		struct rfs_priv_data **data)
 {
 	struct filter *flt;
 	struct rinode *rinode;
-	struct data *found;
+	struct rfs_priv_data *found;
 
 	flt = (struct filter *)filter;
 	
@@ -782,7 +777,7 @@ int rfs_detach_data_inode(rfs_filter *filter, struct inode *inode, void **data)
 
 	spin_lock(&rinode->ri_lock);
 
-	found = data_find(&rinode->ri_data, flt);
+	found = rfs_find_data(&rinode->ri_data, flt);
 	if (!found) {
 		spin_unlock(&rinode->ri_lock);
 		rinode_put(rinode);
@@ -790,9 +785,8 @@ int rfs_detach_data_inode(rfs_filter *filter, struct inode *inode, void **data)
 	}
 
 	list_del(&found->list);
-	*data = found->data;
-	flt_put(found->filter);
-	kfree(found);
+	flt_put(found->flt);
+	*data = found;
 
 	spin_unlock(&rinode->ri_lock);
 
@@ -801,11 +795,12 @@ int rfs_detach_data_inode(rfs_filter *filter, struct inode *inode, void **data)
 	return 0;
 }
 
-int rfs_get_data_inode(rfs_filter *filter, struct inode *inode, void **data)
+int rfs_get_data_inode(rfs_filter filter, struct inode *inode,
+		struct rfs_priv_data **data)
 {
 	struct filter *flt;
 	struct rinode *rinode;
-	struct data *found;
+	struct rfs_priv_data *found;
 
 	flt = (struct filter *)filter;
 	
@@ -817,14 +812,14 @@ int rfs_get_data_inode(rfs_filter *filter, struct inode *inode, void **data)
 		return -ENODATA;
 
 	spin_lock(&rinode->ri_lock);
-	found = data_find(&rinode->ri_data, flt);
+	found = rfs_find_data(&rinode->ri_data, flt);
 	if (!found) {
 		spin_unlock(&rinode->ri_lock);
 		rinode_put(rinode);
 		return -ENODATA;
 	}
 
-	*data = found->data;
+	*data = rfs_get_data(found);
 
 	spin_unlock(&rinode->ri_lock);
 

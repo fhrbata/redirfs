@@ -74,8 +74,9 @@ inline struct rfile *rfile_get(struct rfile* rfile)
 inline void rfile_put(struct rfile *rfile)
 {
 	unsigned long flags;
-	struct data *data;
-	struct data *tmp;
+	struct rfs_priv_data *data;
+	struct rfs_priv_data *tmp;
+	struct filter *flt;
 
 	if (!rfile || IS_ERR(rfile))
 		return;
@@ -89,10 +90,10 @@ inline void rfile_put(struct rfile *rfile)
 	rdentry_put(rfile->rf_rdentry);
 
 	list_for_each_entry_safe(data, tmp, &rfile->rf_data, list) {
-		data->cb(data->data);
 		list_del(&data->list);
-		flt_put(data->filter);
-		kfree(data);
+		flt = data->flt;
+		data->cb(data);
+		flt_put(flt);
 	}
 
 	kmem_cache_free(rfile_cache, rfile);
@@ -721,27 +722,21 @@ void rfile_cache_destroy(void)
 	kmem_cache_destroy(rfile_cache);
 }
 
-int rfs_attach_data_file(rfs_filter filter, struct file *file, void *data, void (*cb)(void *))
+int rfs_attach_data_file(rfs_filter filter, struct file *file,
+		struct rfs_priv_data *data, struct rfs_priv_data **exist)
 {
 	struct filter *flt;
 	struct rfile *rfile;
-	struct data *found;
-	struct data *data_new;
+	struct rfs_priv_data *found;
 
 	flt = (struct filter *)filter;
 
-	if (!flt || !file || !cb)
+	if (!flt || !file || !data)
 		return -EINVAL;
 
-	data_new = kmalloc(sizeof(struct data), GFP_KERNEL);
-	if (!data_new)
-		return -ENOMEM;
-
 	rfile = rfile_find(file);
-	if (!rfile) {
-		kfree(data_new);
+	if (!rfile)
 		return -ENODATA;
-	}
 
 	spin_lock(&rfile->rf_lock);
 
@@ -751,30 +746,30 @@ int rfs_attach_data_file(rfs_filter filter, struct file *file, void *data, void 
 		return -ENOENT;
 	}
 
-	found = data_find(&rfile->rf_data, flt);
+	found = rfs_find_data(&rfile->rf_data, flt);
 	if (found) {
-		kfree(data_new);
+		*exist = rfs_get_data(found);
 		spin_unlock(&rfile->rf_lock);
 		rfile_put(rfile);
 		return -EEXIST;
 	}
 
-	INIT_LIST_HEAD(&data_new->list);
-	data_new->data = data;
-	data_new->cb = cb;
-	data_new->filter = flt_get(flt);
-	list_add_tail(&data_new->list, &rfile->rf_data);
+	rfs_get_data(data);
+	list_add_tail(&data->list, &rfile->rf_data);
+	*exist = NULL;
 	spin_unlock(&rfile->rf_lock);
 
 	rfile_put(rfile);
+
 	return 0;
 }
 
-int rfs_detach_data_file(rfs_filter *filter, struct file *file, void **data)
+int rfs_detach_data_file(rfs_filter filter, struct file *file,
+		struct rfs_priv_data **data)
 {
 	struct filter *flt;
 	struct rfile *rfile;
-	struct data *found;
+	struct rfs_priv_data *found;
 
 	flt = (struct filter *)filter;
 	
@@ -786,7 +781,7 @@ int rfs_detach_data_file(rfs_filter *filter, struct file *file, void **data)
 		return -ENODATA;
 
 	spin_lock(&rfile->rf_lock);
-	found = data_find(&rfile->rf_data, flt);
+	found = rfs_find_data(&rfile->rf_data, flt);
 	if (!found) {
 		spin_unlock(&rfile->rf_lock);
 		rfile_put(rfile);
@@ -794,9 +789,8 @@ int rfs_detach_data_file(rfs_filter *filter, struct file *file, void **data)
 	}
 
 	list_del(&found->list);
-	*data = found->data;
-	flt_put(found->filter);
-	kfree(found);
+	flt_put(found->flt);
+	*data = found;
 
 	spin_unlock(&rfile->rf_lock);
 
@@ -805,11 +799,12 @@ int rfs_detach_data_file(rfs_filter *filter, struct file *file, void **data)
 	return 0;
 }
 
-int rfs_get_data_file(rfs_filter *filter, struct file *file, void **data)
+int rfs_get_data_file(rfs_filter filter, struct file *file,
+		struct rfs_priv_data **data)
 {
 	struct filter *flt;
 	struct rfile *rfile;
-	struct data *found;
+	struct rfs_priv_data *found;
 
 	flt = (struct filter *)filter;
 	
@@ -821,14 +816,14 @@ int rfs_get_data_file(rfs_filter *filter, struct file *file, void **data)
 		return -ENODATA;
 
 	spin_lock(&rfile->rf_lock);
-	found = data_find(&rfile->rf_data, flt);
+	found = rfs_find_data(&rfile->rf_data, flt);
 	if (!found) {
 		spin_unlock(&rfile->rf_lock);
 		rfile_put(rfile);
 		return -ENODATA;
 	}
 
-	*data = found->data;
+	*data = rfs_get_data(found);
 
 	spin_unlock(&rfile->rf_lock);
 
