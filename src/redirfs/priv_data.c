@@ -2,7 +2,7 @@
 
 int rfs_init_data(struct rfs_priv_data *data, rfs_filter filter, void (*cb)(struct rfs_priv_data *data))
 {
-	if (!data || !filter || cb)
+	if (!data || !filter || !cb)
 		return -EINVAL;
 
 	INIT_LIST_HEAD(&data->list);
