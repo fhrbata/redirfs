@@ -120,7 +120,7 @@ static enum rfs_retv avflt_event(struct dentry *dentry, int event,
 	if (avflt_pid_find(current->pid))
 		return RFS_CONTINUE;
 
-	if (!atomic_read(&dentry->d_inode->i_writecount)) {
+	if (atomic_read(&dentry->d_inode->i_writecount) <= 0) {
 		data = avflt_get_data(dentry->d_inode);
 		if (!IS_ERR(data)) {
 			state = atomic_read(&data->state);
