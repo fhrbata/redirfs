@@ -9,8 +9,7 @@
 
 struct avflt_data {
 	struct rfs_priv_data rfs_data;
-	spinlock_t lock;
-	int state;
+	atomic_t state;
 };
 
 #define rfs_to_avflt_data(ptr) container_of(ptr, struct avflt_data, rfs_data)
@@ -55,8 +54,7 @@ static struct avflt_data *avflt_data_alloc(void)
 		 return ERR_PTR(err);
 	}
 
-	data->state = 0;
-	spin_lock_init(&data->lock);
+	atomic_set(&data->state, 0);
 
 	return data;
 }
@@ -125,9 +123,7 @@ static enum rfs_retv avflt_event(struct dentry *dentry, int event,
 	if (!atomic_read(&dentry->d_inode->i_writecount)) {
 		data = avflt_get_data(dentry->d_inode);
 		if (!IS_ERR(data)) {
-			spin_lock(&data->lock);
-			state = data->state;
-			spin_unlock(&data->lock);
+			state = atomic_read(&data->state);
 
 			if (state == AVFLT_CLEAN) {
 				avflt_put_data(data);
@@ -205,9 +201,7 @@ static enum rfs_retv avflt_event(struct dentry *dentry, int event,
 	}
 
 	if (data) {
-		spin_lock(&data->lock);
-		data->state = state;
-		spin_unlock(&data->lock);
+		atomic_set(&data->state, state);
 		avflt_put_data(data);
 	}
 
