@@ -726,7 +726,7 @@ int rfs_attach_data_inode(rfs_filter filter, struct inode *inode,
 
 	flt = (struct filter *)filter;
 
-	if (!flt || !inode || !data)
+	if (!flt || !inode || !data || !exist)
 		return -EINVAL;
 
 	rinode = rinode_find(inode);
@@ -768,7 +768,7 @@ int rfs_detach_data_inode(rfs_filter filter, struct inode *inode,
 
 	flt = (struct filter *)filter;
 	
-	if (!flt || !inode)
+	if (!flt || !inode || !data)
 		return -EINVAL;
 
 	rinode = rinode_find(inode);
@@ -804,7 +804,7 @@ int rfs_get_data_inode(rfs_filter filter, struct inode *inode,
 
 	flt = (struct filter *)filter;
 	
-	if (!flt || !inode)
+	if (!flt || !inode || !data)
 		return -EINVAL;
 
 	rinode = rinode_find(inode);

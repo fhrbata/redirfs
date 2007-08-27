@@ -731,7 +731,7 @@ int rfs_attach_data_file(rfs_filter filter, struct file *file,
 
 	flt = (struct filter *)filter;
 
-	if (!flt || !file || !data)
+	if (!flt || !file || !data || !exist)
 		return -EINVAL;
 
 	rfile = rfile_find(file);
@@ -773,7 +773,7 @@ int rfs_detach_data_file(rfs_filter filter, struct file *file,
 
 	flt = (struct filter *)filter;
 	
-	if (!flt || !file)
+	if (!flt || !file || !data)
 		return -EINVAL;
 
 	rfile = rfile_find(file);
@@ -808,7 +808,7 @@ int rfs_get_data_file(rfs_filter filter, struct file *file,
 
 	flt = (struct filter *)filter;
 	
-	if (!flt || !file)
+	if (!flt || !file || !data)
 		return -EINVAL;
 
 	rfile = rfile_find(file);

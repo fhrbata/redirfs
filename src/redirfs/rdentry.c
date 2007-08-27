@@ -861,7 +861,7 @@ int rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry,
 
 	flt = (struct filter *)filter;
 
-	if (!flt || !dentry || !data)
+	if (!flt || !dentry || !data || !exist)
 		return -EINVAL;
 
 	rdentry = rdentry_find(dentry);
@@ -903,7 +903,7 @@ int rfs_detach_data_dentry(rfs_filter filter, struct dentry *dentry,
 
 	flt = (struct filter *)filter;
 	
-	if (!flt || !dentry)
+	if (!flt || !dentry || !data)
 		return -EINVAL;
 
 	rdentry = rdentry_find(dentry);
@@ -938,7 +938,7 @@ int rfs_get_data_dentry(rfs_filter filter, struct dentry *dentry,
 
 	flt = (struct filter *)filter;
 	
-	if (!flt || !dentry)
+	if (!flt || !dentry || !data)
 		return -EINVAL;
 
 	rdentry = rdentry_find(dentry);
