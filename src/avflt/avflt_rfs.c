@@ -129,11 +129,13 @@ static enum rfs_retv avflt_event(struct dentry *dentry, int event,
 				avflt_put_data(data);
 				return RFS_CONTINUE;
 
-			} else {
+			} else if (state == AVFLT_INFECTED) {
 				avflt_put_data(data);
 				args->retv.rv_int = -EPERM;
 				return RFS_STOP;
 			}
+
+			avflt_put_data(data);
 		}
 	}
 
