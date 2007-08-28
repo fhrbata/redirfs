@@ -117,7 +117,7 @@ static enum rfs_retv avflt_event(struct dentry *dentry, int event,
 	int rv;
 	int state;
 
-	if (avflt_pid_find(current->pid))
+	if (avflt_pid_find(current->tgid))
 		return RFS_CONTINUE;
 
 	if (atomic_read(&dentry->d_inode->i_writecount) <= 0) {

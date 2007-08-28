@@ -11,7 +11,7 @@ static int avflt_dev_open(struct inode *inode, struct file *file)
 {
 	int rv;
 
-	rv = avflt_pid_add(current->pid);
+	rv = avflt_pid_add(current->tgid);
 	if (rv)
 		return rv;
 
@@ -20,7 +20,7 @@ static int avflt_dev_open(struct inode *inode, struct file *file)
 
 static int avflt_dev_release(struct inode *inode, struct file *file)
 {
-	avflt_pid_rem(current->pid);
+	avflt_pid_rem(current->tgid);
 
 	return 0;
 }
