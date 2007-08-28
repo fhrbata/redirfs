@@ -8,7 +8,7 @@ int rfs_init_data(struct rfs_priv_data *data, rfs_filter filter, void (*cb)(stru
 	INIT_LIST_HEAD(&data->list);
 	atomic_set(&data->cnt, 1);
 	data->cb = cb;
-	data->flt = filter;
+	data->flt = flt_get(filter);
 
 	return 0;
 }
