@@ -51,6 +51,7 @@ static struct rfile *rfile_alloc(struct file *file)
 		memset(&rfile->rf_op_new, 0, 
 				sizeof(struct file_operations));
 
+	rfile->rf_op_new.owner = THIS_MODULE;
 	rfile->rf_op_old = (struct file_operations *)op_old;
 
 	rinode_put(rinode);
@@ -140,6 +141,8 @@ struct rfile *rfile_add(struct file *file)
 	rdentry = rdentry_find(file->f_dentry);
 
 	if (!rdentry) {
+		fops_put(file->f_op);
+		fops_get(rfile_new->rf_op_old);
 		rcu_assign_pointer(file->f_op, rfile_new->rf_op_old);
 		rfile_put(rfile_new);
 		return NULL;
@@ -155,6 +158,8 @@ struct rfile *rfile_add(struct file *file)
 		rfile_new->rf_chain = chain_get(rdentry->rd_chain);
 		rfile_new->rf_path = path_get(rdentry->rd_path);
 
+		fops_put(file->f_op);
+		fops_get(&rfile_new->rf_op_new);
 		rcu_assign_pointer(file->f_op, &rfile_new->rf_op_new);
 		rfile_get(rfile_new);
 
@@ -197,6 +202,8 @@ void rfile_del(struct file *file)
 	list_del_init(&rfile->rf_rdentry_list);
 	rfile_put(rfile);
 
+	fops_put(file->f_op);
+	fops_get(rfile->rf_op_old);
 	rcu_assign_pointer(file->f_op, rfile->rf_op_old);
 	rfile_put(rfile);
 
@@ -206,7 +213,6 @@ void rfile_del(struct file *file)
 int rfs_open(struct inode *inode, struct file *file)
 {
 	struct rinode *rinode = NULL;
-	const struct file_operations *fop = NULL;
 	struct rfile *rfile = NULL;
 	struct rpath *path = NULL;
 	struct chain *chain = NULL;
@@ -214,14 +220,14 @@ int rfs_open(struct inode *inode, struct file *file)
 	int rv = 0;
 	int cnt = 0;
 
-	fop = file->f_op;
 	rinode = rinode_find(inode);
 
 	if (!rinode) {
+		fops_put(file->f_op);
+		fops_get(inode->i_fop);
 		rcu_assign_pointer(file->f_op, inode->i_fop);
 		if (file->f_op && file->f_op->open)
 			rv = file->f_op->open(inode, file);
-		fops_put(fop);
 		return rv;
 	}
 
@@ -268,7 +274,6 @@ int rfs_open(struct inode *inode, struct file *file)
 	rfile_put(rfile);
 	path_put(path);
 	chain_put(chain);
-	fops_put(fop);
 
 	return rv;
 }
