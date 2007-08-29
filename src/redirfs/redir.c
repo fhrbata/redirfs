@@ -47,16 +47,13 @@ int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_ar
 static void rfs_remove_data(struct list_head *head, struct filter *filter)
 {
 	struct rfs_priv_data *data;
-	struct filter *flt;
 
 	data = rfs_find_data(head, filter);
 	if (!data)
 		return;
 
 	list_del(&data->list);
-	flt = data->flt;
-	data->cb(data);
-	flt_put(flt);
+	rfs_put_data(data);
 }
 
 static void rfs_detach_data(struct rdentry *rdentry, struct filter *flt)

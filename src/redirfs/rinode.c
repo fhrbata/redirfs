@@ -67,7 +67,6 @@ inline void rinode_put(struct rinode *rinode)
 	unsigned long flags;
 	struct rfs_priv_data *data;
 	struct rfs_priv_data *tmp;
-	struct filter *flt;
 
 	if (!rinode || IS_ERR(rinode))
 		return;
@@ -84,10 +83,10 @@ inline void rinode_put(struct rinode *rinode)
 	BUG_ON(!list_empty(&rinode->ri_rdentries));
 
 	list_for_each_entry_safe(data, tmp, &rinode->ri_data, list) {
+		spin_lock_irqsave(&rinode->ri_lock, flags);
 		list_del(&data->list);
-		flt = data->flt;
-		data->cb(data);
-		flt_put(flt);
+		spin_unlock_irqrestore(&rinode->ri_lock, flags);
+		rfs_put_data(data);
 	}
 
 	kmem_cache_free(rinode_cache, rinode);
@@ -785,7 +784,6 @@ int rfs_detach_data_inode(rfs_filter filter, struct inode *inode,
 	}
 
 	list_del(&found->list);
-	flt_put(found->flt);
 	*data = found;
 
 	spin_unlock(&rinode->ri_lock);

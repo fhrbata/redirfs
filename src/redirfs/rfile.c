@@ -77,7 +77,6 @@ inline void rfile_put(struct rfile *rfile)
 	unsigned long flags;
 	struct rfs_priv_data *data;
 	struct rfs_priv_data *tmp;
-	struct filter *flt;
 
 	if (!rfile || IS_ERR(rfile))
 		return;
@@ -91,10 +90,10 @@ inline void rfile_put(struct rfile *rfile)
 	rdentry_put(rfile->rf_rdentry);
 
 	list_for_each_entry_safe(data, tmp, &rfile->rf_data, list) {
+		spin_lock_irqsave(&rfile->rf_lock, flags);
 		list_del(&data->list);
-		flt = data->flt;
-		data->cb(data);
-		flt_put(flt);
+		spin_unlock_irqrestore(&rfile->rf_lock, flags);
+		rfs_put_data(data);
 	}
 
 	kmem_cache_free(rfile_cache, rfile);
@@ -794,7 +793,6 @@ int rfs_detach_data_file(rfs_filter filter, struct file *file,
 	}
 
 	list_del(&found->list);
-	flt_put(found->flt);
 	*data = found;
 
 	spin_unlock(&rfile->rf_lock);

@@ -8,7 +8,7 @@ int rfs_init_data(struct rfs_priv_data *data, rfs_filter filter, void (*cb)(stru
 	INIT_LIST_HEAD(&data->list);
 	atomic_set(&data->cnt, 1);
 	data->cb = cb;
-	data->flt = flt_get(filter);
+	data->flt = (rfs_filter *)flt_get((struct filter *)filter);
 
 	return 0;
 }
@@ -27,6 +27,8 @@ struct rfs_priv_data *rfs_get_data(struct rfs_priv_data *data)
 
 void rfs_put_data(struct rfs_priv_data *data)
 {
+	struct filter *flt;
+
 	if (!data || IS_ERR(data))
 		return;
 
@@ -35,7 +37,9 @@ void rfs_put_data(struct rfs_priv_data *data)
 	if (!atomic_dec_and_test(&data->cnt))
 		return;
 
+	flt = (struct filter *)data->flt;
 	data->cb(data);
+	flt_put(flt);
 }
 
 struct rfs_priv_data *rfs_find_data(struct list_head *head, struct filter *flt)

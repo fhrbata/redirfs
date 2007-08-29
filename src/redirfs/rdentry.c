@@ -59,7 +59,6 @@ inline void rdentry_put(struct rdentry *rdentry)
 	unsigned long flags;
 	struct rfs_priv_data *data;
 	struct rfs_priv_data *tmp;
-	struct filter *flt;
 
 	if (!rdentry || IS_ERR(rdentry))
 		return;
@@ -76,10 +75,10 @@ inline void rdentry_put(struct rdentry *rdentry)
 	ops_put(rdentry->rd_ops);
 
 	list_for_each_entry_safe(data, tmp, &rdentry->rd_data, list) {
+		spin_lock_irqsave(&rdentry->rd_lock, flags);
 		list_del(&data->list);
-		flt = data->flt;
-		data->cb(data);
-		flt_put(flt);
+		spin_unlock_irqrestore(&rdentry->rd_lock, flags);
+		rfs_put_data(data);
 	}
 
 	kmem_cache_free(rdentry_cache, rdentry);
@@ -919,7 +918,6 @@ int rfs_detach_data_dentry(rfs_filter filter, struct dentry *dentry,
 	}
 
 	list_del(&found->list);
-	flt_put(found->flt);
 	*data = found;
 
 	spin_unlock(&rdentry->rd_lock);
