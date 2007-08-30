@@ -1,8 +1,14 @@
 #include "redir.h"
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22) 
 extern struct subsystem fs_subsys;
-struct kset rfs_flt_kset;
 static struct subsystem rfs_subsys;
+#else
+extern struct kset fs_subsys;
+static struct kset rfs_subsys;
+#endif
+
+struct kset rfs_flt_kset;
 static struct kobj_type rfs_flt_type;
 static struct sysfs_ops rfs_flt_ops;
 
@@ -117,7 +123,11 @@ int rfs_sysfs_init(void)
 {
 	int rv;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22) 
 	memset(&rfs_subsys, 0, sizeof(struct subsystem));
+#else
+	memset(&rfs_subsys, 0, sizeof(struct kset));
+#endif
 	memset(&rfs_flt_type, 0, sizeof(struct kobj_type));
 	memset(&rfs_flt_kset, 0, sizeof(struct kset));
 	memset(&rfs_flt_ops, 0, sizeof(struct sysfs_ops));
@@ -129,11 +139,21 @@ int rfs_sysfs_init(void)
 	rfs_flt_type.default_attrs = rfs_flt_attrs;
 	rfs_flt_type.sysfs_ops = &rfs_flt_ops;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22) 
 	rfs_subsys.kset.kobj.parent = &fs_subsys.kset.kobj;
 	rfs_subsys.kset.ktype = NULL;
 	kobject_set_name(&rfs_subsys.kset.kobj, "%s", "redirfs");
+#else
+	rfs_subsys.kobj.parent = &fs_subsys.kobj;
+	rfs_subsys.ktype = NULL;
+	kobject_set_name(&rfs_subsys.kobj, "%s", "redirfs");
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22) 
 	rfs_flt_kset.subsys = &rfs_subsys;
+#else
+	rfs_flt_kset.kobj.parent = &rfs_subsys.kobj;
+#endif
 	rfs_flt_kset.ktype = &rfs_flt_type;
 	kobject_set_name(&rfs_flt_kset.kobj, "%s", "filters");
 

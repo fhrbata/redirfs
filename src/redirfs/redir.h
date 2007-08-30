@@ -16,6 +16,7 @@
 #include <linux/wait.h>
 #include <asm/uaccess.h>
 #include <linux/device.h>
+#include <linux/sched.h>
 #include "redirfs.h"
 #include "debug.h"
 
