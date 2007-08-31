@@ -71,7 +71,7 @@ enum rfs_retv dummyflt_open(rfs_context context, struct rfs_args *args)
 	if (!args->args.i_permission.nd)
 		return RFS_CONTINUE;
 
-	rv = rfs_get_filename(args->args.i_permission.nd->dentry, path, PAGE_SIZE);
+	rv = rfs_get_filename(args->args.f_open.file->f_dentry, path, PAGE_SIZE);
 	if (rv) {
 		printk(KERN_ALERT "dummyflt: rfs_get_filename failed\n");
 		return RFS_CONTINUE;
