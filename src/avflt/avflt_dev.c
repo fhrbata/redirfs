@@ -30,6 +30,7 @@ static ssize_t avflt_dev_read(struct file *file, char __user *buf,
 {
 	struct avflt_check *check = NULL;
 	struct avflt_ucheck ucheck;
+	int fd;
 	int rv;
 
 	if (!buf)
@@ -47,24 +48,12 @@ static ssize_t avflt_dev_read(struct file *file, char __user *buf,
 	if (ucheck.ver != AV_CTL_VERSION)
 		return -EINVAL;
 
-	if (!ucheck.fn)
-		return -EINVAL;
-
 	while (!check) {
 		rv = avflt_request_available_wait();
 		if (rv)
 			return rv;
 
 		check = avflt_request_dequeue();
-	}
-
-	if (ucheck.fn_size < check->fn_len) {
-		if (avflt_request_queue(check)) 
-			avflt_check_done(check);
-
-		avflt_check_put(check);
-
-		return -ENAMETOOLONG;
 	}
 
 	rv = avflt_reply_queue(check);
@@ -81,24 +70,30 @@ static ssize_t avflt_dev_read(struct file *file, char __user *buf,
 		return rv;
 	}
 
-	ucheck.event = check->event;
-	ucheck.id = check->id;
-
-	if (copy_to_user(ucheck.fn, check->fn, check->fn_len)) {
+	fd = get_unused_fd();
+	if (fd < 0) {
 		BUG_ON(!avflt_reply_dequeue(check->id));
 		if (avflt_request_queue(check)) 
 			avflt_check_done(check);
 
 		avflt_check_put(check);
-
-		return -EFAULT;
+		return fd;
 	}
+
+	fd_install(fd, check->file);
+
+	ucheck.event = check->event;
+	ucheck.id = check->id;
+	ucheck.fd = fd;
+	ucheck.fn = NULL;
+	ucheck.fn_size = 0;
 
 	if (copy_to_user(buf, &ucheck, size)) {
 		BUG_ON(!avflt_reply_dequeue(check->id));
 		if (avflt_request_queue(check))
 			avflt_check_done(check);
 
+		put_unused_fd(fd);
 		avflt_check_put(check);
 
 		return -EFAULT;
@@ -109,11 +104,71 @@ static ssize_t avflt_dev_read(struct file *file, char __user *buf,
 	return size;
 }
 
+static int avflt_cmd_getname(struct avflt_ucheck *ucheck)
+{
+	struct avflt_check *check;
+	char fn_buf[PAGE_SIZE];
+	int fn_len;
+	int rv;
+
+	if (!ucheck->fn)
+		return -EINVAL;
+
+	check = avflt_reply_find(ucheck->id);
+	if (!check) {
+		BUG();
+		printk(KERN_ERR "avflt: reply(%d) not found\n", ucheck->id);
+		return -ENOENT;
+	}
+
+	rv = rfs_get_filename(check->file->f_dentry, fn_buf, PAGE_SIZE);
+	if (rv) {
+		avflt_check_put(check);
+		return rv;
+	}
+
+	fn_len = strlen(fn_buf) + 1;
+
+	if (ucheck->fn_size < fn_len) {
+		avflt_check_put(check);
+		return -ENAMETOOLONG;
+	}
+
+	if (copy_to_user(ucheck->fn, &fn_buf, fn_len)) {
+		avflt_check_put(check);
+		return -EFAULT;
+	}
+
+	return 0;
+}
+
+static int avflt_cmd_reply(struct avflt_ucheck *ucheck)
+{
+	struct avflt_check *check = NULL;
+
+	put_unused_fd(ucheck->fd);
+
+	check = avflt_reply_dequeue(ucheck->id);
+	if (!check) {
+		BUG();
+		printk(KERN_ERR "avflt: reply(%d) not found\n", ucheck->id);
+		return -ENOENT;
+	}
+
+	check->file->f_pos = check->offset;
+
+	atomic_set(&check->deny, ucheck->deny);
+	avflt_check_done(check);
+	avflt_check_put(check);
+
+	return 0;
+}
+
 static ssize_t avflt_dev_write(struct file *file, const char __user *buf,
 		size_t size, loff_t *pos)
 {
-	struct avflt_check *check = NULL;
 	struct avflt_ucheck ucheck;
+	int rv;
 
 	if (!buf)
 		return -EINVAL;
@@ -130,16 +185,22 @@ static ssize_t avflt_dev_write(struct file *file, const char __user *buf,
 	if (ucheck.ver != AV_CTL_VERSION)
 		return -EINVAL;
 
-	check = avflt_reply_dequeue(ucheck.id);
-	if (!check) {
-		BUG();
-		printk(KERN_ERR "avflt: reply(%d) not found\n", ucheck.id);
-		return -ENOENT;
-	}
+	switch (ucheck.cmd) {
+		case AV_CMD_GETNAME:
+			rv = avflt_cmd_getname(&ucheck);
+			if (rv)
+				return rv;
+			break;
 
-	atomic_set(&check->deny, ucheck.deny);
-	avflt_check_done(check);
-	avflt_check_put(check);
+		case AV_CMD_REPLY:
+			rv = avflt_cmd_reply(&ucheck);
+			if (rv)
+				return rv;
+			break;
+
+		default:
+			return -EINVAL;
+	}
 
 	return size;
 }

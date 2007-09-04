@@ -22,5 +22,6 @@ int av_exclude(const char *path);
 int av_event_on(int event);
 int av_event_off(int event);
 int av_set_access(struct av_req *avr, int ava);
-int av_get_filename(struct av_req *avr, const char **fn);
+int av_get_fd(struct av_req *avr, int *fd);
+int av_get_fn(struct av_con *avc, struct av_req *avr, const char **fn);
 int av_get_event(struct av_req *avr, int *event);

@@ -40,9 +40,9 @@ void *check(void *data)
 			return NULL;
 		}
 
-		rv = av_get_filename(&avr, &fn);
+		rv = av_get_fn(&avc, &avr, &fn);
 		if (rv) {
-			fprintf(stderr, "av_get_filename failed: %s(%d)\n", strerror(rv), rv);
+			fprintf(stderr, "av_get_fn failed: %s(%d)\n", strerror(rv), rv);
 			goto reply;
 		}
 
@@ -56,9 +56,7 @@ void *check(void *data)
 			case AV_EVENT_OPEN:
 				en = "OPEN";
 				break;
-			case AV_EVENT_EXEC:
-				en = "EXEC";
-				break;
+
 			case AV_EVENT_CLOSE:
 				en = "CLOSE";
 				break;

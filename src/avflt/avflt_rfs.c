@@ -1,8 +1,7 @@
 #include "avflt.h"
 
 #define AVFLT_REG_FOP_OPEN		0
-#define AVFLT_REG_IOP_PERMISSION	1
-#define AVFLT_REG_FOP_RELEASE		2
+#define AVFLT_REG_FOP_FLUSH		1
 
 #define AVFLT_CLEAN			1
 #define AVFLT_INFECTED			2
@@ -21,14 +20,13 @@ static struct rfs_filter_info avflt_info = {"avflt", 666, 0, avflt_ctl};
 
 int avflt_open = 1;
 int avflt_close = 1;
-int avflt_exec = 1;
+
 spinlock_t avflt_rops_lock = SPIN_LOCK_UNLOCKED;
 static struct kmem_cache *avflt_data_cache = NULL;
 
 static struct rfs_op_info avflt_rops[] = {
 	{RFS_REG_FOP_OPEN, NULL, NULL},
-	{RFS_REG_IOP_PERMISSION, NULL, NULL},
-	{RFS_REG_FOP_RELEASE, NULL, NULL},
+	{RFS_REG_FOP_FLUSH, NULL, NULL},
 	{RFS_OP_END, NULL, NULL}
 };
 
@@ -109,11 +107,12 @@ static inline struct avflt_data *avflt_attach_data(struct inode *inode)
 	return data;
 }
 
-static enum rfs_retv avflt_event(struct dentry *dentry, int event,
+static enum rfs_retv avflt_event(struct file *file, int event,
 		struct rfs_args *args)
 {
 	struct avflt_check *check = NULL;
 	struct avflt_data *data = NULL;
+	struct dentry *dentry = file->f_dentry;
 	int rv;
 	int state;
 
@@ -158,16 +157,10 @@ static enum rfs_retv avflt_event(struct dentry *dentry, int event,
 		return RFS_STOP;
 	}
 
-	rv = rfs_get_filename(dentry, check->fn, check->fn_size);
-	if (rv) {
-		args->retv.rv_int = rv;
-		avflt_request_put();
-		avflt_check_put(check);
-		return RFS_STOP;
-	}
-
 	check->event = event;
-	check->fn_len = strlen(check->fn);
+	check->file = file;
+	check->offset = file->f_pos;
+	atomic_inc(&file->f_count);
 
 	rv = avflt_request_queue(check);
 	if (rv) {
@@ -212,36 +205,20 @@ static enum rfs_retv avflt_event(struct dentry *dentry, int event,
 	return rv;
 }
 
-static enum rfs_retv avflt_pre_open(rfs_context context, struct rfs_args *args)
+static enum rfs_retv avflt_post_open(rfs_context context, struct rfs_args *args)
 {
-	struct dentry *dentry = args->args.f_open.file->f_dentry;
+	struct file *file = args->args.f_open.file;
 	
-	return avflt_event(dentry, AV_EVENT_OPEN, args);
+	return avflt_event(file, AV_EVENT_OPEN, args);
 }
 
-static enum rfs_retv avflt_pre_release(rfs_context context, struct rfs_args *args)
+static enum rfs_retv avflt_post_flush(rfs_context context, struct rfs_args *args)
 {
-	struct dentry *dentry = args->args.f_release.file->f_dentry;
+	struct file *file = args->args.f_flush.file;
 	
-	return avflt_event(dentry, AV_EVENT_CLOSE, args);
+	return avflt_event(file, AV_EVENT_CLOSE, args);
 }
 
-
-static enum rfs_retv avflt_pre_permission(rfs_context context,
-		struct rfs_args *args)
-{
-	struct dentry *dentry;
-
-	if (!args->args.i_permission.nd)
-		return RFS_CONTINUE;
-
-	if (!(args->args.i_permission.mask & MAY_EXEC))
-		return RFS_CONTINUE;
-
-	dentry = args->args.i_permission.nd->dentry;
-
-	return avflt_event(dentry, AV_EVENT_EXEC, args);
-}
 
 static int avflt_ctl(struct rfs_ctl *ctl)
 {
@@ -267,19 +244,14 @@ static int avflt_ctl(struct rfs_ctl *ctl)
 int avflt_rfs_set_ops(void)
 {
 	if (avflt_open) 
-		avflt_rops[AVFLT_REG_FOP_OPEN].pre_cb = avflt_pre_open;
-	else
 		avflt_rops[AVFLT_REG_FOP_OPEN].pre_cb = NULL;
-
-	if (avflt_exec) 
-		avflt_rops[AVFLT_REG_IOP_PERMISSION].pre_cb = avflt_pre_permission;
 	else
-		avflt_rops[AVFLT_REG_IOP_PERMISSION].pre_cb = NULL;
+		avflt_rops[AVFLT_REG_FOP_OPEN].pre_cb = avflt_post_open;
 
 	if (avflt_close) 
-		avflt_rops[AVFLT_REG_FOP_RELEASE].pre_cb = avflt_pre_release;
+		avflt_rops[AVFLT_REG_FOP_FLUSH].pre_cb = NULL;
 	else
-		avflt_rops[AVFLT_REG_FOP_RELEASE].pre_cb = NULL;
+		avflt_rops[AVFLT_REG_FOP_FLUSH].pre_cb = avflt_post_flush;
 
 	return rfs_set_operations(avflt, avflt_rops);
 }

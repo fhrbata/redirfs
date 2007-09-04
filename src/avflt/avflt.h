@@ -4,15 +4,15 @@
 #include <linux/device.h>
 #include <linux/uaccess.h>
 #include <linux/poll.h>
+#include <linux/file.h>
 #include "../redirfs/redirfs.h"
 #include "avflt_io.h"
 
 struct avflt_check {
 	int id;
 	int event;
-	char fn[PATH_MAX];
-	int fn_size;
-	int fn_len;
+	struct file *file;
+	loff_t offset;
 	atomic_t deny;
 	atomic_t cnt;
 	atomic_t done;
@@ -31,6 +31,7 @@ int avflt_request_available_wait(void);
 int avflt_request_wait(void);
 int avflt_reply_queue(struct avflt_check *check);
 struct avflt_check *avflt_reply_dequeue(int id);
+struct avflt_check *avflt_reply_find(int id);
 int avflt_reply_wait(struct avflt_check *check);
 void avflt_check_start(void);
 void avflt_check_stop(void);

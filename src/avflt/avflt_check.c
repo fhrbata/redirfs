@@ -47,9 +47,7 @@ struct avflt_check *avflt_check_alloc(void)
 	atomic_set(&check->deny, 0);
 	check->id = -1;
 	check->event = -1;
-	check->fn_size = PATH_MAX;
-	check->fn_len = 0;
-	memset(&check->fn, 0, check->fn_size);
+	check->file = NULL;
 
 	return check;
 }
@@ -74,6 +72,9 @@ void avflt_check_put(struct avflt_check *check)
 
 	if (!atomic_dec_and_test(&check->cnt))
 		return;
+
+	if (check->file)
+		fput(check->file);
 
 	kmem_cache_free(avflt_check_cache, check);
 }
@@ -219,13 +220,11 @@ again:
 	return 0;
 }
 
-struct avflt_check *avflt_reply_dequeue(int id)
+static struct avflt_check *avflt_find_reply(int id)
 {
 	struct list_head *list;
 	struct avflt_check *loop;
 	struct avflt_check *found = NULL;
-
-	spin_lock(&avflt_reply_lock);
 
 	list = avflt_reply_hashtable + (id % avflt_reply_hashtable_size);
 
@@ -236,8 +235,32 @@ struct avflt_check *avflt_reply_dequeue(int id)
 		}
 	}
 
-	if (found) {
-		list_del(&found->list);
+	return found;
+}
+
+struct avflt_check *avflt_reply_find(int id)
+{
+	struct avflt_check *check;
+
+	spin_lock(&avflt_reply_lock);
+
+	check = avflt_check_get(avflt_find_reply(id));
+
+	spin_unlock(&avflt_reply_lock);
+
+	return check;
+}
+
+struct avflt_check *avflt_reply_dequeue(int id)
+{
+	struct avflt_check *check;
+
+	spin_lock(&avflt_reply_lock);
+
+	check = avflt_find_reply(id);
+
+	if (check) {
+		list_del(&check->list);
 		avflt_reply_nr--;
 		atomic_set(&avflt_reply_free, 1);
 		wake_up(&avflt_reply_waitq);
@@ -245,7 +268,7 @@ struct avflt_check *avflt_reply_dequeue(int id)
 
 	spin_unlock(&avflt_reply_lock);
 
-	return found;
+	return check;
 }
 
 int avflt_reply_wait(struct avflt_check *check)

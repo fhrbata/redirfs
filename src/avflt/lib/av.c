@@ -57,6 +57,8 @@ int av_reply(struct av_con *avc, struct av_req *avr)
 	if (!avc || !avr)
 		return EINVAL;
 
+	avr->ucheck.cmd = AV_CMD_REPLY;
+
 	if (write(avc->fd, &avr->ucheck, sizeof(struct avflt_ucheck)) == -1)
 		return errno;
 
@@ -106,9 +108,6 @@ int av_event(int event, int eon)
 	switch (event) {
 		case AV_EVENT_OPEN:
 			event_fn = "/sys/fs/redirfs/filters/avflt/events/open";
-			break;
-		case AV_EVENT_EXEC:
-			event_fn = "/sys/fs/redirfs/filters/avflt/events/exec";
 			break;
 		case AV_EVENT_CLOSE:
 			event_fn = "/sys/fs/redirfs/filters/avflt/events/close";
@@ -161,11 +160,25 @@ int av_set_access(struct av_req *avr, int ava)
 	return 0;
 }
 
+int av_get_fd(struct av_req *avr, int *fd)
+{
+	if (!avr || !fd)
+		return EINVAL;
 
-int av_get_filename(struct av_req *avr, const char **fn)
+	*fd = avr->ucheck.fd;
+
+	return 0;
+}
+
+int av_get_fn(struct av_con *avc, struct av_req *avr, const char **fn)
 {
 	if (!avr || !fn)
 		return EINVAL;
+
+	avr->ucheck.cmd = AV_CMD_GETNAME;
+
+	if (write(avc->fd, &avr->fn, PATH_MAX) == -1)
+		return errno;
 
 	*fn = avr->fn;
 
