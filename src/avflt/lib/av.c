@@ -177,7 +177,7 @@ int av_get_fn(struct av_con *avc, struct av_req *avr, const char **fn)
 
 	avr->ucheck.cmd = AV_CMD_GETNAME;
 
-	if (write(avc->fd, &avr->fn, PATH_MAX) == -1)
+	if (write(avc->fd, &avr->ucheck, sizeof(struct avflt_ucheck)) == -1)
 		return errno;
 
 	*fn = avr->fn;

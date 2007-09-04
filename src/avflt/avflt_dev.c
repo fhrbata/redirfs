@@ -85,8 +85,6 @@ static ssize_t avflt_dev_read(struct file *file, char __user *buf,
 	ucheck.event = check->event;
 	ucheck.id = check->id;
 	ucheck.fd = fd;
-	ucheck.fn = NULL;
-	ucheck.fn_size = 0;
 
 	if (copy_to_user(buf, &ucheck, size)) {
 		BUG_ON(!avflt_reply_dequeue(check->id));
