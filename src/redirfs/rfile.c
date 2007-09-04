@@ -337,6 +337,64 @@ int rfs_release(struct inode *inode, struct file *file)
 	return rv;
 }
 
+int rfs_flush(struct file *file, fl_owner_t id)
+{
+	struct rfile *rfile = NULL;
+	struct rpath *path = NULL;
+	struct chain *chain = NULL;
+	struct inode *inode = NULL;
+	struct rfs_args args;
+	int rv = 0;
+	int cnt = 0;
+
+	rfile = rfile_find(file);
+	if (!rfile) {
+		if (file->f_op && file->f_op->flush)
+			return file->f_op->flush(file, id);
+	}
+
+	spin_lock(&rfile->rf_lock);
+	path = path_get(rfile->rf_path);
+	chain = chain_get(rfile->rf_chain);
+	spin_unlock(&rfile->rf_lock);
+
+	args.args.f_flush.file = file;
+	args.args.f_flush.id = id;
+
+	inode = file->f_dentry->d_inode;
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_FOP_FLUSH;
+	else if (S_ISDIR(inode->i_mode))
+		args.type.id = RFS_DIR_FOP_FLUSH;
+	else if (S_ISLNK(inode->i_mode))
+		args.type.id = RFS_LNK_FOP_FLUSH;
+	else if (S_ISCHR(inode->i_mode))
+		args.type.id = RFS_CHR_FOP_FLUSH;
+	else if (S_ISBLK(inode->i_mode))
+		args.type.id = RFS_BLK_FOP_FLUSH;
+	else if (S_ISFIFO(inode->i_mode))
+		args.type.id = RFS_FIFO_FOP_FLUSH;
+	else 
+		args.type.id = RFS_SOCK_FOP_FLUSH;
+
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+		if (rfile->rf_op_old && rfile->rf_op_old->flush)
+			rv = rfile->rf_op_old->flush(args.args.f_flush.file, args.args.f_flush.id);
+
+		args.retv.rv_int = rv;
+	}
+	
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rv = args.retv.rv_int;
+
+	rfile_put(rfile);
+	path_put(path);
+	chain_put(chain);
+
+	return rv;
+}
+
 int rfs_readdir(struct file *file, void *buf, filldir_t filler)
 {
 	struct rfile *rfile = NULL;
@@ -578,6 +636,11 @@ static void rfile_set_reg_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.llseek = rfs_llseek;
 	else
 		rfile->rf_op_new.llseek = rfile->rf_op_old ? rfile->rf_op_old->llseek : NULL;
+
+	if (ops[RFS_REG_FOP_FLUSH])
+		rfile->rf_op_new.flush = rfs_flush;
+	else
+		rfile->rf_op_new.flush = rfile->rf_op_old ? rfile->rf_op_old->flush : NULL;
 }
 
 static void rfile_set_dir_ops(struct rfile *rfile, char *ops)
@@ -586,6 +649,11 @@ static void rfile_set_dir_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.readdir = rfs_readdir;
 	else
 		rfile->rf_op_new.readdir = rfile->rf_op_old ? rfile->rf_op_old->readdir : NULL;
+
+	if (ops[RFS_DIR_FOP_FLUSH])
+		rfile->rf_op_new.flush = rfs_flush;
+	else
+		rfile->rf_op_new.flush = rfile->rf_op_old ? rfile->rf_op_old->flush : NULL;
 }
 
 static void rfile_set_chr_ops(struct rfile *rfile, char *ops)
@@ -604,6 +672,11 @@ static void rfile_set_chr_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.llseek = rfs_llseek;
 	else
 		rfile->rf_op_new.llseek = rfile->rf_op_old ? rfile->rf_op_old->llseek : NULL;
+
+	if (ops[RFS_CHR_FOP_FLUSH])
+		rfile->rf_op_new.flush = rfs_flush;
+	else
+		rfile->rf_op_new.flush = rfile->rf_op_old ? rfile->rf_op_old->flush : NULL;
 }
 
 static void rfile_set_blk_ops(struct rfile *rfile, char *ops)
@@ -622,6 +695,11 @@ static void rfile_set_blk_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.llseek = rfs_llseek;
 	else
 		rfile->rf_op_new.llseek = rfile->rf_op_old ? rfile->rf_op_old->llseek : NULL;
+
+	if (ops[RFS_BLK_FOP_FLUSH])
+		rfile->rf_op_new.flush = rfs_flush;
+	else
+		rfile->rf_op_new.flush = rfile->rf_op_old ? rfile->rf_op_old->flush : NULL;
 }
 
 static void rfile_set_fifo_ops(struct rfile *rfile, char *ops)
@@ -640,6 +718,11 @@ static void rfile_set_fifo_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.llseek = rfs_llseek;
 	else
 		rfile->rf_op_new.llseek = rfile->rf_op_old ? rfile->rf_op_old->llseek : NULL;
+
+	if (ops[RFS_FIFO_FOP_FLUSH])
+		rfile->rf_op_new.flush = rfs_flush;
+	else
+		rfile->rf_op_new.flush = rfile->rf_op_old ? rfile->rf_op_old->flush : NULL;
 }
 
 static void rfile_set_lnk_ops(struct rfile *rfile, char *ops)
@@ -658,6 +741,11 @@ static void rfile_set_lnk_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.llseek = rfs_llseek;
 	else
 		rfile->rf_op_new.llseek = rfile->rf_op_old ? rfile->rf_op_old->llseek : NULL;
+
+	if (ops[RFS_LNK_FOP_FLUSH])
+		rfile->rf_op_new.flush = rfs_flush;
+	else
+		rfile->rf_op_new.flush = rfile->rf_op_old ? rfile->rf_op_old->flush : NULL;
 }
 
 static void rfile_set_sock_ops(struct rfile *rfile, char *ops)
@@ -676,6 +764,11 @@ static void rfile_set_sock_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.llseek = rfs_llseek;
 	else
 		rfile->rf_op_new.llseek = rfile->rf_op_old ? rfile->rf_op_old->llseek : NULL;
+
+	if (ops[RFS_SOCK_FOP_FLUSH])
+		rfile->rf_op_new.flush = rfs_flush;
+	else
+		rfile->rf_op_new.flush = rfile->rf_op_old ? rfile->rf_op_old->flush : NULL;
 }
 
 void rfile_set_ops(struct rfile *rfile, struct ops *ops)
