@@ -244,14 +244,14 @@ static int avflt_ctl(struct rfs_ctl *ctl)
 int avflt_rfs_set_ops(void)
 {
 	if (avflt_open) 
-		avflt_rops[AVFLT_REG_FOP_OPEN].pre_cb = NULL;
+		avflt_rops[AVFLT_REG_FOP_OPEN].post_cb = avflt_post_open;
 	else
-		avflt_rops[AVFLT_REG_FOP_OPEN].pre_cb = avflt_post_open;
+		avflt_rops[AVFLT_REG_FOP_OPEN].post_cb = NULL;
 
 	if (avflt_close) 
-		avflt_rops[AVFLT_REG_FOP_FLUSH].pre_cb = NULL;
+		avflt_rops[AVFLT_REG_FOP_FLUSH].post_cb = avflt_post_flush;
 	else
-		avflt_rops[AVFLT_REG_FOP_FLUSH].pre_cb = avflt_post_flush;
+		avflt_rops[AVFLT_REG_FOP_FLUSH].post_cb = NULL;
 
 	return rfs_set_operations(avflt, avflt_rops);
 }
