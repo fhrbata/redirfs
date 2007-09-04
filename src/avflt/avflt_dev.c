@@ -60,6 +60,7 @@ static ssize_t avflt_dev_read(struct file *file, char __user *buf,
 	if (rv == 1) {
 		avflt_check_done(check);
 		avflt_check_put(check);
+		return -ENODATA;
 	}
 
 	if (rv < 0) {

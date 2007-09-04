@@ -158,9 +158,8 @@ static enum rfs_retv avflt_event(struct file *file, int event,
 	}
 
 	check->event = event;
-	check->file = file;
+	check->file = get_file(file);
 	check->offset = file->f_pos;
-	atomic_inc(&file->f_count);
 
 	rv = avflt_request_queue(check);
 	if (rv) {
