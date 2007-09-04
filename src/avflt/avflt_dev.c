@@ -139,6 +139,8 @@ static int avflt_cmd_getname(struct avflt_ucheck *ucheck)
 		return -EFAULT;
 	}
 
+	avflt_check_put(check);
+
 	return 0;
 }
 
