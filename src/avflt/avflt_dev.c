@@ -146,6 +146,13 @@ static int avflt_cmd_getname(struct avflt_ucheck *ucheck)
 static int avflt_cmd_reply(struct avflt_ucheck *ucheck)
 {
 	struct avflt_check *check = NULL;
+	struct files_struct *files = current->files;
+	struct fdtable *fdt;
+	
+	spin_lock(&files->file_lock);
+	fdt = files_fdtable(files);
+	rcu_assign_pointer(fdt->fd[ucheck->fd], NULL);
+	spin_unlock(&files->file_lock);
 
 	put_unused_fd(ucheck->fd);
 
