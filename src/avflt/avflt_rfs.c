@@ -118,6 +118,11 @@ static enum rfs_retv avflt_event(struct file *file, int event,
 
 	if (avflt_pid_find(current->tgid))
 		return RFS_CONTINUE;
+	
+	if (file->f_mode & FMODE_WRITE) {
+		if (atomic_read(&dentry->d_inode->i_writecount) == 1)
+			return RFS_CONTINUE;
+	}
 
 	if (atomic_read(&dentry->d_inode->i_writecount) <= 0) {
 		data = avflt_get_data(dentry->d_inode);
@@ -160,7 +165,8 @@ static enum rfs_retv avflt_event(struct file *file, int event,
 	check->event = event;
 	check->file = file;
 	check->offset = file->f_pos;
-	get_file(file);
+	if (event == AV_EVENT_CLOSE)
+		get_file(file);
 
 	rv = avflt_request_queue(check);
 	if (rv) {
