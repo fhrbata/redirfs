@@ -260,13 +260,19 @@ int rfs_open(struct inode *inode, struct file *file)
 		args.retv.rv_int = rv;
 	}
 
+	if (!rv) {
+		rfile = rfile_add(file);
+		BUG_ON(IS_ERR(rfile));
+	}
+
 	rfs_postcall_flts(chain, NULL, &args, &cnt);
 
 	rv = args.retv.rv_int;
 
-	if (!rv) {
-		rfile = rfile_add(file);
-		BUG_ON(IS_ERR(rfile));
+	if (rv && rfile) {
+		spin_lock(&rfile->rf_rdentry->rd_lock);
+		rfile_del(file);
+		spin_unlock(&rfile->rf_rdentry->rd_lock);
 	}
 
 	rinode_put(rinode);
