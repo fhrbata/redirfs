@@ -20,9 +20,9 @@ struct file *avflt_get_file(struct file *file)
 	fops->owner = THIS_MODULE;
 	fops->release = NULL;
 
-	f->f_path.mnt = mntget(file->f_vfsmnt);
-	f->f_path.dentry = dget(file->f_dentry);
-	f->f_mapping = file->f_path.dentry->d_inode->i_mapping;
+	f->f_vfsmnt = mntget(file->f_vfsmnt);
+	f->f_dentry = dget(file->f_dentry);
+	f->f_mapping = file->f_dentry->d_inode->i_mapping;
 
 	f->f_pos = 0;
 	f->f_flags = O_RDONLY;
