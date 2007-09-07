@@ -1,7 +1,7 @@
 #include "avflt.h"
 
 #define AVFLT_REG_FOP_OPEN		0
-#define AVFLT_REG_FOP_FLUSH		1
+#define AVFLT_REG_FOP_RELEASE		1
 
 #define AVFLT_CLEAN			1
 #define AVFLT_INFECTED			2
@@ -26,7 +26,7 @@ static struct kmem_cache *avflt_data_cache = NULL;
 
 static struct rfs_op_info avflt_rops[] = {
 	{RFS_REG_FOP_OPEN, NULL, NULL},
-	{RFS_REG_FOP_FLUSH, NULL, NULL},
+	{RFS_REG_FOP_RELEASE, NULL, NULL},
 	{RFS_OP_END, NULL, NULL}
 };
 
@@ -121,7 +121,12 @@ static enum rfs_retv avflt_event(struct file *file, int event,
 		return RFS_CONTINUE;
 	
 	wc = atomic_read(&dentry->d_inode->i_writecount);
-	if (wc <= 0 || (wc == 1 && (file->f_mode & FMODE_WRITE))) {
+	if (wc <= 0 || (wc == 1 && file->f_mode & FMODE_WRITE &&
+				event == AV_EVENT_OPEN)) {
+
+		if (!file->f_dentry->d_inode->i_size)
+			return RFS_CONTINUE;
+
 		data = avflt_get_data(dentry->d_inode);
 		if (!IS_ERR(data)) {
 			state = atomic_read(&data->state);
@@ -160,15 +165,20 @@ static enum rfs_retv avflt_event(struct file *file, int event,
 	}
 
 	check->event = event;
-	check->file = file;
-	check->offset = file->f_pos;
-	if (event == AV_EVENT_CLOSE)
-		get_file(file);
+	check->file = avflt_get_file(file);
+
+	if (IS_ERR(check->file)) {
+		avflt_request_put();
+		avflt_check_put(check);
+		args->retv.rv_int = PTR_ERR(check->file);
+		return RFS_STOP;
+	}
 
 	rv = avflt_request_queue(check);
 	if (rv) {
 		args->retv.rv_int = 0;
 		avflt_request_put();
+		avflt_put_file(check->file);
 		avflt_check_put(check);
 		return RFS_STOP;
 	}
@@ -215,9 +225,9 @@ static enum rfs_retv avflt_post_open(rfs_context context, struct rfs_args *args)
 	return avflt_event(file, AV_EVENT_OPEN, args);
 }
 
-static enum rfs_retv avflt_post_flush(rfs_context context, struct rfs_args *args)
+static enum rfs_retv avflt_post_release(rfs_context context, struct rfs_args *args)
 {
-	struct file *file = args->args.f_flush.file;
+	struct file *file = args->args.f_release.file;
 	
 	return avflt_event(file, AV_EVENT_CLOSE, args);
 }
@@ -252,9 +262,9 @@ int avflt_rfs_set_ops(void)
 		avflt_rops[AVFLT_REG_FOP_OPEN].post_cb = NULL;
 
 	if (avflt_close) 
-		avflt_rops[AVFLT_REG_FOP_FLUSH].post_cb = avflt_post_flush;
+		avflt_rops[AVFLT_REG_FOP_RELEASE].post_cb = avflt_post_release;
 	else
-		avflt_rops[AVFLT_REG_FOP_FLUSH].post_cb = NULL;
+		avflt_rops[AVFLT_REG_FOP_RELEASE].post_cb = NULL;
 
 	return rfs_set_operations(avflt, avflt_rops);
 }

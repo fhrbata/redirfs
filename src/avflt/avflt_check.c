@@ -73,11 +73,6 @@ void avflt_check_put(struct avflt_check *check)
 	if (!atomic_dec_and_test(&check->cnt))
 		return;
 
-	if (check->event == AV_EVENT_CLOSE) {
-		if (check->file)
-			fput(check->file);
-	}
-
 	kmem_cache_free(avflt_check_cache, check);
 }
 
@@ -275,11 +270,6 @@ struct avflt_check *avflt_reply_dequeue(int id)
 
 int avflt_reply_wait(struct avflt_check *check)
 {
-	if (check->event == AV_EVENT_OPEN) {
-		wait_event(check->wait, atomic_read(&check->done));
-		return 0;
-	}
-
 	return wait_event_interruptible(check->wait, atomic_read(&check->done));
 }
 
@@ -335,6 +325,7 @@ void avflt_check_stop(void)
 
 void avflt_check_done(struct avflt_check *check)
 {
+	avflt_put_file(check->file);
 	atomic_set(&check->done, 1);
 	wake_up(&check->wait);
 }

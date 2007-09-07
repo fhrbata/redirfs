@@ -5,6 +5,7 @@
 #include <linux/uaccess.h>
 #include <linux/poll.h>
 #include <linux/file.h>
+#include <linux/mount.h>
 #include "../redirfs/redirfs.h"
 #include "avflt_io.h"
 
@@ -12,7 +13,6 @@ struct avflt_check {
 	int id;
 	int event;
 	struct file *file;
-	loff_t offset;
 	atomic_t deny;
 	atomic_t cnt;
 	atomic_t done;
@@ -52,6 +52,9 @@ int avflt_rfs_set_ops(void);
 
 int avflt_sys_init(struct kobject *parent);
 void avflt_sys_exit(void);
+
+struct file *avflt_get_file(struct file *file);
+void avflt_put_file(struct file *file);
 
 #endif
 

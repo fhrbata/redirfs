@@ -163,8 +163,6 @@ static int avflt_cmd_reply(struct avflt_ucheck *ucheck)
 		return -ENOENT;
 	}
 
-	check->file->f_pos = check->offset;
-
 	atomic_set(&check->deny, ucheck->deny);
 	avflt_check_done(check);
 	avflt_check_put(check);

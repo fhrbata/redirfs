@@ -9,7 +9,7 @@ fail:
 endif
 
 obj-m += avflt.o
-avflt-objs := avflt_rfs.o avflt_sys.o avflt_dev.o avflt_mod.o avflt_check.o
+avflt-objs := avflt_rfs.o avflt_sys.o avflt_dev.o avflt_mod.o avflt_check.o avflt_file.o
 
 avflt.ko: *.c
 	$(MAKE) -C $(KERN_SRC) SUBDIRS=$(RFS_SRC) modules
