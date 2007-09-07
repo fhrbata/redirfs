@@ -22,6 +22,7 @@ void *check(void *data)
 	const char *fn;
 	const char *en;
 	int event;
+	int fd;
 	int rv;
 
 	sigemptyset(&sigmask);
@@ -43,6 +44,12 @@ void *check(void *data)
 		rv = av_get_fn(&avc, &avr, &fn);
 		if (rv) {
 			fprintf(stderr, "av_get_fn failed: %s(%d)\n", strerror(rv), rv);
+			goto reply;
+		}
+
+		rv = av_get_fd(&avr, &fd);
+		if (rv) {
+			fprintf(stderr, "av_get_fd failed: %s(%d)\n", strerror(rv), rv);
 			goto reply;
 		}
 
