@@ -158,6 +158,48 @@ void rinode_del(struct inode *inode)
 	call_rcu(&rinode->ri_rcu, rinode_del_rcu);
 }
 
+int rfs_rmdir(struct inode *dir, struct dentry *dentry)
+{
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	int rv = 0;
+	int cnt = 0;
+
+	rinode = rinode_find(dir);
+	if (!rinode) {
+		if (dir->i_op && dir->i_op->rmdir)
+			 return dir->i_op->rmdir(dir, dentry);
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.i_rmdir.dir = dir;
+	args.args.i_rmdir.dentry = dentry;
+
+	if (S_ISDIR(dir->i_mode))
+		args.type.id = RFS_DIR_IOP_RMDIR;
+	else
+		BUG();
+
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+		if (rinode->ri_op_old && rinode->ri_op_old->rmdir)
+			rv = rinode->ri_op_old->rmdir(args.args.i_rmdir.dir, args.args.i_rmdir.dentry);
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rv = args.retv.rv_int;
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	return rv;
+}
+
 int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 {
 	struct rinode *parent = NULL;
@@ -625,6 +667,11 @@ static void rinode_set_dir_ops(struct rinode *rinode, char *ops)
 		rinode->ri_op_new.permission = rfs_permission;
 	else
 		rinode->ri_op_new.permission = rinode->ri_op_old ? rinode->ri_op_old->permission : NULL;
+
+	if (ops[RFS_DIR_IOP_RMDIR])
+		rinode->ri_op_new.rmdir = rfs_rmdir;
+	else
+		rinode->ri_op_new.rmdir = rinode->ri_op_old ? rinode->ri_op_old->rmdir : NULL;
 
 	rinode->ri_op_new.mkdir = rfs_mkdir;
 	rinode->ri_op_new.create = rfs_create;
