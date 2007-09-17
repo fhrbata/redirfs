@@ -69,6 +69,8 @@ enum rfs_op_id {
 
 	RFS_DIR_IOP_CREATE,
 	RFS_DIR_IOP_LOOKUP,
+	RFS_DIR_IOP_LINK,
+	RFS_DIR_IOP_UNLINK,
 	RFS_DIR_IOP_MKDIR,
 	RFS_DIR_IOP_RMDIR,
 	RFS_DIR_IOP_MKNOD,
@@ -186,6 +188,17 @@ union rfs_op_args {
 		struct dentry *dentry;
 		struct nameidata *nd;
 	} i_lookup;
+
+	struct {
+		struct dentry *old_dentry;
+		struct inode *dir;
+		struct dentry *dentry;
+	} i_link;
+
+	struct {
+		struct inode *dir;
+		struct dentry *dentry;
+	} i_unlink;
 
 	struct {
 		struct inode *dir;

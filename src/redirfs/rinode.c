@@ -158,6 +158,48 @@ void rinode_del(struct inode *inode)
 	call_rcu(&rinode->ri_rcu, rinode_del_rcu);
 }
 
+int rfs_unlink(struct inode *dir, struct dentry *dentry)
+{
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	int rv = 0;
+	int cnt = 0;
+
+	rinode = rinode_find(dir);
+	if (!rinode) {
+		if (dir->i_op && dir->i_op->unlink)
+			 return dir->i_op->unlink(dir, dentry);
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.i_unlink.dir = dir;
+	args.args.i_unlink.dentry = dentry;
+
+	if (S_ISDIR(dir->i_mode))
+		args.type.id = RFS_DIR_IOP_UNLINK;
+	else
+		BUG();
+
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+		if (rinode->ri_op_old && rinode->ri_op_old->unlink)
+			rv = rinode->ri_op_old->unlink(args.args.i_unlink.dir, args.args.i_unlink.dentry);
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rv = args.retv.rv_int;
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	return rv;
+}
+
 int rfs_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	struct rinode *rinode = NULL;
@@ -339,6 +381,104 @@ int rfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameid
 
 		if (parent->ri_op_old && parent->ri_op_old->create)
 			rv = parent->ri_op_old->create(args.args.i_create.dir, args.args.i_create.dentry, args.args.i_create.mode, args.args.i_create.nd);
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+
+	rv = args.retv.rv_int;
+
+	if (!chain_set)
+		goto exit;
+
+	rdentry = rdentry_add(dentry);
+	if (IS_ERR(rdentry)) {
+		BUG();
+		goto exit;
+	}
+
+	spin_lock(&rdentry->rd_lock);
+	path_put(rdentry->rd_path);
+	chain_put(rdentry->rd_chain);
+	ops_put(rdentry->rd_ops);
+	rdentry->rd_path = path_get(path_set);
+	rdentry->rd_chain = chain_get(chain_set);
+	rdentry->rd_ops = ops_get(ops_set);
+	spin_unlock(&rdentry->rd_lock);
+	rdentry_set_ops(rdentry, ops_set);
+
+	rinode = rdentry->rd_rinode;
+	if (rinode) {
+		spin_lock(&rinode->ri_lock);
+		path_put(rinode->ri_path_set);
+		chain_put(rinode->ri_chain_set);
+		ops_put(rinode->ri_ops_set);
+		path_put(rinode->ri_path);
+		chain_put(rinode->ri_chain);
+		rinode->ri_path_set = path_get(path_set);
+		rinode->ri_chain_set = chain_get(chain_set);
+		rinode->ri_ops_set = ops_get(ops_set);
+		rinode->ri_path = path_get(path_set);
+		rinode->ri_chain = chain_get(chain_set);
+		spin_unlock(&rinode->ri_lock);
+		rinode_set_ops(rinode, ops_set);
+	}
+
+exit:
+	rdentry_put(rdentry);
+	rinode_put(parent);
+	path_put(path_set);
+	chain_put(chain_set);
+	ops_put(ops_set);
+	path_put(path);
+	chain_put(chain);
+
+	return rv;
+}
+
+int rfs_link(struct dentry *old_dentry,
+		struct inode *dir, struct dentry *dentry)
+{
+	struct rinode *parent = NULL;
+	struct rpath *path = NULL;
+	struct rdentry *rdentry = NULL;
+	struct rinode *rinode = NULL;
+	struct rpath *path_set = NULL;
+	struct chain *chain_set = NULL;
+	struct ops *ops_set = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	int rv = 0;
+	int cnt = 0;
+
+	parent = rinode_find(dir);
+	if (!parent) {
+		if (dir->i_op && dir->i_op->link)
+			return dir->i_op->link(old_dentry, dir, dentry);
+	}
+
+	spin_lock(&parent->ri_lock);
+	path_set = path_get(parent->ri_path_set);
+	chain_set = chain_get(parent->ri_chain_set);
+	ops_set = ops_get(parent->ri_ops_set);
+	path = path_get(parent->ri_path);
+	chain = chain_get(parent->ri_chain);
+	spin_unlock(&parent->ri_lock);
+
+	args.args.i_link.old_dentry = old_dentry;
+	args.args.i_link.dir = dir;
+	args.args.i_link.dentry = dentry;
+
+	if (S_ISDIR(dir->i_mode))
+		args.type.id = RFS_DIR_IOP_LINK;
+	else
+		BUG();
+
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+
+		if (parent->ri_op_old && parent->ri_op_old->link)
+			rv = parent->ri_op_old->link(args.args.i_link.old_dentry, args.args.i_link.dir, args.args.i_link.dentry);
 
 		args.retv.rv_int = rv;
 	}
@@ -663,6 +803,11 @@ static void rinode_set_reg_ops(struct rinode *rinode, char *ops)
 
 static void rinode_set_dir_ops(struct rinode *rinode, char *ops)
 {
+	if (ops[RFS_DIR_IOP_UNLINK])
+		rinode->ri_op_new.unlink = rfs_unlink;
+	else
+		rinode->ri_op_new.unlink = rinode->ri_op_old ? rinode->ri_op_old->unlink : NULL;
+
 	if (ops[RFS_DIR_IOP_PERMISSION])
 		rinode->ri_op_new.permission = rfs_permission;
 	else
@@ -675,6 +820,7 @@ static void rinode_set_dir_ops(struct rinode *rinode, char *ops)
 
 	rinode->ri_op_new.mkdir = rfs_mkdir;
 	rinode->ri_op_new.create = rfs_create;
+	rinode->ri_op_new.link = rfs_link;
 	rinode->ri_op_new.mknod = rfs_mknod;
 }
 
