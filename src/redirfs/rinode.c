@@ -793,12 +793,69 @@ int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 	return rv;
 }
 
+int rfs_setattr(struct dentry *dentry, struct iattr *iattr)
+{
+	struct inode *inode = dentry->d_inode;
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	int rv = 0;
+	int cnt = 0;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		if (inode && inode->i_op && inode->i_op->setattr)
+			 return inode->i_op->setattr(dentry, iattr);
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.i_setattr.dentry = dentry;
+	args.args.i_setattr.iattr = iattr;
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_IOP_SETATTR;
+	else if (S_ISDIR(inode->i_mode))
+		args.type.id = RFS_DIR_IOP_SETATTR;
+	else if (S_ISLNK(inode->i_mode))
+		args.type.id = RFS_LNK_IOP_SETATTR;
+	else if (S_ISCHR(inode->i_mode))
+		args.type.id = RFS_CHR_IOP_SETATTR;
+	else if (S_ISBLK(inode->i_mode))
+		args.type.id = RFS_BLK_IOP_SETATTR;
+	else if (S_ISFIFO(inode->i_mode))
+		args.type.id = RFS_FIFO_IOP_SETATTR;
+	else 
+		args.type.id = RFS_SOCK_IOP_SETATTR;
+
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+		if (rinode->ri_op_old && rinode->ri_op_old->setattr)
+			rv = rinode->ri_op_old->setattr(args.args.i_setattr.dentry, args.args.i_setattr.iattr);
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rv = args.retv.rv_int;
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	return rv;
+}
+
 static void rinode_set_reg_ops(struct rinode *rinode, char *ops)
 {
 	if (ops[RFS_REG_IOP_PERMISSION])
 		rinode->ri_op_new.permission = rfs_permission;
 	else
 		rinode->ri_op_new.permission = rinode->ri_op_old ? rinode->ri_op_old->permission : NULL;
+
+	if (ops[RFS_REG_IOP_SETATTR])
+		rinode->ri_op_new.setattr = rfs_setattr;
+	else
+		rinode->ri_op_new.setattr = rinode->ri_op_old ? rinode->ri_op_old->setattr : NULL;
 }
 
 static void rinode_set_dir_ops(struct rinode *rinode, char *ops)
@@ -812,6 +869,11 @@ static void rinode_set_dir_ops(struct rinode *rinode, char *ops)
 		rinode->ri_op_new.permission = rfs_permission;
 	else
 		rinode->ri_op_new.permission = rinode->ri_op_old ? rinode->ri_op_old->permission : NULL;
+
+	if (ops[RFS_DIR_IOP_SETATTR])
+		rinode->ri_op_new.setattr = rfs_setattr;
+	else
+		rinode->ri_op_new.setattr = rinode->ri_op_old ? rinode->ri_op_old->setattr : NULL;
 
 	if (ops[RFS_DIR_IOP_RMDIR])
 		rinode->ri_op_new.rmdir = rfs_rmdir;
@@ -830,6 +892,11 @@ static void rinode_set_chr_ops(struct rinode *rinode, char *ops)
 		rinode->ri_op_new.permission = rfs_permission;
 	else
 		rinode->ri_op_new.permission = rinode->ri_op_old ? rinode->ri_op_old->permission : NULL;
+
+	if (ops[RFS_CHR_IOP_SETATTR])
+		rinode->ri_op_new.setattr = rfs_setattr;
+	else
+		rinode->ri_op_new.setattr = rinode->ri_op_old ? rinode->ri_op_old->setattr : NULL;
 }
 
 static void rinode_set_blk_ops(struct rinode *rinode, char *ops)
@@ -838,6 +905,11 @@ static void rinode_set_blk_ops(struct rinode *rinode, char *ops)
 		rinode->ri_op_new.permission = rfs_permission;
 	else
 		rinode->ri_op_new.permission = rinode->ri_op_old ? rinode->ri_op_old->permission : NULL;
+
+	if (ops[RFS_BLK_IOP_SETATTR])
+		rinode->ri_op_new.setattr = rfs_setattr;
+	else
+		rinode->ri_op_new.setattr = rinode->ri_op_old ? rinode->ri_op_old->setattr : NULL;
 }
 
 static void rinode_set_fifo_ops(struct rinode *rinode, char *ops)
@@ -846,6 +918,11 @@ static void rinode_set_fifo_ops(struct rinode *rinode, char *ops)
 		rinode->ri_op_new.permission = rfs_permission;
 	else
 		rinode->ri_op_new.permission = rinode->ri_op_old ? rinode->ri_op_old->permission : NULL;
+
+	if (ops[RFS_FIFO_IOP_SETATTR])
+		rinode->ri_op_new.setattr = rfs_setattr;
+	else
+		rinode->ri_op_new.setattr = rinode->ri_op_old ? rinode->ri_op_old->setattr : NULL;
 }
 
 static void rinode_set_lnk_ops(struct rinode *rinode, char *ops)
@@ -854,6 +931,11 @@ static void rinode_set_lnk_ops(struct rinode *rinode, char *ops)
 		rinode->ri_op_new.permission = rfs_permission;
 	else
 		rinode->ri_op_new.permission = rinode->ri_op_old ? rinode->ri_op_old->permission : NULL;
+
+	if (ops[RFS_LNK_IOP_SETATTR])
+		rinode->ri_op_new.setattr = rfs_setattr;
+	else
+		rinode->ri_op_new.setattr = rinode->ri_op_old ? rinode->ri_op_old->setattr : NULL;
 }
 
 static void rinode_set_sock_ops(struct rinode *rinode, char *ops)
@@ -862,6 +944,11 @@ static void rinode_set_sock_ops(struct rinode *rinode, char *ops)
 		rinode->ri_op_new.permission = rfs_permission;
 	else
 		rinode->ri_op_new.permission = rinode->ri_op_old ? rinode->ri_op_old->permission : NULL;
+
+	if (ops[RFS_SOCK_IOP_SETATTR])
+		rinode->ri_op_new.setattr = rfs_setattr;
+	else
+		rinode->ri_op_new.setattr = rinode->ri_op_old ? rinode->ri_op_old->setattr : NULL;
 }
 
 void rinode_set_ops(struct rinode *rinode, struct ops *ops)

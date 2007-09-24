@@ -66,6 +66,7 @@ enum rfs_op_id {
 	RFS_SOCK_DOP_D_IPUT,
 
 	RFS_REG_IOP_PERMISSION,
+	RFS_REG_IOP_SETATTR,
 
 	RFS_DIR_IOP_CREATE,
 	RFS_DIR_IOP_LOOKUP,
@@ -75,16 +76,22 @@ enum rfs_op_id {
 	RFS_DIR_IOP_RMDIR,
 	RFS_DIR_IOP_MKNOD,
 	RFS_DIR_IOP_PERMISSION,
+	RFS_DIR_IOP_SETATTR,
 
 	RFS_CHR_IOP_PERMISSION,
+	RFS_CHR_IOP_SETATTR,
 
 	RFS_BLK_IOP_PERMISSION,
+	RFS_BLK_IOP_SETATTR,
 
 	RFS_FIFO_IOP_PERMISSION,
+	RFS_FIFO_IOP_SETATTR,
 
 	RFS_LNK_IOP_PERMISSION,
+	RFS_LNK_IOP_SETATTR,
 
 	RFS_SOCK_IOP_PERMISSION,
+	RFS_SOCK_IOP_SETATTR,
 
 	RFS_REG_FOP_OPEN,
 	RFS_REG_FOP_RELEASE,
@@ -222,7 +229,12 @@ union rfs_op_args {
 		struct inode *inode;
 		int mask;
 		struct nameidata *nd;
-	} i_permission;	
+	} i_permission;
+
+	struct {
+		struct dentry *dentry;
+		struct iattr *iattr;
+	} i_setattr;
 
 	struct {
 		struct inode *inode;
