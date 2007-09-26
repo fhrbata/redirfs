@@ -1,3 +1,10 @@
+/*
+ *
+ * This code uses old ioctl interface and needs to be rewritten to new sysfs
+ * one - it does not work with trunk version of redirfs framework
+ *
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
