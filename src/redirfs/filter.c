@@ -37,7 +37,6 @@ void flt_put(struct filter *flt)
 	if (!del)
 		return;
 
-	kobject_unregister(&flt->f_kobj);
 	atomic_set(&flt->f_del, 1);
 	wake_up_interruptible(&flt->f_wait);
 }
@@ -167,6 +166,7 @@ int rfs_unregister_filter(void *filter)
 
 	wait_event_interruptible(flt->f_wait, atomic_read(&flt->f_del));
 
+	kobject_unregister(&flt->f_kobj);
 	kfree(flt->f_name);
 	kfree(flt);
 
