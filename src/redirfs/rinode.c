@@ -535,6 +535,103 @@ exit:
 	return rv;
 }
 
+int rfs_symlink(struct inode *dir, struct dentry *dentry, const char *oldname)
+{
+	struct rinode *parent = NULL;
+	struct rpath *path = NULL;
+	struct rdentry *rdentry = NULL;
+	struct rinode *rinode = NULL;
+	struct rpath *path_set = NULL;
+	struct chain *chain_set = NULL;
+	struct ops *ops_set = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	int rv = 0;
+	int cnt = 0;
+
+	parent = rinode_find(dir);
+	if (!parent) {
+		if (dir->i_op && dir->i_op->symlink)
+			return dir->i_op->symlink(dir, dentry, oldname);
+	}
+
+	spin_lock(&parent->ri_lock);
+	path_set = path_get(parent->ri_path_set);
+	chain_set = chain_get(parent->ri_chain_set);
+	ops_set = ops_get(parent->ri_ops_set);
+	path = path_get(parent->ri_path);
+	chain = chain_get(parent->ri_chain);
+	spin_unlock(&parent->ri_lock);
+
+	args.args.i_symlink.dir = dir;
+	args.args.i_symlink.dentry = dentry;
+	args.args.i_symlink.oldname = oldname;
+
+	if (S_ISDIR(dir->i_mode))
+		args.type.id = RFS_DIR_IOP_LINK;
+	else
+		BUG();
+
+	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+
+		if (parent->ri_op_old && parent->ri_op_old->link)
+			rv = parent->ri_op_old->symlink(args.args.i_symlink.dir, args.args.i_symlink.dentry, args.args.i_symlink.oldname);
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(chain, NULL, &args, &cnt);
+
+	rv = args.retv.rv_int;
+
+	if (!chain_set)
+		goto exit;
+
+	rdentry = rdentry_add(dentry);
+	if (IS_ERR(rdentry)) {
+		BUG();
+		goto exit;
+	}
+
+	spin_lock(&rdentry->rd_lock);
+	path_put(rdentry->rd_path);
+	chain_put(rdentry->rd_chain);
+	ops_put(rdentry->rd_ops);
+	rdentry->rd_path = path_get(path_set);
+	rdentry->rd_chain = chain_get(chain_set);
+	rdentry->rd_ops = ops_get(ops_set);
+	spin_unlock(&rdentry->rd_lock);
+	rdentry_set_ops(rdentry, ops_set);
+
+	rinode = rdentry->rd_rinode;
+	if (rinode) {
+		spin_lock(&rinode->ri_lock);
+		path_put(rinode->ri_path_set);
+		chain_put(rinode->ri_chain_set);
+		ops_put(rinode->ri_ops_set);
+		path_put(rinode->ri_path);
+		chain_put(rinode->ri_chain);
+		rinode->ri_path_set = path_get(path_set);
+		rinode->ri_chain_set = chain_get(chain_set);
+		rinode->ri_ops_set = ops_get(ops_set);
+		rinode->ri_path = path_get(path_set);
+		rinode->ri_chain = chain_get(chain_set);
+		spin_unlock(&rinode->ri_lock);
+		rinode_set_ops(rinode, ops_set);
+	}
+
+exit:
+	rdentry_put(rdentry);
+	rinode_put(parent);
+	path_put(path_set);
+	chain_put(chain_set);
+	ops_put(ops_set);
+	path_put(path);
+	chain_put(chain);
+
+	return rv;
+}
+
 struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nd)
 {
 	struct rinode *parent = NULL;
@@ -884,6 +981,7 @@ static void rinode_set_dir_ops(struct rinode *rinode, char *ops)
 	rinode->ri_op_new.create = rfs_create;
 	rinode->ri_op_new.link = rfs_link;
 	rinode->ri_op_new.mknod = rfs_mknod;
+	rinode->ri_op_new.symlink = rfs_symlink;
 }
 
 static void rinode_set_chr_ops(struct rinode *rinode, char *ops)
