@@ -483,16 +483,16 @@ static int path_flt_info_cb(struct rpath *path, void *data)
 	struct rpath_proc_data *info = (struct rpath_proc_data *)data;
 	
 	if (chain_find_flt(path->p_inchain, info->flt) != -1) 
-		info->len += sprintf(info->buf + info->len, "1:1:%s&", path->p_path);
+		info->len += sprintf(info->buf + info->len, "1:1:%s%c", path->p_path, '\0');
 
 	if (chain_find_flt(path->p_exchain, info->flt) != -1) 
-		info->len += sprintf(info->buf + info->len, "1:0:%s&", path->p_path);
+		info->len += sprintf(info->buf + info->len, "1:0:%s%c", path->p_path, '\0');
 
 	if (chain_find_flt(path->p_inchain_local, info->flt) != -1) 
-		info->len += sprintf(info->buf + info->len, "0:1:%s&", path->p_path);
+		info->len += sprintf(info->buf + info->len, "0:1:%s%c", path->p_path, '\0');
 
 	if (chain_find_flt(path->p_exchain_local, info->flt) != -1) 
-		info->len += sprintf(info->buf + info->len, "0:0:%s&", path->p_path);
+		info->len += sprintf(info->buf + info->len, "0:0:%s%c", path->p_path, '\0');
 
 	return 0;
 }               
