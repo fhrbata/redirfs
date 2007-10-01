@@ -248,7 +248,6 @@ void path_rem(struct rpath *path)
 	}
 
 	list_del(&path->p_sibpath);
-	path_put(parent);
 	path_put(path);
 }
 
