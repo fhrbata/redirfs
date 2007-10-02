@@ -568,7 +568,7 @@ int rfs_symlink(struct inode *dir, struct dentry *dentry, const char *oldname)
 	args.args.i_symlink.oldname = oldname;
 
 	if (S_ISDIR(dir->i_mode))
-		args.type.id = RFS_DIR_IOP_LINK;
+		args.type.id = RFS_DIR_IOP_SYMLINK;
 	else
 		BUG();
 

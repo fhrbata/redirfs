@@ -571,7 +571,7 @@ int rfs_get_filename(struct dentry *dentry, char *buffer, int size)
 
 	/* NOTE: 2007-04-22 Frantisek Hrbata
 	 *
-	 * Maybe for better performance we can use use some 
+	 * Maybe for better performance we can use some 
 	 * kind of name cache here before going throught dcache.
 	 */
 
