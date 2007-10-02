@@ -1,0 +1,33 @@
+Operations supported by the RedirFS Framework
+---------------------------------------------
+
+Here is a list of operations which are supported by the RedirFS Framework. For
+now there are only few but I hope that the list will expand in near future.
+
+    * REDIRFS_I_REG - inode operations of regular file
+          * REDIRFS_IOP_PERMISSION 
+
+
+    * REDIRFS_I_DIR - inode operations of directory
+          * REDIRFS_IOP_CREATE
+          * REDIRFS_IOP_LOOKUP
+          * REDIRFS_IOP_UNLINK
+          * REDIRFS_IOP_MKDIR
+          * REDIRFS_IOP_RMDIR 
+
+
+    * REDIRFS_F_REG - file operations of regular file
+          * REDIRFS_FOP_OPEN
+          * REDIRFS_FOP_FLUSH
+          * REDIRFS_FOP_RELEASE 
+
+
+    * REDIRFS_F_DIR - file operations of directory
+          * REDIRFS_FOP_OPEN
+          * REDIRFS_FOP_RELEASE 
+
+
+    * REDIRFS_DENTRY - dentry operations
+          * REDIRFS_DOP_IPUT 
+
+
