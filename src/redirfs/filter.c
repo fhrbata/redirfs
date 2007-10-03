@@ -312,6 +312,7 @@ int flt_rem_local(struct rpath *path, struct filter *flt)
 	struct rpath *path_go = path;
 	struct rpath *path_cmp = path;
 	struct dcache_data_cb data_cb;
+	int inch_modified = 0;
 	struct ops *ops = NULL;
 	int aux = 0;
 	int retv;
@@ -335,6 +336,7 @@ int flt_rem_local(struct rpath *path, struct filter *flt)
 	if (chain_find_flt(path->p_inchain_local, flt) != -1 &&
 	    chain_find_flt(path->p_exchain_local, flt) == -1) {
 
+		inch_modified = 1;
 		inchain_local = chain_rem_flt(path->p_inchain_local, flt);
 		if (IS_ERR(inchain_local))
 			return PTR_ERR(inchain_local);
@@ -358,7 +360,7 @@ int flt_rem_local(struct rpath *path, struct filter *flt)
 			return PTR_ERR(exchain_local);
 
 		chain_put(path->p_exchain_local);
-		path->p_exchain = exchain_local;
+		path->p_exchain_local = exchain_local;
 	}
 
 	if (path_cmp) {
@@ -387,9 +389,8 @@ int flt_rem_local(struct rpath *path, struct filter *flt)
 			remove = 1;
 	}
 
-	if (!inchain_local && (path->p_flags & RFS_PATH_SINGLE))
+	if (!inch_modified && (path->p_flags & RFS_PATH_SINGLE))
 		return 0;
-
 
 	if (!remove) {
 		if (path->p_flags & RFS_PATH_SINGLE) {
@@ -397,7 +398,7 @@ int flt_rem_local(struct rpath *path, struct filter *flt)
 			if (IS_ERR(ops))
 				return PTR_ERR(ops);
 
-			chain_get_ops(path_go->p_inchain, ops->o_ops);
+			chain_get_ops(path_go->p_inchain_local, ops->o_ops);
 			ops_put(path_go->p_ops_local);
 			path_go->p_ops_local = ops;
 		}
