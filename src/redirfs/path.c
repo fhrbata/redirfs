@@ -127,7 +127,6 @@ void path_put(struct rpath *path)
 		return;
 
 	path_put(path->p_parent);
-	dput(path->p_dentry);
 	kfree(path->p_path);
 	kfree(path);
 }
@@ -232,6 +231,7 @@ void path_rem(struct rpath *path)
 	struct list_head *dst;
 	struct rpath *loop;
 	struct rpath *parent;
+	struct dentry *dentry;
 
 	parent = path->p_parent;
 
@@ -248,6 +248,14 @@ void path_rem(struct rpath *path)
 	}
 
 	list_del(&path->p_sibpath);
+
+	spin_lock(&path->p_lock);
+	dentry = path->p_dentry;
+	path->p_dentry = NULL;
+	spin_unlock(&path->p_lock);
+
+	dput(dentry);
+
 	path_put(path);
 }
 
@@ -510,15 +518,26 @@ int path_flt_info(struct filter *flt, char *buf, int size)
 int path_dpath(struct rdentry *rdentry, struct rpath *path, char *buffer, int size)
 {
 	struct dentry *dentry;
+	struct dentry *path_dentry = NULL;
 	char *end;
 	int len;
+
+	spin_lock(&path->p_lock);
+	if (path->p_dentry)
+		path_dentry = dget(path->p_dentry);
+	spin_unlock(&path->p_lock);
+
+	if (!path_dentry)
+		return -ENODATA;
 
 	dentry = rdentry->rd_dentry;
 	end = buffer + size;
 	len = size;
 
-	if (size < 2)
+	if (size < 2) {
+		dput(path_dentry);
 		return -ENAMETOOLONG;
+	}
 
 	*--end = '\0';
 	size--;
@@ -530,6 +549,7 @@ int path_dpath(struct rdentry *rdentry, struct rpath *path, char *buffer, int si
 		size -= dentry->d_name.len + 1; /* dentry name + slash */
 		if (size < 0) {
 			spin_unlock(&dcache_lock);
+			dput(path_dentry);
 			return -ENAMETOOLONG;
 		}
 		memcpy(end, dentry->d_name.name, dentry->d_name.len);
@@ -541,6 +561,7 @@ int path_dpath(struct rdentry *rdentry, struct rpath *path, char *buffer, int si
 	size -= path->p_len;
 	if (size < 0) {
 		spin_unlock(&dcache_lock);
+		dput(path_dentry);
 		return -ENAMETOOLONG;
 	}
 
@@ -548,6 +569,8 @@ int path_dpath(struct rdentry *rdentry, struct rpath *path, char *buffer, int si
 	memmove(buffer, end, len - size);
 
 	spin_unlock(&dcache_lock);
+
+	dput(path_dentry);
 
 	return 0;
 }
