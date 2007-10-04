@@ -40,16 +40,20 @@ static ssize_t rfs_active_store(rfs_filter filter, struct rfs_flt_attribute *att
 	int act;
 	int rv;
 
-	if (!flt->f_ctl_cb)
-		return -EINVAL;
+	if (!flt->f_ctl_cb) {
+		printk(KERN_INFO "redirfs: filter '%s' does not support configuration via sysfs interface\n", flt->f_name);
+		return size;
+	}
 
-	if (sscanf(buf, "%d", &act) != 1)
-		return -EINVAL;
+	if (sscanf(buf, "%d", &act) != 1) {
+		printk(KERN_ERR "redirfs: %s of filter '%s' failed(malformed input)\n", act ? "activation" : "deactivation", flt->f_name);
+		return size;
+	}
 
 	ctl.id = act ? RFS_CTL_ACTIVATE : RFS_CTL_DEACTIVATE;
 
 	if ((rv = flt->f_ctl_cb(&ctl)))
-		return rv;
+		printk(KERN_ERR "redirfs: %s of filter '%s' failed(%d)\n", act ? "activation" : "deactivation", flt->f_name, rv);
 
 	return size;
 }
@@ -70,11 +74,15 @@ static ssize_t rfs_paths_store(rfs_filter filter, struct rfs_flt_attribute *attr
 	struct rfs_ctl ctl;
 	int rv;
 
-	if (!flt->f_ctl_cb)
-		return -EINVAL;
+	if (!flt->f_ctl_cb) {
+		printk(KERN_INFO "redirfs: filter '%s' does not support configuration via sysfs interface\n", flt->f_name);
+		return size;
+	}
 
-	if (sscanf(buf, "%d:%d:%s", &subtree, &incl, path) != 3)
-		return -EINVAL;
+	if (sscanf(buf, "%d:%d:%s", &subtree, &incl, path) != 3) {
+		printk(KERN_ERR "redirfs: setting path for filter '%s' failed(malformed input)\n", flt->f_name);
+		return size;
+	}
 
 	ctl.id = RFS_CTL_SETPATH;
 	ctl.data.path_info.path = path;
@@ -82,7 +90,7 @@ static ssize_t rfs_paths_store(rfs_filter filter, struct rfs_flt_attribute *attr
 	ctl.data.path_info.flags |= subtree ? RFS_PATH_SUBTREE : RFS_PATH_SINGLE;
 
 	if ((rv = flt->f_ctl_cb(&ctl)))
-		return rv;
+		printk(KERN_ERR "redirfs: setting path for filter '%s' failed(%d)\n", flt->f_name, rv);
 
 	return size;
 }
