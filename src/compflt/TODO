@@ -1,4 +1,6 @@
 high:
+- update to the new redirfs private data handling
+- add cache deinitializations in compflt_init when further initialization fail
 
 medium:
 - mmap support
@@ -13,4 +15,4 @@ low:
 - renaming cflt_file to cflt_inode makes more sense (the data is inode-specific)
 
 feature:
-- use configfs for setting methods/block_size/etc.
+- add stats directory to sysfs interface

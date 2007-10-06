@@ -1,6 +1,7 @@
 #include <linux/crypto.h>
 #include <linux/list.h>
 #include <linux/fs.h>
+#include <linux/sched.h>
 #include "../redirfs/redirfs.h"
 
 #define CFLT_MAGIC "\x06\x10\x19\x82"
@@ -63,10 +64,8 @@ void cflt_file_cache_deinit(void);
 struct cflt_file *cflt_file_find(struct inode*);
 int cflt_file_read(struct file*, struct cflt_file*);
 void cflt_file_write(struct file*, struct cflt_file*);
-int cflt_file_blksize_set(unsigned int);
-int cflt_file_proc_blksize(char*, int);
-
-int cflt_file_proc_stat(char*, int);
+int cflt_file_blksize_set(unsigned long int);
+int cflt_file_blksize_get(char*, int);
 
 // block.c
 int cflt_block_read_headers(struct file*, struct cflt_file*);
@@ -92,12 +91,17 @@ struct crypto_comp *cflt_comp_init(unsigned int);
 void cflt_comp_deinit(struct crypto_comp*);
 int cflt_decomp_block(struct crypto_comp*, struct cflt_block*);
 int cflt_comp_block(struct crypto_comp*, struct cflt_block*);
-int cflt_comp_method_set(char*);
-int cflt_comp_proc_method(char*, int);
+int cflt_comp_method_set(const char*);
+int cflt_comp_method_get(char*, int);
 
+/*
 // proc.c
 int cflt_proc_init(void);
 void cflt_proc_deinit(void);
+*/
+// sysfs.c
+int cflt_sysfs_init(void);
+void cflt_sysfs_deinit(void);
 
 // debug.c
 #ifdef CFLT_DEBUG

@@ -78,7 +78,7 @@ int cflt_comp_block(struct crypto_comp *tfm, struct cflt_block *blk)
         return rv;
 }
 
-int cflt_comp_proc_method(char* buf, int bsize)
+int cflt_comp_method_get(char* buf, int bsize)
 {
         int len = 0;
 
@@ -89,7 +89,7 @@ int cflt_comp_proc_method(char* buf, int bsize)
         return len;
 }
 
-int cflt_comp_method_set(char* buf)
+int cflt_comp_method_set(const char* buf)
 {
         char **p = cflt_method_known;
         int i = 1;

@@ -276,20 +276,20 @@ void cflt_file_put(struct cflt_file *fh)
 }
 
 
-int cflt_file_blksize_set(unsigned int new)
+int cflt_file_blksize_set(unsigned long int new)
 {
         if (new >= CFLT_BLKSIZE_MIN && new <= CFLT_BLKSIZE_MAX && !(new%CFLT_BLKSIZE_MOD)) {
                 cflt_blksize = new;
-                printk(KERN_INFO "compflt: block size set to %i bytes\n", new);
+                printk(KERN_INFO "compflt: block size set to %li bytes\n", new);
         }
         else {
-                printk(KERN_INFO "compflt: block size %i is out of the permitted range\n", new);
+                printk(KERN_INFO "compflt: block size %li is out of the permitted range\n", new);
         }
 
         return 0;
 }
 
-int cflt_file_proc_blksize(char* buf, int bsize)
+int cflt_file_blksize_get(char* buf, int bsize)
 {
         int len = 0;
         len = sprintf(buf, "%i\n", cflt_blksize);
@@ -518,32 +518,4 @@ void cflt_file_write(struct file *f, struct cflt_file *fh)
         cflt_orig_write(f, buf, sizeof(buf), &off);
 
         atomic_set(&fh->dirty, 0);
-}
-
-int cflt_file_proc_stat(char *buf, int bsize)
-{
-        int len = 0;
-        struct cflt_file *fh;
-        struct cflt_block *blk;
-        long u, c, overhead;
-
-        if (len + 68 > bsize)
-                return len;
-        len += sprintf(buf, "%-10s%-12s%-10s%-12s%-12s%-11s\n", "ino", "alg", "blksize", "comp", "ohead", "decomp");
-
-        list_for_each_entry_reverse(fh, &cflt_file_list, all) {
-                if (len + 68 > bsize)
-                        return len;
-
-                u = c = 0;
-                overhead = CFLT_FH_SIZE;
-                list_for_each_entry(blk, &fh->blks, file) {
-                        overhead += CFLT_BH_SIZE;
-                        u += blk->size_u;
-                        c += blk->size_c;
-                }
-                len += sprintf(buf+len, "%-10li%-12s%-10i%-12li%-12li%-11li\n", fh->inode->i_ino, cflt_method_known[fh->method], fh->blksize, c, overhead, u);
-        }
-
-        return len;
 }

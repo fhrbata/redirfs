@@ -194,10 +194,10 @@ static struct rfs_op_info ops_info[] = {
 
 static int __init compflt_init(void)
 {
-        enum rfs_err err;
+        int err;
 
         err = rfs_register_filter(&compflt, &flt_info);
-        if (err != RFS_ERR_OK) {
+        if (err) {
                 printk(KERN_ERR "compflt: registration failed: error %d\n", err);
                 goto error;
         }
@@ -214,26 +214,26 @@ static int __init compflt_init(void)
                 goto error;
         }
 
-        err = cflt_proc_init();
+        err = cflt_sysfs_init();
         if (err) {
-                printk(KERN_ERR "compflt: /proc initialization failed: error %d\n", err);
+                printk(KERN_ERR "compflt: /sys initialization failed: error %d\n", err);
                 goto error;
         }
 
         err = rfs_set_operations(compflt, ops_info);
-        if (err != RFS_ERR_OK) {
+        if (err) {
                 printk(KERN_ERR "compflt: set operations failed: error %d\n", err);
                 goto error;
         }
 
         err = rfs_set_path(compflt, &path_info);
-        if (err != RFS_ERR_OK) {
+        if (err) {
                 printk(KERN_ERR "compflt: include path failed: error %d\n", err);
                 goto error;
         }
 
         err = rfs_activate_filter(compflt);
-        if (err != RFS_ERR_OK) {
+        if (err) {
                 printk(KERN_ERR "compflt: filter activation failed: error %d\n", err);
                 goto error;
         }
@@ -259,13 +259,13 @@ error:
 
 static void __exit compflt_exit(void)
 {
-        enum rfs_err err;
+        int err;
 
 	err = rfs_unregister_filter(compflt);
-	if (err != RFS_ERR_OK)
+	if (err)
                 printk(KERN_ERR "compflt: unregistration failed: error %d\n", err);
 
-        cflt_proc_deinit();
+        cflt_sysfs_deinit();
         cflt_file_cache_deinit();
         cflt_block_cache_deinit();
 }

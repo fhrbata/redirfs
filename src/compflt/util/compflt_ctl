@@ -1,6 +1,6 @@
 #!/bin/sh
 
-root_dir=/proc/fs/compflt
+root_dir=/sys/fs/redirfs/filters/compflt/settings
 method_f=method
 bsize_f=blksize
 
