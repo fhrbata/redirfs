@@ -17,6 +17,8 @@
 #include <asm/uaccess.h>
 #include <linux/device.h>
 #include <linux/sched.h>
+#include <linux/mm_types.h>
+#include <linux/mount.h>
 #include "redirfs.h"
 #include "debug.h"
 
@@ -84,6 +86,7 @@ struct rpath {
 	int p_len;
 	int p_flags;
 	struct dentry *p_dentry;
+	struct vfsmount *p_mnt;
 	unsigned long long p_count;
 	spinlock_t p_lock;
 	struct rpath *p_parent;
@@ -193,6 +196,8 @@ void rinode_set_ops(struct rinode *rinode, struct ops *ops);
 struct dentry *rfs_lookup(struct inode *inode, struct dentry *dentry, struct nameidata *nd);
 
 struct context {
+	struct list_head data_list;
+	int idx;
 };
 
 struct rfs_priv_data *rfs_find_data(struct list_head *head, struct filter *flt);
@@ -204,8 +209,8 @@ int rfs_set_path_cb(struct dentry *dentry, void *data);
 int rfs_set_ops(struct dentry *dentry, struct rpath *path);
 int rfs_set_ops_cb(struct dentry *dentry, void *data);
 int rfs_walk_dcache(struct dentry *root, int (*)(struct dentry *, void *), void *, int (*)(struct dentry *, void *), void *);
-int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_args *args, int *cnt);
-int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_args *args, int *cnt);
+int rfs_precall_flts(int idx_start, struct chain *chain, struct context *cont, struct rfs_args *args);
+void rfs_postcall_flts(int idx_start, struct chain *chain, struct context *cont, struct rfs_args *args);
 
 int rfs_sysfs_init(void);
 void rfs_sysfs_destroy(void);

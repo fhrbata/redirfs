@@ -123,7 +123,6 @@ static inline void rinode_del_rcu(struct rcu_head *head)
 {
 	struct rinode *rinode = NULL;
 
-	
 	rinode = container_of(head, struct rinode, ri_rcu);
 	rinode_put(rinode);
 }
@@ -131,7 +130,6 @@ static inline void rinode_del_rcu(struct rcu_head *head)
 void rinode_del(struct inode *inode)
 {
 	struct rinode *rinode = NULL;
-
 
 	spin_lock(&inode->i_lock);
 
@@ -147,8 +145,12 @@ void rinode_del(struct inode *inode)
 		return;
 	}
 
-	inode->i_fop = rinode->ri_fop_old;
-	inode->i_mapping->a_ops = rinode->ri_aop_old;
+	if (!S_ISSOCK(inode->i_mode))
+		inode->i_fop = rinode->ri_fop_old;
+
+	if (S_ISREG(inode->i_mode))
+		inode->i_mapping->a_ops = rinode->ri_aop_old;
+
 	rcu_assign_pointer(inode->i_op, rinode->ri_op_old);
 
 	rinode_put(rinode);
@@ -163,13 +165,15 @@ int rfs_unlink(struct inode *dir, struct dentry *dentry)
 	struct rinode *rinode = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
+	struct context cont;
 	int rv = 0;
-	int cnt = 0;
 
 	rinode = rinode_find(dir);
 	if (!rinode) {
 		if (dir->i_op && dir->i_op->unlink)
 			 return dir->i_op->unlink(dir, dentry);
+
+		return -EPERM;
 	}
 
 	spin_lock(&rinode->ri_lock);
@@ -179,23 +183,29 @@ int rfs_unlink(struct inode *dir, struct dentry *dentry)
 	args.args.i_unlink.dir = dir;
 	args.args.i_unlink.dentry = dentry;
 
+	INIT_LIST_HEAD(&cont.data_list);
+
 	if (S_ISDIR(dir->i_mode))
 		args.type.id = RFS_DIR_IOP_UNLINK;
 	else
 		BUG();
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 		if (rinode->ri_op_old && rinode->ri_op_old->unlink)
 			rv = rinode->ri_op_old->unlink(args.args.i_unlink.dir, args.args.i_unlink.dentry);
+		else
+			rv = -EPERM;
 
 		args.retv.rv_int = rv;
 	}
 
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rfs_postcall_flts(0, chain, &cont, &args);
 	rv = args.retv.rv_int;
 
 	chain_put(chain);
 	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
 
 	return rv;
 }
@@ -205,13 +215,15 @@ int rfs_rmdir(struct inode *dir, struct dentry *dentry)
 	struct rinode *rinode = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
+	struct context cont;
 	int rv = 0;
-	int cnt = 0;
 
 	rinode = rinode_find(dir);
 	if (!rinode) {
 		if (dir->i_op && dir->i_op->rmdir)
 			 return dir->i_op->rmdir(dir, dentry);
+
+		return -EPERM;
 	}
 
 	spin_lock(&rinode->ri_lock);
@@ -221,23 +233,29 @@ int rfs_rmdir(struct inode *dir, struct dentry *dentry)
 	args.args.i_rmdir.dir = dir;
 	args.args.i_rmdir.dentry = dentry;
 
+	INIT_LIST_HEAD(&cont.data_list);
+
 	if (S_ISDIR(dir->i_mode))
 		args.type.id = RFS_DIR_IOP_RMDIR;
 	else
 		BUG();
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 		if (rinode->ri_op_old && rinode->ri_op_old->rmdir)
 			rv = rinode->ri_op_old->rmdir(args.args.i_rmdir.dir, args.args.i_rmdir.dentry);
+		else
+			rv = -EPERM;
 
 		args.retv.rv_int = rv;
 	}
 
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rfs_postcall_flts(0, chain, &cont, &args);
 	rv = args.retv.rv_int;
 
 	chain_put(chain);
 	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
 
 	return rv;
 }
@@ -253,13 +271,15 @@ int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	struct ops *ops_set = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
+	struct context cont;
 	int rv = 0;
-	int cnt = 0;
 
 	parent = rinode_find(dir);
 	if (!parent) {
 		if (dir->i_op && dir->i_op->mkdir)
 			 return dir->i_op->mkdir(dir, dentry, mode);
+
+		return -EPERM;
 	}
 
 	spin_lock(&parent->ri_lock);
@@ -274,20 +294,24 @@ int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	args.args.i_mkdir.dentry = dentry;
 	args.args.i_mkdir.mode = mode;
 
+	INIT_LIST_HEAD(&cont.data_list);
+
 	if (S_ISDIR(dir->i_mode))
 		args.type.id = RFS_DIR_IOP_MKDIR;
 	else
 		BUG();
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 
 		if (parent->ri_op_old && parent->ri_op_old->mkdir)
 			rv = parent->ri_op_old->mkdir(args.args.i_mkdir.dir, args.args.i_mkdir.dentry, args.args.i_mkdir.mode);
+		else
+			rv = -EPERM;
 
 		args.retv.rv_int = rv;
 	}
 
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rfs_postcall_flts(0, chain, &cont, &args);
 	
 	rv = args.retv.rv_int;
 
@@ -336,6 +360,8 @@ exit:
 	path_put(path);
 	chain_put(chain);
 
+	BUG_ON(!list_empty(&cont.data_list));
+
 	return rv;
 }
 
@@ -350,13 +376,15 @@ int rfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameid
 	struct ops *ops_set = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
+	struct context cont;
 	int rv = 0;
-	int cnt = 0;
 
 	parent = rinode_find(dir);
 	if (!parent) {
 		if (dir->i_op && dir->i_op->create)
 			return dir->i_op->create(dir, dentry, mode, nd);
+
+		return -EACCES;
 	}
 
 	spin_lock(&parent->ri_lock);
@@ -372,20 +400,24 @@ int rfs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameid
 	args.args.i_create.mode = mode;
 	args.args.i_create.nd = nd;
 
+	INIT_LIST_HEAD(&cont.data_list);
+
 	if (S_ISDIR(dir->i_mode))
 		args.type.id = RFS_DIR_IOP_CREATE;
 	else
 		BUG();
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 
 		if (parent->ri_op_old && parent->ri_op_old->create)
 			rv = parent->ri_op_old->create(args.args.i_create.dir, args.args.i_create.dentry, args.args.i_create.mode, args.args.i_create.nd);
+		else
+			rv = -EACCES;
 
 		args.retv.rv_int = rv;
 	}
 
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rfs_postcall_flts(0, chain, &cont, &args);
 
 	rv = args.retv.rv_int;
 
@@ -433,6 +465,8 @@ exit:
 	ops_put(ops_set);
 	path_put(path);
 	chain_put(chain);
+
+	BUG_ON(!list_empty(&cont.data_list));
 
 	return rv;
 }
@@ -449,13 +483,15 @@ int rfs_link(struct dentry *old_dentry,
 	struct ops *ops_set = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
+	struct context cont;
 	int rv = 0;
-	int cnt = 0;
 
 	parent = rinode_find(dir);
 	if (!parent) {
 		if (dir->i_op && dir->i_op->link)
 			return dir->i_op->link(old_dentry, dir, dentry);
+
+		return -EPERM;
 	}
 
 	spin_lock(&parent->ri_lock);
@@ -470,20 +506,24 @@ int rfs_link(struct dentry *old_dentry,
 	args.args.i_link.dir = dir;
 	args.args.i_link.dentry = dentry;
 
+	INIT_LIST_HEAD(&cont.data_list);
+
 	if (S_ISDIR(dir->i_mode))
 		args.type.id = RFS_DIR_IOP_LINK;
 	else
 		BUG();
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 
 		if (parent->ri_op_old && parent->ri_op_old->link)
 			rv = parent->ri_op_old->link(args.args.i_link.old_dentry, args.args.i_link.dir, args.args.i_link.dentry);
+		else
+			rv = -EPERM;
 
 		args.retv.rv_int = rv;
 	}
 
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rfs_postcall_flts(0, chain, &cont, &args);
 
 	rv = args.retv.rv_int;
 
@@ -531,6 +571,8 @@ exit:
 	ops_put(ops_set);
 	path_put(path);
 	chain_put(chain);
+
+	BUG_ON(!list_empty(&cont.data_list));
 
 	return rv;
 }
@@ -546,13 +588,15 @@ int rfs_symlink(struct inode *dir, struct dentry *dentry, const char *oldname)
 	struct ops *ops_set = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
+	struct context cont;
 	int rv = 0;
-	int cnt = 0;
 
 	parent = rinode_find(dir);
 	if (!parent) {
 		if (dir->i_op && dir->i_op->symlink)
 			return dir->i_op->symlink(dir, dentry, oldname);
+
+		return -EPERM;
 	}
 
 	spin_lock(&parent->ri_lock);
@@ -567,20 +611,24 @@ int rfs_symlink(struct inode *dir, struct dentry *dentry, const char *oldname)
 	args.args.i_symlink.dentry = dentry;
 	args.args.i_symlink.oldname = oldname;
 
+	INIT_LIST_HEAD(&cont.data_list);
+
 	if (S_ISDIR(dir->i_mode))
 		args.type.id = RFS_DIR_IOP_SYMLINK;
 	else
 		BUG();
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 
 		if (parent->ri_op_old && parent->ri_op_old->link)
 			rv = parent->ri_op_old->symlink(args.args.i_symlink.dir, args.args.i_symlink.dentry, args.args.i_symlink.oldname);
+		else
+			rv = -EPERM;
 
 		args.retv.rv_int = rv;
 	}
 
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rfs_postcall_flts(0, chain, &cont, &args);
 
 	rv = args.retv.rv_int;
 
@@ -628,6 +676,8 @@ exit:
 	ops_put(ops_set);
 	path_put(path);
 	chain_put(chain);
+
+	BUG_ON(!list_empty(&cont.data_list));
 
 	return rv;
 }
@@ -644,12 +694,14 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct namei
 	struct chain *chain = NULL;
 	struct rfs_args args;
 	struct dentry *rv = NULL;
-	int cnt = 0;
+	struct context cont;
 
 	parent = rinode_find(dir);
 	if (!parent) {
 		if (dir->i_op && dir->i_op->lookup)
 			return dir->i_op->lookup(dir, dentry, nd);
+
+		return ERR_PTR(-ENOSYS);
 	}
 
 	spin_lock(&parent->ri_lock);
@@ -664,20 +716,24 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct namei
 	args.args.i_lookup.dentry = dentry;
 	args.args.i_lookup.nd = nd;
 
+	INIT_LIST_HEAD(&cont.data_list);
+
 	if (S_ISDIR(dir->i_mode))
 		args.type.id = RFS_DIR_IOP_LOOKUP;
 	else
 		BUG();
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 
 		if (parent->ri_op_old && parent->ri_op_old->lookup)
 			rv = parent->ri_op_old->lookup(args.args.i_lookup.dir, args.args.i_lookup.dentry, args.args.i_lookup.nd);
+		else
+			rv = ERR_PTR(-ENOSYS);
 
 		args.retv.rv_dentry = rv;
 	}
 
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rfs_postcall_flts(0, chain, &cont, &args);
 
 	rv = args.retv.rv_dentry;
 
@@ -726,6 +782,8 @@ exit:
 	path_put(path);
 	chain_put(chain);
 
+	BUG_ON(!list_empty(&cont.data_list));
+
 	return rv;
 }
 
@@ -740,13 +798,15 @@ int rfs_mknod(struct inode * dir, struct dentry *dentry, int mode, dev_t rdev)
 	struct ops *ops_set = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
+	struct context cont;
 	int rv = 0;
-	int cnt = 0;
 
 	parent = rinode_find(dir);
 	if (!parent) {
 		if (dir->i_op && dir->i_op->mknod)
 			return dir->i_op->mknod(dir, dentry, mode, rdev);
+		
+		return -EPERM;
 	}
 
 	spin_lock(&parent->ri_lock);
@@ -762,20 +822,24 @@ int rfs_mknod(struct inode * dir, struct dentry *dentry, int mode, dev_t rdev)
 	args.args.i_mknod.mode = mode;
 	args.args.i_mknod.rdev = rdev;
 
+	INIT_LIST_HEAD(&cont.data_list);
+
 	if (S_ISDIR(dir->i_mode))
 		args.type.id = RFS_DIR_IOP_MKNOD;
 	else
 		BUG();
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 
 		if (parent->ri_op_old && parent->ri_op_old->mknod)
 			rv = parent->ri_op_old->mknod(args.args.i_mknod.dir, args.args.i_mknod.dentry, args.args.i_mknod.mode, args.args.i_mknod.rdev);
+		else
+			rv = -EPERM;
 
 		args.retv.rv_int = rv;
 	}
 
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rfs_postcall_flts(0, chain, &cont, &args);
 
 	rv = args.retv.rv_int;
 
@@ -824,18 +888,19 @@ exit:
 	path_put(path);
 	chain_put(chain);
 
+	BUG_ON(!list_empty(&cont.data_list));
+
 	return rv;
 }
 
 int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 {
 	struct rinode *rinode = NULL;
-	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
+	struct context cont;
 	int submask = mask & ~MAY_APPEND;
 	int rv = 0;
-	int cnt = 0;
 
 	rinode = rinode_find(inode);
 	if (!rinode) {
@@ -846,13 +911,14 @@ int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 	}
 
 	spin_lock(&rinode->ri_lock);
-	path = path_get(rinode->ri_path);
 	chain = chain_get(rinode->ri_chain);
 	spin_unlock(&rinode->ri_lock);
 
 	args.args.i_permission.inode = inode;
 	args.args.i_permission.mask = mask;
 	args.args.i_permission.nd = nd;
+
+	INIT_LIST_HEAD(&cont.data_list);
 
 	if (S_ISREG(inode->i_mode))
 		args.type.id = RFS_REG_IOP_PERMISSION;
@@ -869,7 +935,7 @@ int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 	else 
 		args.type.id = RFS_SOCK_IOP_PERMISSION;
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 		if (rinode->ri_op_old && rinode->ri_op_old->permission)
 			rv = rinode->ri_op_old->permission(args.args.i_permission.inode, args.args.i_permission.mask, args.args.i_permission.nd);
 		else {
@@ -880,12 +946,13 @@ int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 		args.retv.rv_int = rv;
 	}
 
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rfs_postcall_flts(0, chain, &cont, &args);
 	rv = args.retv.rv_int;
 
 	rinode_put(rinode);
-	path_put(path);
 	chain_put(chain);
+
+	BUG_ON(!list_empty(&cont.data_list));
 
 	return rv;
 }
@@ -896,13 +963,15 @@ int rfs_setattr(struct dentry *dentry, struct iattr *iattr)
 	struct rinode *rinode = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
+	struct context cont;
 	int rv = 0;
-	int cnt = 0;
 
 	rinode = rinode_find(inode);
 	if (!rinode) {
 		if (inode && inode->i_op && inode->i_op->setattr)
 			 return inode->i_op->setattr(dentry, iattr);
+
+		return rv;
 	}
 
 	spin_lock(&rinode->ri_lock);
@@ -911,6 +980,9 @@ int rfs_setattr(struct dentry *dentry, struct iattr *iattr)
 
 	args.args.i_setattr.dentry = dentry;
 	args.args.i_setattr.iattr = iattr;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
 	if (S_ISREG(inode->i_mode))
 		args.type.id = RFS_REG_IOP_SETATTR;
 	else if (S_ISDIR(inode->i_mode))
@@ -926,20 +998,169 @@ int rfs_setattr(struct dentry *dentry, struct iattr *iattr)
 	else 
 		args.type.id = RFS_SOCK_IOP_SETATTR;
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 		if (rinode->ri_op_old && rinode->ri_op_old->setattr)
 			rv = rinode->ri_op_old->setattr(args.args.i_setattr.dentry, args.args.i_setattr.iattr);
 
 		args.retv.rv_int = rv;
 	}
 
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rfs_postcall_flts(0, chain, &cont, &args);
 	rv = args.retv.rv_int;
 
 	chain_put(chain);
 	rinode_put(rinode);
 
+	BUG_ON(!list_empty(&cont.data_list));
+
 	return rv;
+}
+
+static int rfs_readpage_call(struct filter *flt, struct file *file, struct page *page)
+{
+	struct inode *inode = page->mapping->host;
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	int rv = 0;
+	int idx_start = 0;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		if (inode && inode->i_mapping && inode->i_mapping->a_ops &&
+				inode->i_mapping->a_ops->readpage)
+			return inode->i_mapping->a_ops->readpage(file, page);
+
+		return -EINVAL;
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.a_readpage.file = file;
+	args.args.a_readpage.page = page;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_AOP_READPAGE;
+	else
+		BUG();
+
+	if (flt) {
+		idx_start = chain_find_flt(chain, flt);
+
+		if (idx_start == -1)
+			idx_start = chain->c_flts_nr;
+		else
+			idx_start++;
+	}
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rinode->ri_aop_old && rinode->ri_aop_old->readpage)
+			rv = rinode->ri_aop_old->readpage(args.args.a_readpage.file,
+						args.args.a_readpage.page);
+		else
+			rv = -EINVAL;
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+	rv = args.retv.rv_int;
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	return rv;
+}
+
+int rfs_readpage_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_readpage_call(flt, args->a_readpage.file, args->a_readpage.page);
+}
+
+int rfs_readpage(struct file *file, struct page *page)
+{
+	return rfs_readpage_call(NULL, file, page);
+}
+
+
+static int rfs_writepage_call(struct filter *flt, struct page *page, struct writeback_control *wbc)
+{
+	struct inode *inode = page->mapping->host;
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	int rv = 0;
+	int idx_start = 0;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		if (inode && inode->i_mapping && inode->i_mapping->a_ops &&
+				inode->i_mapping->a_ops->writepage)
+			return inode->i_mapping->a_ops->writepage(page, wbc);
+
+		return -EINVAL;
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.a_writepage.page = page;
+	args.args.a_writepage.wbc = wbc;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_AOP_WRITEPAGE;
+	else
+		BUG();
+
+	if (flt) {
+		idx_start = chain_find_flt(chain, flt);
+
+		if (idx_start == -1)
+			idx_start = chain->c_flts_nr;
+		else
+			idx_start++;
+	}
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rinode->ri_aop_old && rinode->ri_aop_old->writepage)
+			rv = rinode->ri_aop_old->writepage(args.args.a_writepage.page,
+						args.args.a_writepage.wbc);
+		else
+			rv = -EINVAL;
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+	rv = args.retv.rv_int;
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	return rv;
+}
+
+int rfs_writepage_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_writepage_call(flt, args->a_writepage.page, args->a_writepage.wbc);
+}
+
+int rfs_writepage(struct page *page, struct writeback_control *wbc)
+{
+	return rfs_writepage_call(NULL, page, wbc);
 }
 
 static void rinode_set_reg_ops(struct rinode *rinode, char *ops)
@@ -953,6 +1174,16 @@ static void rinode_set_reg_ops(struct rinode *rinode, char *ops)
 		rinode->ri_op_new.setattr = rfs_setattr;
 	else
 		rinode->ri_op_new.setattr = rinode->ri_op_old ? rinode->ri_op_old->setattr : NULL;
+
+	if (ops[RFS_REG_AOP_READPAGE])
+		rinode->ri_aop_new.readpage = rfs_readpage;
+	else
+		rinode->ri_aop_new.readpage = rinode->ri_aop_old ? rinode->ri_aop_old->readpage : NULL;
+
+	if (ops[RFS_REG_AOP_WRITEPAGE])
+		rinode->ri_aop_new.writepage = rfs_writepage;
+	else
+		rinode->ri_aop_new.writepage = rinode->ri_aop_old ? rinode->ri_aop_old->writepage : NULL;
 }
 
 static void rinode_set_dir_ops(struct rinode *rinode, char *ops)
@@ -1207,3 +1438,6 @@ int rfs_get_data_inode(rfs_filter filter, struct inode *inode,
 EXPORT_SYMBOL(rfs_attach_data_inode);
 EXPORT_SYMBOL(rfs_detach_data_inode);
 EXPORT_SYMBOL(rfs_get_data_inode);
+EXPORT_SYMBOL(rfs_readpage_subcall);
+EXPORT_SYMBOL(rfs_writepage_subcall);
+

@@ -8,6 +8,8 @@
 #include <linux/sysfs.h>
 #include <linux/kobject.h>
 
+#define RFS_VERSION "0.2"
+
 enum rfs_op_id {
 	RFS_NONE_DOP_D_REVALIDATE,
 	RFS_NONE_DOP_D_HASH,
@@ -134,12 +136,8 @@ enum rfs_op_id {
 	RFS_LNK_FOP_WRITE,
 	RFS_LNK_FOP_FLUSH,
 
-	RFS_SOCK_FOP_OPEN,
-	RFS_SOCK_FOP_RELEASE,
-	RFS_SOCK_FOP_LLSEEK,
-	RFS_SOCK_FOP_READ,
-	RFS_SOCK_FOP_WRITE,
-	RFS_SOCK_FOP_FLUSH,
+	RFS_REG_AOP_READPAGE,
+	RFS_REG_AOP_WRITEPAGE,
 
 	RFS_OP_END
 };
@@ -283,6 +281,16 @@ union rfs_op_args {
 		size_t count;
 		loff_t *pos;
 	} f_write;
+
+	struct {
+		struct file *file;
+		struct page *page;
+	} a_readpage;
+
+	struct {
+		struct page *page;
+		struct writeback_control *wbc;
+	} a_writepage;
 };
 
 union rfs_op_retv {
@@ -348,6 +356,11 @@ struct rfs_priv_data {
 	void (*cb)(struct rfs_priv_data *);
 };
 
+struct rfs_cont_data {
+	struct list_head list;
+	rfs_filter flt;
+};
+
 struct rfs_ctl {
 	enum rfs_ctl_id id;
 	union rfs_ctl_data data;
@@ -386,6 +399,14 @@ int rfs_register_attribute(rfs_filter filter, struct rfs_flt_attribute *attr);
 int rfs_unregister_attribute(rfs_filter filter, struct rfs_flt_attribute *attr);
 int rfs_get_kobject(rfs_filter filter, struct kobject **kobj);
 
+ssize_t rfs_read_subcall(rfs_filter flt, union rfs_op_args *args);
+ssize_t rfs_write_subcall(rfs_filter flt, union rfs_op_args *args);
+int rfs_readpage_subcall(rfs_filter flt, union rfs_op_args *args);
+int rfs_writepage_subcall(rfs_filter flt, union rfs_op_args *args);
+
+int rfs_init_data_cont(struct rfs_cont_data *data, rfs_filter filter);
+int rfs_attach_data_cont(rfs_filter filter, rfs_context *context, struct rfs_cont_data *data);
+int rfs_detach_data_cont(rfs_filter filter, rfs_context context, struct rfs_cont_data **data);
 
 #define rfs_flt_attr(__name, __mode, __show, __store, __data)	\
 struct rfs_flt_attribute rfs_flt_attr_##__name = { 		\

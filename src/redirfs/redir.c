@@ -13,35 +13,56 @@ extern spinlock_t rinode_cnt_lock;
 extern unsigned long long rfile_cnt;
 extern spinlock_t rfile_cnt_lock;
 
-int rfs_precall_flts(struct chain *chain, struct context *context, struct rfs_args *args, int *cnt)
+int rfs_precall_flts(int idx_start, struct chain *chain, struct context *cont, struct rfs_args *args)
 {
 	enum rfs_retv (**ops)(rfs_context, struct rfs_args *);
 	enum rfs_retv (*op)(rfs_context, struct rfs_args *);
 	int retv;
-	int i;
 
 	if (!chain)
 		return 0;
 
 	args->type.call = RFS_PRECALL;
-	*cnt = chain->c_flts_nr;
 
-	for (i = 0; i < chain->c_flts_nr; i++) {
-		if (!atomic_read(&chain->c_flts[i]->f_active))
+	for (cont->idx = idx_start; cont->idx < chain->c_flts_nr; cont->idx++) {
+		if (!atomic_read(&chain->c_flts[cont->idx]->f_active))
 			continue;
 
-		ops = chain->c_flts[i]->f_pre_cbs;
+		ops = chain->c_flts[cont->idx]->f_pre_cbs;
 		op = ops[args->type.id];
 		if (op) {
-			retv = op(context, args);
-			if (retv == RFS_STOP) {
-				*cnt = i + 1;
+			retv = op(cont, args);
+			if (retv == RFS_STOP) 
 				return -1;
-			}
 		}
 	}
 
+	cont->idx--;
+
 	return 0;
+}
+
+void rfs_postcall_flts(int idx_start, struct chain *chain, struct context *cont, struct rfs_args *args)
+{
+	enum rfs_retv (**ops)(rfs_context, struct rfs_args *);
+	enum rfs_retv (*op)(rfs_context, struct rfs_args *);
+
+	if (!chain)
+		return;
+
+	args->type.call = RFS_POSTCALL;
+
+	for (; cont->idx >= idx_start; cont->idx--) {
+		if (!atomic_read(&chain->c_flts[cont->idx]->f_active))
+			continue;
+
+		ops = chain->c_flts[cont->idx]->f_post_cbs;
+		op = ops[args->type.id];
+		if (op) 
+			op(cont, args);
+	}
+
+	cont->idx++;
 }
 
 static void rfs_remove_data(struct list_head *head, struct filter *filter)
@@ -78,36 +99,6 @@ static void rfs_detach_data(struct rdentry *rdentry, struct filter *flt)
 	spin_lock(&rinode->ri_lock);
 	rfs_remove_data(&rinode->ri_data, flt);
 	spin_unlock(&rinode->ri_lock);
-}
-
-int rfs_postcall_flts(struct chain *chain, struct context *context, struct rfs_args *args, int *cnt)
-{
-	enum rfs_retv (**ops)(rfs_context, struct rfs_args *);
-	enum rfs_retv (*op)(rfs_context, struct rfs_args *);
-	int retv;
-	int i;
-
-	if (!chain)
-		return 0;
-
-	args->type.call = RFS_POSTCALL;
-
-	for (i = *cnt - 1; i >= 0; i--) {
-		if (!atomic_read(&chain->c_flts[i]->f_active))
-			continue;
-
-		ops = chain->c_flts[i]->f_post_cbs;
-		op = ops[args->type.id];
-		if (op) {
-			retv = op(context, args);
-			if (retv == RFS_STOP) {
-				*cnt = i;
-				return -1;
-			}
-		}
-	}
-
-	return 0;
 }
 
 int rfs_replace_ops(struct rpath *path_old, struct rpath *path_new, struct filter *flt)
@@ -597,6 +588,8 @@ static int __init rfs_init(void)
 		return rv;
 	}
 
+	printk(KERN_INFO "Redirecting Filesystem Framework Driver Version " RFS_VERSION " <www.redirfs.org>\n");
+
 	return 0;	
 }
 
@@ -651,5 +644,6 @@ module_init(rfs_init);
 module_exit(rfs_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Frantisek Hrbata <franta@redirfs.org>");
-MODULE_DESCRIPTION("RedirFS - VFS callback framework");
+MODULE_AUTHOR("Frantisek Hrbata <frantisek.hrbata@redirfs.org>");
+MODULE_DESCRIPTION("Redirecting Filesystem Framework Driver Version " RFS_VERSION " <www.redirfs.org>");
+

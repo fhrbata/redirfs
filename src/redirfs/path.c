@@ -75,6 +75,7 @@ struct rpath *path_alloc(const char *path_name)
 	path->p_inchain_local = NULL;
 	path->p_exchain_local = NULL;
 	path->p_dentry = dget(nd.dentry);
+	path->p_mnt = mntget(nd.mnt);
 	path->p_path = path_buf;
 	path->p_len = path_len;
 	path->p_parent = NULL;
@@ -119,8 +120,10 @@ void path_put(struct rpath *path)
 	spin_lock_irqsave(&path->p_lock, flags);
 	BUG_ON(!path->p_count);
 	path->p_count--;
-	if (!path->p_count)
+	if (!path->p_count) {
+		mntput(path->p_mnt);
 		del = 1;
+	}
 	spin_unlock_irqrestore(&path->p_lock, flags);
 
 	if (!del)
@@ -232,6 +235,7 @@ void path_rem(struct rpath *path)
 	struct rpath *loop;
 	struct rpath *parent;
 	struct dentry *dentry;
+	unsigned long flags;
 
 	parent = path->p_parent;
 
@@ -249,10 +253,10 @@ void path_rem(struct rpath *path)
 
 	list_del(&path->p_sibpath);
 
-	spin_lock(&path->p_lock);
+	spin_lock_irqsave(&path->p_lock, flags);
 	dentry = path->p_dentry;
 	path->p_dentry = NULL;
-	spin_unlock(&path->p_lock);
+	spin_unlock_irqrestore(&path->p_lock, flags);
 
 	dput(dentry);
 
@@ -519,13 +523,14 @@ int path_dpath(struct rdentry *rdentry, struct rpath *path, char *buffer, int si
 {
 	struct dentry *dentry;
 	struct dentry *path_dentry = NULL;
+	unsigned long flags;
 	char *end;
 	int len;
 
-	spin_lock(&path->p_lock);
+	spin_lock_irqsave(&path->p_lock, flags);
 	if (path->p_dentry)
 		path_dentry = dget(path->p_dentry);
-	spin_unlock(&path->p_lock);
+	spin_unlock_irqrestore(&path->p_lock, flags);
 
 	if (!path_dentry)
 		return -ENODATA;
@@ -544,7 +549,7 @@ int path_dpath(struct rdentry *rdentry, struct rpath *path, char *buffer, int si
 
 	spin_lock(&dcache_lock);
 
-	while (path->p_dentry != dentry) {
+	while (path_dentry != dentry) {
 		end -= dentry->d_name.len;
 		size -= dentry->d_name.len + 1; /* dentry name + slash */
 		if (size < 0) {

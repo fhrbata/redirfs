@@ -18,11 +18,11 @@ static struct rfile *rfile_alloc(struct file *file)
 	const struct file_operations *op_old;
 	unsigned long flags;
 
-	
+
 	rfile = kmem_cache_alloc(rfile_cache, GFP_KERNEL);
 	if (!rfile)
 		return ERR_PTR(-ENOMEM);
-	
+
 	INIT_LIST_HEAD(&rfile->rf_rdentry_list);
 	INIT_LIST_HEAD(&rfile->rf_data);
 	INIT_RCU_HEAD(&rfile->rf_rcu);
@@ -32,7 +32,7 @@ static struct rfile *rfile_alloc(struct file *file)
 	rfile->rf_rdentry = NULL;
 	atomic_set(&rfile->rf_count, 1);
 	spin_lock_init(&rfile->rf_lock);
-	
+
 
 	if (file->f_op->open == rfs_open) {
 		rinode = rinode_find(file->f_dentry->d_inode);
@@ -184,7 +184,7 @@ static void rfile_del_rcu(struct rcu_head *head)
 {
 	struct rfile *rfile = NULL;
 
-	
+
 	rfile = container_of(head, struct rfile, rf_rcu);
 	rfile_put(rfile);
 }
@@ -213,11 +213,10 @@ int rfs_open(struct inode *inode, struct file *file)
 {
 	struct rinode *rinode = NULL;
 	struct rfile *rfile = NULL;
-	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
+	struct context cont;
 	int rv = 0;
-	int cnt = 0;
 
 	rinode = rinode_find(inode);
 
@@ -227,16 +226,18 @@ int rfs_open(struct inode *inode, struct file *file)
 		rcu_assign_pointer(file->f_op, inode->i_fop);
 		if (file->f_op && file->f_op->open)
 			rv = file->f_op->open(inode, file);
+
 		return rv;
 	}
 
 	spin_lock(&rinode->ri_lock);
-	path = path_get(rinode->ri_path);
 	chain = chain_get(rinode->ri_chain);
 	spin_unlock(&rinode->ri_lock);
 
 	args.args.f_open.inode = inode;
 	args.args.f_open.file = file;
+
+	INIT_LIST_HEAD(&cont.data_list);
 
 	if (S_ISREG(inode->i_mode))
 		args.type.id = RFS_REG_FOP_OPEN;
@@ -251,9 +252,9 @@ int rfs_open(struct inode *inode, struct file *file)
 	else if (S_ISFIFO(inode->i_mode))
 		args.type.id = RFS_FIFO_FOP_OPEN;
 	else 
-		args.type.id = RFS_SOCK_FOP_OPEN;
+		BUG();
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 		if (rinode->ri_fop_old && rinode->ri_fop_old->open)
 			rv = rinode->ri_fop_old->open(args.args.f_open.inode, args.args.f_open.file);
 
@@ -265,7 +266,7 @@ int rfs_open(struct inode *inode, struct file *file)
 		BUG_ON(IS_ERR(rfile));
 	}
 
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rfs_postcall_flts(0, chain, &cont, &args);
 
 	rv = args.retv.rv_int;
 
@@ -277,8 +278,9 @@ int rfs_open(struct inode *inode, struct file *file)
 
 	rinode_put(rinode);
 	rfile_put(rfile);
-	path_put(path);
 	chain_put(chain);
+
+	BUG_ON(!list_empty(&cont.data_list));
 
 	return rv;
 }
@@ -286,25 +288,27 @@ int rfs_open(struct inode *inode, struct file *file)
 int rfs_release(struct inode *inode, struct file *file)
 {
 	struct rfile *rfile = NULL;
-	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
+	struct context cont;
 	int rv = 0;
-	int cnt = 0;
 
 	rfile = rfile_find(file);
 	if (!rfile) {
 		if (file->f_op && file->f_op->release)
-			return file->f_op->release(inode, file);
+			rv = file->f_op->release(inode, file);
+
+		return rv;
 	}
 
 	spin_lock(&rfile->rf_lock);
-	path = path_get(rfile->rf_path);
 	chain = chain_get(rfile->rf_chain);
 	spin_unlock(&rfile->rf_lock);
 
 	args.args.f_release.inode = inode;
 	args.args.f_release.file = file;
+
+	INIT_LIST_HEAD(&cont.data_list);
 
 	if (S_ISREG(inode->i_mode))
 		args.type.id = RFS_REG_FOP_RELEASE;
@@ -319,16 +323,16 @@ int rfs_release(struct inode *inode, struct file *file)
 	else if (S_ISFIFO(inode->i_mode))
 		args.type.id = RFS_FIFO_FOP_RELEASE;
 	else 
-		args.type.id = RFS_SOCK_FOP_RELEASE;
+		BUG();
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 		if (rfile->rf_op_old && rfile->rf_op_old->release)
 			rv = rfile->rf_op_old->release(args.args.f_release.inode, args.args.f_release.file);
 
 		args.retv.rv_int = rv;
 	}
 
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+	rfs_postcall_flts(0, chain, &cont, &args);
 
 	rv = args.retv.rv_int;
 
@@ -337,8 +341,9 @@ int rfs_release(struct inode *inode, struct file *file)
 	spin_unlock(&rfile->rf_rdentry->rd_lock);
 
 	rfile_put(rfile);
-	path_put(path);
 	chain_put(chain);
+
+	BUG_ON(!list_empty(&cont.data_list));
 
 	return rv;
 }
@@ -346,26 +351,28 @@ int rfs_release(struct inode *inode, struct file *file)
 int rfs_flush(struct file *file, fl_owner_t id)
 {
 	struct rfile *rfile = NULL;
-	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct inode *inode = NULL;
 	struct rfs_args args;
+	struct context cont;
 	int rv = 0;
-	int cnt = 0;
 
 	rfile = rfile_find(file);
 	if (!rfile) {
 		if (file->f_op && file->f_op->flush)
 			return file->f_op->flush(file, id);
+
+		return rv;
 	}
 
 	spin_lock(&rfile->rf_lock);
-	path = path_get(rfile->rf_path);
 	chain = chain_get(rfile->rf_chain);
 	spin_unlock(&rfile->rf_lock);
 
 	args.args.f_flush.file = file;
 	args.args.f_flush.id = id;
+
+	INIT_LIST_HEAD(&cont.data_list);
 
 	inode = file->f_dentry->d_inode;
 
@@ -382,21 +389,22 @@ int rfs_flush(struct file *file, fl_owner_t id)
 	else if (S_ISFIFO(inode->i_mode))
 		args.type.id = RFS_FIFO_FOP_FLUSH;
 	else 
-		args.type.id = RFS_SOCK_FOP_FLUSH;
+		BUG();
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 		if (rfile->rf_op_old && rfile->rf_op_old->flush)
 			rv = rfile->rf_op_old->flush(args.args.f_flush.file, args.args.f_flush.id);
 
 		args.retv.rv_int = rv;
 	}
-	
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+
+	rfs_postcall_flts(0, chain, &cont, &args);
 	rv = args.retv.rv_int;
 
 	rfile_put(rfile);
-	path_put(path);
 	chain_put(chain);
+
+	BUG_ON(!list_empty(&cont.data_list));
 
 	return rv;
 }
@@ -404,44 +412,50 @@ int rfs_flush(struct file *file, fl_owner_t id)
 int rfs_readdir(struct file *file, void *buf, filldir_t filler)
 {
 	struct rfile *rfile = NULL;
-	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
+	struct context cont;
 	int rv = 0;
-	int cnt = 0;
 
 	rfile = rfile_find(file);
 	if (!rfile) {
 		if (file->f_op && file->f_op->readdir)
 			return file->f_op->readdir(file, buf, filler);
+
+		return -ENOTDIR;
 	}
 
 	spin_lock(&rfile->rf_lock);
-	path = path_get(rfile->rf_path);
 	chain = chain_get(rfile->rf_chain);
 	spin_unlock(&rfile->rf_lock);
 
 	args.args.f_readdir.file = file;
 	args.args.f_readdir.buf = buf;
 	args.args.f_readdir.filldir = filler;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
 	if (S_ISDIR(file->f_dentry->d_inode->i_mode))
 		args.type.id = RFS_DIR_FOP_READDIR;
 	else
 		BUG();
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 		if (rfile->rf_op_old && rfile->rf_op_old->readdir)
 			rv = rfile->rf_op_old->readdir(args.args.f_readdir.file, args.args.f_readdir.buf, args.args.f_readdir.filldir);
+		else
+			rv = -ENOTDIR;
 
 		args.retv.rv_int = rv;
 	}
-	
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+
+	rfs_postcall_flts(0, chain, &cont, &args);
 	rv = args.retv.rv_int;
 
 	rfile_put(rfile);
-	path_put(path);
 	chain_put(chain);
+
+	BUG_ON(!list_empty(&cont.data_list));
 
 	return rv;
 }
@@ -449,27 +463,33 @@ int rfs_readdir(struct file *file, void *buf, filldir_t filler)
 loff_t rfs_llseek(struct file *file, loff_t offset, int origin)
 {
 	struct rfile *rfile = NULL;
-	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
+	struct context cont;
 	loff_t rv = 0;
-	int cnt = 0;
 	umode_t mode;
 
 	rfile = rfile_find(file);
 	if (!rfile) {
-		if (file->f_op && file->f_op->llseek)
-			return file->f_op->llseek(file, offset, origin);
+		if (file->f_mode & FMODE_LSEEK) {
+			if (file->f_op && file->f_op->llseek)
+				return file->f_op->llseek(file, offset, origin);
+			else
+				return default_llseek(file, offset, origin);
+		}
+
+		return no_llseek(file, offset, origin);
 	}
 
 	spin_lock(&rfile->rf_lock);
-	path = path_get(rfile->rf_path);
 	chain = chain_get(rfile->rf_chain);
 	spin_unlock(&rfile->rf_lock);
 
 	args.args.f_llseek.file = file;
 	args.args.f_llseek.offset = offset;
 	args.args.f_llseek.origin = origin;
+
+	INIT_LIST_HEAD(&cont.data_list);
 
 	mode = file->f_dentry->d_inode->i_mode;
 
@@ -483,54 +503,60 @@ loff_t rfs_llseek(struct file *file, loff_t offset, int origin)
 		args.type.id = RFS_BLK_FOP_LLSEEK;
 	else if (S_ISFIFO(mode))
 		args.type.id = RFS_FIFO_FOP_LLSEEK;
-	else if (S_ISSOCK(mode))
-		args.type.id = RFS_SOCK_FOP_LLSEEK;
 	else
 		BUG();
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
-		if (rfile->rf_op_old && rfile->rf_op_old->llseek)
-			rv = rfile->rf_op_old->llseek(file, offset, origin);
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
+		if (file->f_mode & FMODE_LSEEK) {
+			if (rfile->rf_op_old && rfile->rf_op_old->llseek)
+				rv = rfile->rf_op_old->llseek(args.args.f_llseek.file, args.args.f_llseek.offset, args.args.f_llseek.origin);
+			else
+				rv = default_llseek(args.args.f_llseek.file, args.args.f_llseek.offset, args.args.f_llseek.origin);
+		} else
+			rv = no_llseek(args.args.f_llseek.file, args.args.f_llseek.offset, args.args.f_llseek.origin);
 
 		args.retv.rv_loff = rv;
 	}
-	
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+
+	rfs_postcall_flts(0, chain, &cont, &args);
 	rv = args.retv.rv_loff;
 
 	rfile_put(rfile);
-	path_put(path);
 	chain_put(chain);
+
+	BUG_ON(!list_empty(&cont.data_list));
 
 	return rv;
 }
 
-ssize_t rfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
+static ssize_t rfs_read_call(struct filter *flt, struct file *file, char __user *buf, size_t count, loff_t *pos)
 {
 	struct rfile *rfile = NULL;
-	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
+	struct context cont;
 	ssize_t rv = 0;
-	int cnt = 0;
 	umode_t mode;
+	int idx_start = 0;
 
 	rfile = rfile_find(file);
 	if (!rfile) {
 		if (file->f_op && file->f_op->read)
 			return file->f_op->read(file, buf, count, pos);
+
+		return do_sync_read(file, buf, count, pos);
 	}
 
 	spin_lock(&rfile->rf_lock);
-	path = path_get(rfile->rf_path);
 	chain = chain_get(rfile->rf_chain);
 	spin_unlock(&rfile->rf_lock);
-
 
 	args.args.f_read.file = file;
 	args.args.f_read.buf = buf;
 	args.args.f_read.count = count;
 	args.args.f_read.pos = pos;
+
+	INIT_LIST_HEAD(&cont.data_list);
 
 	mode = file->f_dentry->d_inode->i_mode;
 
@@ -544,46 +570,67 @@ ssize_t rfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 		args.type.id = RFS_BLK_FOP_READ;
 	else if (S_ISFIFO(mode))
 		args.type.id = RFS_FIFO_FOP_READ;
-	else if (S_ISSOCK(mode))
-		args.type.id = RFS_SOCK_FOP_READ;
 	else
 		BUG();
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+	if (flt) {
+		idx_start = chain_find_flt(chain, flt);
+
+		if (idx_start == -1)
+			idx_start = chain->c_flts_nr;
+		else
+			idx_start++;
+	}
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
 		if (rfile->rf_op_old && rfile->rf_op_old->read)
 			rv = rfile->rf_op_old->read(file, buf, count, pos);
+		else
+			rv = do_sync_read(file, buf, count, pos);
 
 		args.retv.rv_ssize = rv;
 	}
-	
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
 	rv = args.retv.rv_ssize;
 
 	rfile_put(rfile);
-	path_put(path);
 	chain_put(chain);
+
+	BUG_ON(!list_empty(&cont.data_list));
 
 	return rv;
 }
 
-ssize_t rfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
+ssize_t rfs_read_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_read_call(flt, args->f_read.file, args->f_read.buf, args->f_read.count, args->f_read.pos);
+}
+
+ssize_t rfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
+{
+	return rfs_read_call(NULL, file, buf, count, pos);
+}
+
+ssize_t rfs_write_call(struct filter *flt, struct file *file, const char __user *buf, size_t count, loff_t *pos)
 {
 	struct rfile *rfile = NULL;
-	struct rpath *path = NULL;
 	struct chain *chain = NULL;
 	struct rfs_args args;
+	struct context cont;
 	ssize_t rv = 0;
-	int cnt = 0;
+	int idx_start = 0;
 	umode_t mode;
 
 	rfile = rfile_find(file);
 	if (!rfile) {
 		if (file->f_op && file->f_op->write)
 			return file->f_op->write(file, buf, count, pos);
+
+		return do_sync_write(file, buf, count, pos);
 	}
 
 	spin_lock(&rfile->rf_lock);
-	path = path_get(rfile->rf_path);
 	chain = chain_get(rfile->rf_chain);
 	spin_unlock(&rfile->rf_lock);
 
@@ -591,6 +638,8 @@ ssize_t rfs_write(struct file *file, const char __user *buf, size_t count, loff_
 	args.args.f_write.buf = buf;
 	args.args.f_write.count = count;
 	args.args.f_write.pos = pos;
+
+	INIT_LIST_HEAD(&cont.data_list);
 
 	mode = file->f_dentry->d_inode->i_mode;
 
@@ -604,26 +653,46 @@ ssize_t rfs_write(struct file *file, const char __user *buf, size_t count, loff_
 		args.type.id = RFS_BLK_FOP_WRITE;
 	else if (S_ISFIFO(mode))
 		args.type.id = RFS_FIFO_FOP_WRITE;
-	else if (S_ISSOCK(mode))
-		args.type.id = RFS_SOCK_FOP_WRITE;
 	else
 		BUG();
 
-	if (!rfs_precall_flts(chain, NULL, &args, &cnt)) {
+	if (flt) {
+		idx_start = chain_find_flt(chain, flt);
+
+		if (idx_start == -1)
+			idx_start = chain->c_flts_nr;
+		else
+			idx_start++;
+	}
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
 		if (rfile->rf_op_old && rfile->rf_op_old->write)
 			rv = rfile->rf_op_old->write(file, buf, count, pos);
+		else
+			rv = do_sync_write(file, buf, count, pos);
 
 		args.retv.rv_ssize = rv;
 	}
-	
-	rfs_postcall_flts(chain, NULL, &args, &cnt);
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
 	rv = args.retv.rv_ssize;
 
 	rfile_put(rfile);
-	path_put(path);
 	chain_put(chain);
 
+	BUG_ON(!list_empty(&cont.data_list));
+
 	return rv;
+}
+
+ssize_t rfs_write_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_write_call(flt, args->f_write.file, args->f_write.buf, args->f_write.count, args->f_write.pos);
+}
+
+ssize_t rfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
+{
+	return rfs_write_call(NULL, file, buf, count, pos);
 }
 
 static void rfile_set_reg_ops(struct rfile *rfile, char *ops)
@@ -754,33 +823,9 @@ static void rfile_set_lnk_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.flush = rfile->rf_op_old ? rfile->rf_op_old->flush : NULL;
 }
 
-static void rfile_set_sock_ops(struct rfile *rfile, char *ops)
-{
-	if (ops[RFS_SOCK_FOP_READ])
-		rfile->rf_op_new.read = rfs_read;
-	else
-		rfile->rf_op_new.read = rfile->rf_op_old ? rfile->rf_op_old->read : NULL;
-
-	if (ops[RFS_SOCK_FOP_WRITE])
-		rfile->rf_op_new.write = rfs_write;
-	else
-		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
-
-	if (ops[RFS_SOCK_FOP_LLSEEK])
-		rfile->rf_op_new.llseek = rfs_llseek;
-	else
-		rfile->rf_op_new.llseek = rfile->rf_op_old ? rfile->rf_op_old->llseek : NULL;
-
-	if (ops[RFS_SOCK_FOP_FLUSH])
-		rfile->rf_op_new.flush = rfs_flush;
-	else
-		rfile->rf_op_new.flush = rfile->rf_op_old ? rfile->rf_op_old->flush : NULL;
-}
-
 void rfile_set_ops(struct rfile *rfile, struct ops *ops)
 {
 	umode_t mode = rfile->rf_rdentry->rd_rinode->ri_inode->i_mode;
-
 
 	if (S_ISREG(mode))
 		rfile_set_reg_ops(rfile, ops->o_ops);
@@ -800,8 +845,8 @@ void rfile_set_ops(struct rfile *rfile, struct ops *ops)
 	else if (S_ISFIFO(mode))
 		rfile_set_fifo_ops(rfile, ops->o_ops);
 
-	else if (S_ISSOCK(mode))
-		rfile_set_sock_ops(rfile, ops->o_ops);
+	else
+		BUG();
 
 	rfile->rf_op_new.open = rfs_open;
 	rfile->rf_op_new.release = rfs_release;
@@ -810,9 +855,9 @@ void rfile_set_ops(struct rfile *rfile, struct ops *ops)
 int rfile_cache_create(void)
 {
 	rfile_cache = kmem_cache_create("rfile_cache",
-					  sizeof(struct rfile),
-					  0, SLAB_RECLAIM_ACCOUNT,
-					  NULL, NULL);
+			sizeof(struct rfile),
+			0, SLAB_RECLAIM_ACCOUNT,
+			NULL, NULL);
 	if (!rfile_cache)
 		return -ENOMEM;
 
@@ -875,7 +920,7 @@ int rfs_detach_data_file(rfs_filter filter, struct file *file,
 	struct rfs_priv_data *found;
 
 	flt = (struct filter *)filter;
-	
+
 	if (!flt || !file || !data)
 		return -EINVAL;
 
@@ -909,7 +954,7 @@ int rfs_get_data_file(rfs_filter filter, struct file *file,
 	struct rfs_priv_data *found;
 
 	flt = (struct filter *)filter;
-	
+
 	if (!flt || !file || !data)
 		return -EINVAL;
 
@@ -937,3 +982,6 @@ int rfs_get_data_file(rfs_filter filter, struct file *file,
 EXPORT_SYMBOL(rfs_attach_data_file);
 EXPORT_SYMBOL(rfs_detach_data_file);
 EXPORT_SYMBOL(rfs_get_data_file);
+EXPORT_SYMBOL(rfs_read_subcall);
+EXPORT_SYMBOL(rfs_write_subcall);
+
