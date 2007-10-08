@@ -3,7 +3,7 @@ Operations Supported by the RedirFS Framework
 Here is a list of operations which are supported by the RedirFS Framework.
 
 
-Dentry Operation
+Dentry Operations
 ----------------
 	RFS_NONE_DOP_D_REVALIDATE
 	RFS_NONE_DOP_D_HASH
