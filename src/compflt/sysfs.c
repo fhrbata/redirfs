@@ -23,10 +23,11 @@ static struct attribute *cflt_settings_attrs[] = {
         NULL
 };
 
-static ssize_t cflt_settings_show(struct kobject *kobj, struct attribute *attr,
+static ssize_t cflt_sysfs_settings_show(struct kobject *kobj, struct attribute *attr,
                 char *buf)
 {
         int len;
+        cflt_debug_printk("compflt: [f:cflt_sysfs_settings_show]\n");
 
         if (!strcmp(attr->name, "method"))
                 len = cflt_comp_method_get(buf, PAGE_SIZE);
@@ -38,15 +39,15 @@ static ssize_t cflt_settings_show(struct kobject *kobj, struct attribute *attr,
         return len;
 }
 
-static ssize_t cflt_settings_store(struct kobject *kobj, struct attribute *attr,
+static ssize_t cflt_sysfs_settings_store(struct kobject *kobj, struct attribute *attr,
                 const char *buf, size_t size)
 {
+        cflt_debug_printk("compflt: [f:cflt_sysfs_settings_store]\n");
+
         if (!strcmp(attr->name, "method"))
                 cflt_comp_method_set(buf);
         else if (!strcmp(attr->name, "blksize"))
                 cflt_file_blksize_set(simple_strtol(buf, (char**)NULL, 10));
-        else
-                return -EINVAL;
 
         return size; // this is ok for now
 }
@@ -54,6 +55,8 @@ static ssize_t cflt_settings_store(struct kobject *kobj, struct attribute *attr,
 int cflt_sysfs_init (void)
 {
         int err;
+
+        cflt_debug_printk("compflt: [f:cflt_sysfs_init]\n");
 
         err = rfs_get_kobject(compflt, &cflt_root_ko);
         if (err)
@@ -63,8 +66,8 @@ int cflt_sysfs_init (void)
         memset(&cflt_settings_ktype, 0, sizeof(cflt_settings_ktype));
         memset(&cflt_settings_sops, 0, sizeof(cflt_settings_sops));
 
-        cflt_settings_sops.show = cflt_settings_show;
-        cflt_settings_sops.store = cflt_settings_store;
+        cflt_settings_sops.show = cflt_sysfs_settings_show;
+        cflt_settings_sops.store = cflt_sysfs_settings_store;
 
         cflt_settings_ktype.release = NULL;
         cflt_settings_ktype.default_attrs = cflt_settings_attrs;
@@ -82,5 +85,6 @@ int cflt_sysfs_init (void)
 
 void cflt_sysfs_deinit(void)
 {
+        cflt_debug_printk("compflt: [f:cflt_sysfs_deinit]\n");
         kobject_unregister(&cflt_settings_ko);
 }

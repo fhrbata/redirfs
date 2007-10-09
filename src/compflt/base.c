@@ -202,6 +202,12 @@ static int __init compflt_init(void)
                 goto error;
         }
 
+        err = cflt_privd_cache_init();
+        if (err) {
+                printk(KERN_ERR "compflt: private data cache initialization failed: error %d\n", err);
+                goto error;
+        }
+
         err = cflt_block_cache_init();
         if (err) {
                 printk(KERN_ERR "compflt: block cache initialization failed: error %d\n", err);
@@ -261,11 +267,13 @@ static void __exit compflt_exit(void)
 {
         int err;
 
+        cflt_sysfs_deinit();
+
 	err = rfs_unregister_filter(compflt);
 	if (err)
                 printk(KERN_ERR "compflt: unregistration failed: error %d\n", err);
 
-        cflt_sysfs_deinit();
+        cflt_privd_cache_deinit();
         cflt_file_cache_deinit();
         cflt_block_cache_deinit();
 }

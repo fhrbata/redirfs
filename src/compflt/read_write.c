@@ -5,38 +5,51 @@
 
 ssize_t cflt_orig_read(struct file *f, char __user *buf, size_t len, loff_t *off)
 {
-        int rv;
         mm_segment_t orig_fs;
-        struct rfile *rfile = rfile_find(f);
-        BUG_ON(!rfile);
+        ssize_t rv;
+        union rfs_op_args args;
 
         cflt_debug_printk("compflt: [f:orig_read] %i@%i\n", len, (int)*off);
 
+        args.f_read.file = f;
+        args.f_read.buf = buf;
+        args.f_read.count = len;
+        args.f_read.pos = off;
+
         orig_fs = get_fs();
         set_fs(KERNEL_DS);
-        rv = rfile->rf_op_old->read(f, buf, len, off);
-        rfile_put(rfile);
-	cflt_hexdump(buf, rv); // DEBUG
+
+        rv = rfs_read_subcall(compflt, &args);
+
 	set_fs(orig_fs);
-	return rv;
+
+	cflt_hexdump((char*)buf, len); // DEBUG
+
+        return rv;
 }
 
 ssize_t cflt_orig_write(struct file *f, const char __user *buf, size_t len, loff_t *off)
 {
-	int rv;
 	mm_segment_t orig_fs;
-        struct rfile *rfile = rfile_find(f);
-        BUG_ON(!rfile);
+        int rv;
+        union rfs_op_args args;
 
 	cflt_debug_printk("compflt: [f:orig_write] %i@%i\n", len, (int) *off);
 	cflt_hexdump((char*)buf, len); // DEBUG
 
+        args.f_write.file = f;
+        args.f_write.buf = buf;
+        args.f_write.count = len;
+        args.f_write.pos = off;
+
 	orig_fs = get_fs();
 	set_fs(KERNEL_DS);
-        rv = rfile->rf_op_old->write(f, buf, len, off);
-        rfile_put(rfile);
+
+        rv = rfs_write_subcall(compflt, &args);
+
 	set_fs(orig_fs);
-	return rv;
+
+        return rv;
 }
 
 #define cflt_rw_match(blk, off_req, size_req, blk_max) \

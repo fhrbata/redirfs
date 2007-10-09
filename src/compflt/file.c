@@ -15,6 +15,7 @@ spinlock_t cflt_file_list_l = SPIN_LOCK_UNLOCKED;
 
 static unsigned int cflt_blksize = CFLT_DEFAULT_BLKSIZE;
 
+
 void cflt_file_truncate(struct cflt_file *fh)
 {
         cflt_debug_printk("compflt: [f:cflt_file_truncate] i=%li\n", fh->inode->i_ino);
@@ -48,12 +49,11 @@ static struct cflt_file* cflt_file_init(struct inode *inode)
         cflt_debug_printk("compflt: [f:cflt_file_init] i=%li\n", inode->i_ino);
 
         fh = kmem_cache_alloc(cflt_file_cache, GFP_KERNEL);
-        atomic_inc(&file_cache_cnt);
-
         if (!fh) {
                 printk(KERN_ERR "compflt: failed to alloc file header\n");
                 return NULL;
         }
+        atomic_inc(&file_cache_cnt);
 
         INIT_LIST_HEAD(&fh->blks);
 
@@ -83,6 +83,8 @@ static void cflt_file_deinit(struct cflt_file *fh)
 
         wait_event_interruptible(fh->ref_w, !atomic_read(&fh->cnt));
 
+        //TODO: irqsave not needed anymore ? (doesnt get called from the rfs
+        // callback now)
         spin_lock_irqsave(&cflt_file_list_l, flags);
         list_del(&fh->all);
         spin_unlock_irqrestore(&cflt_file_list_l, flags);
@@ -96,11 +98,13 @@ static void cflt_file_deinit(struct cflt_file *fh)
         }
 }
 
+/*
 // callback registered with redirfs
 static inline void cflt_file_deinit_cb(void *data)
 {
         cflt_file_deinit((struct cflt_file*)data);
 }
+*/
 
 int cflt_file_cache_init(void)
 {
@@ -133,7 +137,14 @@ static void cflt_file_update_size(struct cflt_file *fh)
 
 void cflt_file_cache_deinit(void)
 {
+        struct cflt_file *fh;
+        struct cflt_file *tmp;
+
         cflt_debug_printk("compflt: [f:cflt_file_cache_deinit]\n");
+
+        list_for_each_entry_safe(fh, tmp, &cflt_file_list, all) {
+                cflt_file_deinit(fh);
+        }
 
         wait_event_interruptible(file_cache_w, !atomic_read(&file_cache_cnt));
         kmem_cache_destroy(cflt_file_cache);
@@ -221,13 +232,19 @@ void cflt_file_write_block_headers(struct file *f, struct cflt_file *fh)
 // @inode: inode to match with an cflt_file
 struct cflt_file *cflt_file_find(struct inode *inode)
 {
-        struct cflt_file *fh = NULL;
+        struct cflt_privd *pd;
+        struct rfs_priv_data *rfs_data;
+        int err;
 
         cflt_debug_printk("compflt: [f:cflt_file_find] i=%li\n", inode->i_ino);
 
-        rfs_get_data_inode(compflt, inode, (void**)&fh);
+        err = rfs_get_data_inode(compflt, inode, &rfs_data);
+        if (err)
+                return NULL;
 
-        return fh;
+        pd = cflt_privd_from_rfs(rfs_data);
+
+        return pd->fh;
 }
 
 // if the cflt_file is not in the cache and f is set then try to read it from
@@ -235,6 +252,8 @@ struct cflt_file *cflt_file_find(struct inode *inode)
 struct cflt_file *cflt_file_get(struct inode *inode, struct file *f)
 {
         struct cflt_file *fh = NULL;
+        struct cflt_privd *pd = NULL;
+        struct rfs_priv_data *exist = NULL;
 
         cflt_debug_printk("compflt: [f:cflt_file_get] i=%li\n", inode->i_ino);
 
@@ -252,7 +271,10 @@ struct cflt_file *cflt_file_get(struct inode *inode, struct file *f)
                         return NULL;
                 }
 
-                rfs_attach_data_inode(compflt, inode, (void*)fh, cflt_file_deinit_cb);
+                // TODO: this can fail ... returns NULL atm ?
+                pd = cflt_privd_init(fh);
+
+                rfs_attach_data_inode(compflt, inode, &pd->rfs_data, &exist);
                 if (atomic_read(&fh->compressed))
                         cflt_file_read_block_headers(f, fh);
 

@@ -1,5 +1,4 @@
 high:
-- update to the new redirfs private data handling
 - add cache deinitializations in compflt_init when further initialization fail
 
 medium:
