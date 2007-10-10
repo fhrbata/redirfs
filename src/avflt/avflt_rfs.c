@@ -271,10 +271,11 @@ int avflt_rfs_set_ops(void)
 
 static int avflt_rfs_data_cache_init(void)
 {
-	avflt_data_cache = kmem_cache_create("avflt_data_cache",
-			sizeof(struct avflt_data),
-			0, SLAB_RECLAIM_ACCOUNT,
-			NULL, NULL);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+	avflt_data_cache = kmem_cache_create("avflt_data_cache", sizeof(struct avflt_data), 0, SLAB_RECLAIM_ACCOUNT, NULL, NULL);
+#else
+	avflt_data_cache = kmem_cache_create("avflt_data_cache", sizeof(struct avflt_data), 0, SLAB_RECLAIM_ACCOUNT, NULL);
+#endif
 
 	if (!avflt_data_cache)
 		return -ENOMEM;

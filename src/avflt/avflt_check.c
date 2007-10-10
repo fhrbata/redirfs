@@ -425,9 +425,11 @@ int avflt_check_init(void)
 {
 	int i;
 
-	avflt_check_cache = kmem_cache_create("avflt_check_cache", 
-			sizeof(struct avflt_check), 0, 
-			SLAB_RECLAIM_ACCOUNT, NULL, NULL);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+	avflt_check_cache = kmem_cache_create("avflt_check_cache", sizeof(struct avflt_check), 0, SLAB_RECLAIM_ACCOUNT, NULL, NULL);
+#else
+	avflt_check_cache = kmem_cache_create("avflt_check_cache", sizeof(struct avflt_check), 0, SLAB_RECLAIM_ACCOUNT, NULL);
+#endif
 
 	if (!avflt_check_cache)
 		return -ENOMEM;

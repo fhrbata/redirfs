@@ -6,6 +6,7 @@
 #include <linux/poll.h>
 #include <linux/file.h>
 #include <linux/mount.h>
+#include <linux/version.h>
 #include "../redirfs/redirfs.h"
 #include "avflt_io.h"
 

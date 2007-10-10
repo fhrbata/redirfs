@@ -263,11 +263,7 @@ int avflt_dev_init(void)
 
 void avflt_dev_exit(void)
 {
-	int err;
-
 	class_device_destroy(avflt_class, avflt_dev);
 	class_destroy(avflt_class);
-	err = unregister_chrdev(MAJOR(avflt_dev), "avflt");
-	if (err)
-		printk(KERN_ERR "avflt: unregister_chrdev failed(%d)\n", err);
+	unregister_chrdev(MAJOR(avflt_dev), "avflt");
 }
