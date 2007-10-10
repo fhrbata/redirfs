@@ -14,7 +14,11 @@ int cflt_block_cache_init(void)
 {
         cflt_debug_printk("compflt: [f:cflt_block_cache_init]\n");
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
         cflt_block_cache = kmem_cache_create(CACHE_NAME, sizeof(struct cflt_block), 0, 0, NULL, NULL);
+#else
+        cflt_block_cache = kmem_cache_create(CACHE_NAME, sizeof(struct cflt_block), 0, 0, NULL);
+#endif
 
         if (!cflt_block_cache)
                 return -ENOMEM;

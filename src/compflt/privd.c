@@ -21,7 +21,11 @@ int cflt_privd_cache_init(void)
 {
         cflt_debug_printk("compflt: [f:cflt_privd_cache_init]\n");
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
         cflt_privd_cache = kmem_cache_create(CACHE_NAME, sizeof(struct cflt_privd), 0, 0, NULL, NULL);
+#else
+        cflt_privd_cache = kmem_cache_create(CACHE_NAME, sizeof(struct cflt_privd), 0, 0, NULL);
+#endif
 
         if (!cflt_privd_cache)
                 return -ENOMEM;

@@ -2,6 +2,7 @@
 #include <linux/list.h>
 #include <linux/fs.h>
 #include <linux/sched.h>
+#include <linux/version.h>
 #include "../redirfs/redirfs.h"
 
 #define CFLT_MAGIC "\x06\x10\x19\x82"
@@ -28,7 +29,7 @@ struct cflt_block {
 };
 
 struct cflt_file {
-	struct list_head all; // used for statistics
+	struct list_head all;
         // ===
 	struct list_head blks;
 	struct inode *inode;
@@ -40,6 +41,12 @@ struct cflt_file {
         atomic_t cnt;
         wait_queue_head_t ref_w;
         spinlock_t lock;
+};
+
+struct cflt_privd {
+	struct list_head all;
+        struct rfs_priv_data rfs_data;
+        struct cflt_file *fh;
 };
 
 // base.c
@@ -94,14 +101,15 @@ int cflt_comp_block(struct crypto_comp*, struct cflt_block*);
 int cflt_comp_method_set(const char*);
 int cflt_comp_method_get(char*, int);
 
-/*
-// proc.c
-int cflt_proc_init(void);
-void cflt_proc_deinit(void);
-*/
 // sysfs.c
 int cflt_sysfs_init(void);
 void cflt_sysfs_deinit(void);
+
+// privd.c
+int cflt_privd_cache_init(void);
+void cflt_privd_cache_deinit(void);
+struct cflt_privd *cflt_privd_init(struct cflt_file*);
+struct cflt_privd *cflt_privd_from_rfs(struct rfs_priv_data*);
 
 // debug.c
 #ifdef CFLT_DEBUG
