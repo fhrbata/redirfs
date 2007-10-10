@@ -1,11 +1,15 @@
 #include "../redirfs/redirfs.h"
 
+#define DUMMYFLT_VERSION "0.1"
+
 enum rfs_retv dummyflt_permission(rfs_context context, struct rfs_args *args);
 enum rfs_retv dummyflt_open(rfs_context context, struct rfs_args *args);
 int dummyflt_ctl(struct rfs_ctl *ctl);
 
-static rfs_filter dummyflt;
+/*
 static struct rfs_path_info path_info;
+*/
+static rfs_filter dummyflt;
 static struct rfs_filter_info flt_info = {"dummyflt", 1000, 0, dummyflt_ctl};
 
 static struct rfs_op_info op_info[] = {
@@ -123,6 +127,8 @@ static int __init dummyflt_init(void)
 		goto error;
 	}
 
+	printk(KERN_INFO "Dummy Filter Version " RFS_VERSION " <www.redirfs.org>\n");
+
 	return 0;
 
 error:
@@ -145,5 +151,5 @@ module_init(dummyflt_init);
 module_exit(dummyflt_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Frantisek Hrbata <franta@redirfs.org>");
-MODULE_DESCRIPTION("Dummy Filter for the RedirFS Framework");
+MODULE_AUTHOR("Frantisek Hrbata <frantisek.hrbata@redirfs.org>");
+MODULE_DESCRIPTION("Dummy Filter Version " DUMMYFLT_VERSION "<www.redirfs.org>");
