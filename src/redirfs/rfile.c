@@ -854,10 +854,11 @@ void rfile_set_ops(struct rfile *rfile, struct ops *ops)
 
 int rfile_cache_create(void)
 {
-	rfile_cache = kmem_cache_create("rfile_cache",
-			sizeof(struct rfile),
-			0, SLAB_RECLAIM_ACCOUNT,
-			NULL, NULL);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+	rfile_cache = kmem_cache_create("rfile_cache", sizeof(struct rfile), 0, SLAB_RECLAIM_ACCOUNT, NULL, NULL);
+#else
+	rfile_cache = kmem_cache_create("rfile_cache", sizeof(struct rfile), 0, SLAB_RECLAIM_ACCOUNT, NULL);
+#endif
 	if (!rfile_cache)
 		return -ENOMEM;
 

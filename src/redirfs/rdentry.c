@@ -852,10 +852,11 @@ void rdentry_set_ops(struct rdentry *rdentry, struct ops *ops)
 
 int rdentry_cache_create(void)
 {
-	rdentry_cache = kmem_cache_create("rdentry_cache",
-			sizeof(struct rdentry),
-			0, SLAB_RECLAIM_ACCOUNT,
-			NULL, NULL);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+	rdentry_cache = kmem_cache_create("rdentry_cache", sizeof(struct rdentry), 0, SLAB_RECLAIM_ACCOUNT, NULL, NULL);
+#else
+	rdentry_cache = kmem_cache_create("rdentry_cache", sizeof(struct rdentry), 0, SLAB_RECLAIM_ACCOUNT, NULL);
+#endif
 	if (!rdentry_cache)
 		return -ENOMEM;
 

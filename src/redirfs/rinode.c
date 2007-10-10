@@ -1310,10 +1310,11 @@ void rinode_set_ops(struct rinode *rinode, struct ops *ops)
 
 int rinode_cache_create(void)
 {
-	rinode_cache = kmem_cache_create("rinode_cache",
-					  sizeof(struct rinode),
-					  0, SLAB_RECLAIM_ACCOUNT,
-					  NULL, NULL);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+	rinode_cache = kmem_cache_create("rinode_cache", sizeof(struct rinode), 0, SLAB_RECLAIM_ACCOUNT, NULL, NULL);
+#else
+	rinode_cache = kmem_cache_create("rinode_cache", sizeof(struct rinode), 0, SLAB_RECLAIM_ACCOUNT, NULL);
+#endif
 	if (!rinode_cache)
 		return -ENOMEM;
 
