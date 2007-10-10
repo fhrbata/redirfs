@@ -1,4 +1,4 @@
-obj-m := avflt/ dummyflt/ redirfs/
+obj-m := avflt/ dummyflt/ redirfs/ compflt/
 
 RFS_SRC=$(PWD)
 KERN_SRC="/lib/modules/$(shell uname -r)/build"
