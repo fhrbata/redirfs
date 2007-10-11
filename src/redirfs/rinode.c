@@ -777,10 +777,12 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct namei
 
 	filp = nd->intent.open.file;
 
+	/*
 	if (!IS_ERR(filp) && filp->f_dentry != NULL) {
 		rfile = rfile_add(filp);
 		BUG_ON(IS_ERR(rfile));
 	}
+	*/
 				
 exit:
 	rfile_put(rfile);
