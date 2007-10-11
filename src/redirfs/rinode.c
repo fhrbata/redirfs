@@ -695,7 +695,6 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct namei
 	struct rfs_args args;
 	struct dentry *rv = NULL;
 	struct context cont;
-	struct file *filp;
 	struct rfile *rfile = NULL;
 
 	parent = rinode_find(dir);
@@ -775,15 +774,6 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct namei
 		rinode_set_ops(rinode, ops_set);
 	}
 
-	filp = nd->intent.open.file;
-
-	/*
-	if (!IS_ERR(filp) && filp->f_dentry != NULL) {
-		rfile = rfile_add(filp);
-		BUG_ON(IS_ERR(rfile));
-	}
-	*/
-				
 exit:
 	rfile_put(rfile);
 	rdentry_put(rdentry);
