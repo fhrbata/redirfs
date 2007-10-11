@@ -7,6 +7,7 @@
 #include <linux/namei.h>
 #include <linux/sysfs.h>
 #include <linux/kobject.h>
+#include <linux/types.h>
 
 #define RFS_VERSION "0.2"
 
@@ -138,6 +139,19 @@ enum rfs_op_id {
 
 	RFS_REG_AOP_READPAGE,
 	RFS_REG_AOP_WRITEPAGE,
+	RFS_REG_AOP_READPAGES,
+	RFS_REG_AOP_WRITEPAGES,
+	RFS_REG_AOP_SYNC_PAGE,
+	RFS_REG_AOP_SET_PAGE_DIRTY,
+	RFS_REG_AOP_PREPARE_WRITE,
+	RFS_REG_AOP_COMMINT_WRITE,
+	RFS_REG_AOP_BMAP,
+	RFS_REG_AOP_INVALIDATEPAGE,
+	RFS_REG_AOP_RELEASEPAGE,
+	RFS_REG_AOP_DIRECT_IO,
+	RFS_REG_AOP_GET_XIP_PAGE,
+	RFS_REG_AOP_MIGRATEPAGE,
+	RFS_REG_AOP_LAUNDER_PAGE,
 
 	RFS_OP_END
 };
@@ -291,7 +305,81 @@ union rfs_op_args {
 		struct page *page;
 		struct writeback_control *wbc;
 	} a_writepage;
+
+	struct {
+		struct file *file;
+		struct address_space *mapping;
+		struct list_head *pages;
+		unsigned nr_pages;
+	} a_readpages;
+
+	struct {
+		struct address_space *mapping;
+		struct writeback_control *wbc;
+	} a_writepages;
+
+	struct {
+		struct page *page;
+	} a_sync_page;
+
+	struct {
+		struct page *page;
+	} a_set_page_dirty;
+
+	struct {
+		struct file *file;
+		struct page *page;
+		unsigned from;
+		unsigned to;
+	} a_prepare_write;
+
+	struct {
+		struct file *file;
+		struct page *page;
+		unsigned from;
+		unsigned to;
+	} a_commit_write;
+
+	struct {
+		struct address_space *mapping;
+		sector_t block;
+	} a_bmap;
+
+	struct {
+		struct page *page;
+		unsigned long offset;
+	} a_invalidatepage;
+
+	struct {
+		struct page *page;
+		gfp_t flags;
+	} a_releasepage;
+
+	struct {
+		int rw;
+		struct kiocb *iocb;
+		const struct iovec *iov;
+		loff_t offset;
+		unsigned long nr_segs;
+	} a_direct_IO;
+
+	struct {
+		struct address_space *mapping;
+		sector_t offset;
+		int create;
+	} a_get_xip_page;
+
+	struct {
+		struct address_space *mapping;
+		struct page *newpage;
+		struct page *page;
+	} a_migratepage;
+
+	struct {
+		struct page *page;
+	} a_launder_page;
 };
+
 
 union rfs_op_retv {
 	int		rv_int;
@@ -300,6 +388,8 @@ union rfs_op_retv {
 	unsigned long	rv_ulong;
 	loff_t		rv_loff;
 	struct dentry	*rv_dentry;
+	sector_t	rv_sector;
+	struct page	*rv_page;
 };
 
 struct rfs_op_type {
@@ -403,6 +493,19 @@ ssize_t rfs_read_subcall(rfs_filter flt, union rfs_op_args *args);
 ssize_t rfs_write_subcall(rfs_filter flt, union rfs_op_args *args);
 int rfs_readpage_subcall(rfs_filter flt, union rfs_op_args *args);
 int rfs_writepage_subcall(rfs_filter flt, union rfs_op_args *args);
+int rfs_readpages_subcall(rfs_filter flt, union rfs_op_args *args);
+int rfs_readpages_subcall(rfs_filter flt, union rfs_op_args *args);
+void rfs_sync_page_subcall(rfs_filter flt, union rfs_op_args *args);
+int rfs_set_page_dirty_subcall(rfs_filter flt, union rfs_op_args *args);
+int rfs_prepare_write_subcall(rfs_filter flt, union rfs_op_args *args);
+int rfs_commit_write_subcall(rfs_filter flt, union rfs_op_args *args);
+sector_t rfs_bmap_subcall(rfs_filter flt, union rfs_op_args *args);
+void rfs_invalidatepage_subcall(rfs_filter flt, union rfs_op_args *args);
+int rfs_releasepage_subcall(rfs_filter flt, union rfs_op_args *args);
+ssize_t rfs_direct_IO_subcall(rfs_filter flt, union rfs_op_args *args);
+struct page* rfs_get_xip_page_subcall(rfs_filter flt, union rfs_op_args *args);
+int rfs_migratepage_subcall(rfs_filter flt, union rfs_op_args *args);
+int rfs_launder_page_subcall(rfs_filter flt, union rfs_op_args *args);
 
 int rfs_init_data_cont(struct rfs_cont_data *data, rfs_filter filter);
 int rfs_attach_data_cont(rfs_filter filter, rfs_context *context, struct rfs_cont_data *data);

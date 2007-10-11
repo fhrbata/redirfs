@@ -1026,7 +1026,8 @@ int rfs_setattr(struct dentry *dentry, struct iattr *iattr)
 	return rv;
 }
 
-static int rfs_readpage_call(struct filter *flt, struct file *file, struct page *page)
+static int rfs_readpage_call(struct filter *flt, struct file *file,
+		struct page *page)
 {
 	struct inode *inode = page->mapping->host;
 	struct rinode *rinode = NULL;
@@ -1059,19 +1060,13 @@ static int rfs_readpage_call(struct filter *flt, struct file *file, struct page 
 	else
 		BUG();
 
-	if (flt) {
-		idx_start = chain_find_flt(chain, flt);
-
-		if (idx_start == -1)
-			idx_start = chain->c_flts_nr;
-		else
-			idx_start++;
-	}
+	idx_start = chain_flt_idx(chain, flt);
 
 	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
 		if (rinode->ri_aop_old && rinode->ri_aop_old->readpage)
-			rv = rinode->ri_aop_old->readpage(args.args.a_readpage.file,
-						args.args.a_readpage.page);
+			rv = rinode->ri_aop_old->readpage(
+					args.args.a_readpage.file,
+					args.args.a_readpage.page);
 		else
 			rv = -EINVAL;
 
@@ -1100,7 +1095,8 @@ int rfs_readpage(struct file *file, struct page *page)
 }
 
 
-static int rfs_writepage_call(struct filter *flt, struct page *page, struct writeback_control *wbc)
+static int rfs_writepage_call(struct filter *flt, struct page *page,
+		struct writeback_control *wbc)
 {
 	struct inode *inode = page->mapping->host;
 	struct rinode *rinode = NULL;
@@ -1133,19 +1129,13 @@ static int rfs_writepage_call(struct filter *flt, struct page *page, struct writ
 	else
 		BUG();
 
-	if (flt) {
-		idx_start = chain_find_flt(chain, flt);
-
-		if (idx_start == -1)
-			idx_start = chain->c_flts_nr;
-		else
-			idx_start++;
-	}
+	idx_start = chain_flt_idx(chain, flt);
 
 	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
 		if (rinode->ri_aop_old && rinode->ri_aop_old->writepage)
-			rv = rinode->ri_aop_old->writepage(args.args.a_writepage.page,
-						args.args.a_writepage.wbc);
+			rv = rinode->ri_aop_old->writepage(
+					args.args.a_writepage.page,
+					args.args.a_writepage.wbc);
 		else
 			rv = -EINVAL;
 
@@ -1165,12 +1155,921 @@ static int rfs_writepage_call(struct filter *flt, struct page *page, struct writ
 
 int rfs_writepage_subcall(rfs_filter flt, union rfs_op_args *args)
 {
-	return rfs_writepage_call(flt, args->a_writepage.page, args->a_writepage.wbc);
+	return rfs_writepage_call(flt, args->a_writepage.page,
+			args->a_writepage.wbc);
 }
 
 int rfs_writepage(struct page *page, struct writeback_control *wbc)
 {
 	return rfs_writepage_call(NULL, page, wbc);
+}
+
+static int rfs_readpages_call(struct filter *flt, struct file *file,
+		struct address_space *mapping, struct list_head *pages,
+		unsigned nr_pages)
+{
+	struct inode *inode = mapping->host;
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	int rv = 0;
+	int idx_start = 0;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		if (inode->i_mapping && inode->i_mapping->a_ops &&
+				inode->i_mapping->a_ops->readpages)
+			return inode->i_mapping->a_ops->readpages(file, mapping,
+					pages, nr_pages);
+
+		return -EINVAL;
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.a_readpages.file = file;
+	args.args.a_readpages.mapping = mapping;
+	args.args.a_readpages.pages = pages;
+	args.args.a_readpages.nr_pages = nr_pages;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_AOP_READPAGES;
+	else
+		BUG();
+
+	idx_start = chain_flt_idx(chain, flt);
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rinode->ri_aop_old && rinode->ri_aop_old->readpages)
+			rv = rinode->ri_aop_old->readpages(args.args.a_readpages.file,
+						args.args.a_readpages.mapping,
+						args.args.a_readpages.pages,
+						args.args.a_readpages.nr_pages);
+		else
+			rv = -EINVAL;
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+	rv = args.retv.rv_int;
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	return rv;
+}
+
+int rfs_readpages_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_readpages_call(flt, args->a_readpages.file,
+			args->a_readpages.mapping,
+			args->a_readpages.pages,
+			args->a_readpages.nr_pages);
+}
+
+int rfs_readpages(struct file *file, struct address_space *mapping,
+		struct list_head *pages, unsigned nr_pages)
+{
+	return rfs_readpages_call(NULL, file, mapping, pages, nr_pages);
+}
+
+static int rfs_writepages_call(struct filter *flt,
+		struct address_space *mapping,
+		struct writeback_control *wbc)
+{
+	struct inode *inode = mapping->host;
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	int rv = 0;
+	int idx_start = 0;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		if (inode->i_mapping && inode->i_mapping->a_ops &&
+				inode->i_mapping->a_ops->writepages)
+			return inode->i_mapping->a_ops->writepages(mapping, wbc);
+
+		return -EINVAL;
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.a_writepages.mapping = mapping;
+	args.args.a_writepages.wbc = wbc;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_AOP_WRITEPAGES;
+	else
+		BUG();
+
+	idx_start = chain_flt_idx(chain, flt);
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rinode->ri_aop_old && rinode->ri_aop_old->writepages)
+			rv = rinode->ri_aop_old->writepages(
+					args.args.a_writepages.mapping,
+					args.args.a_writepages.wbc);
+		else
+			rv = -EINVAL;
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+	rv = args.retv.rv_int;
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	return rv;
+}
+
+int rfs_writepages_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_writepages_call(flt, args->a_writepages.mapping, args->a_writepages.wbc);
+}
+
+int rfs_writepages(struct address_space *mapping, struct writeback_control *wbc)
+{
+	return rfs_writepages_call(NULL, mapping, wbc);
+}
+
+static void rfs_sync_page_call(struct filter *flt, struct page *page)
+{
+	struct inode *inode = page->mapping->host;
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	int idx_start = 0;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		if (inode->i_mapping && inode->i_mapping->a_ops &&
+				inode->i_mapping->a_ops->sync_page)
+			inode->i_mapping->a_ops->sync_page(page);
+
+		return;
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.a_sync_page.page = page;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_AOP_SYNC_PAGE;
+	else
+		BUG();
+
+	idx_start = chain_flt_idx(chain, flt);
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rinode->ri_aop_old && rinode->ri_aop_old->sync_page)
+			rinode->ri_aop_old->sync_page(
+					args.args.a_sync_page.page);
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
+}
+
+void rfs_sync_page_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	rfs_sync_page_call(flt, args->a_sync_page.page);
+}
+
+void rfs_sync_page(struct page *page)
+{
+	rfs_sync_page_call(NULL, page);
+}
+
+static int rfs_set_page_dirty_call(struct filter *flt, struct page *page)
+{
+	struct inode *inode = page->mapping->host;
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	int rv = 0;
+	int idx_start = 0;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		if (inode->i_mapping && inode->i_mapping->a_ops &&
+				inode->i_mapping->a_ops->set_page_dirty)
+			return inode->i_mapping->a_ops->set_page_dirty(page);
+
+		return -EINVAL;
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.a_set_page_dirty.page = page;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_AOP_SET_PAGE_DIRTY;
+	else
+		BUG();
+
+	idx_start = chain_flt_idx(chain, flt);
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rinode->ri_aop_old && rinode->ri_aop_old->set_page_dirty)
+			rv = rinode->ri_aop_old->set_page_dirty(
+					args.args.a_set_page_dirty.page);
+		else
+			rv = -EINVAL;
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+	rv = args.retv.rv_int;
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	return rv;
+}
+
+int rfs_set_page_dirty_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_set_page_dirty_call(flt, args->a_set_page_dirty.page);
+}
+
+int rfs_set_page_dirty(struct page *page)
+{
+	return rfs_set_page_dirty_call(NULL, page);
+}
+
+static int rfs_prepare_write_call(struct filter *flt, struct file *file,
+		struct page *page, unsigned from, unsigned to)
+{
+	struct inode *inode = page->mapping->host;
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	int rv = 0;
+	int idx_start = 0;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		if (inode->i_mapping && inode->i_mapping->a_ops &&
+				inode->i_mapping->a_ops->prepare_write)
+			return inode->i_mapping->a_ops->prepare_write(file, page,
+					from, to);
+
+		return -EINVAL;
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.a_prepare_write.file = file;
+	args.args.a_prepare_write.page = page;
+	args.args.a_prepare_write.from = from;
+	args.args.a_prepare_write.to = to;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_AOP_PREPARE_WRITE;
+	else
+		BUG();
+
+	idx_start = chain_flt_idx(chain, flt);
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rinode->ri_aop_old && rinode->ri_aop_old->prepare_write)
+			rv = rinode->ri_aop_old->prepare_write(
+					args.args.a_prepare_write.file,
+					args.args.a_prepare_write.page,
+					args.args.a_prepare_write.from,
+					args.args.a_prepare_write.to);
+		else
+			rv = -EINVAL;
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+	rv = args.retv.rv_int;
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	return rv;
+}
+
+int rfs_prepare_write_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_prepare_write_call(flt, args->a_prepare_write.file,
+			args->a_prepare_write.page,
+			args->a_prepare_write.from,
+			args->a_prepare_write.to);
+}
+
+int rfs_prepare_write(struct file *file, struct page *page, unsigned from, unsigned to)
+{
+	return rfs_prepare_write_call(NULL, file, page, from, to);
+}
+
+static int rfs_commit_write_call(struct filter *flt, struct file *file,
+		struct page *page, unsigned from, unsigned to)
+{
+	struct inode *inode = page->mapping->host;
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	int rv = 0;
+	int idx_start = 0;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		if (inode->i_mapping && inode->i_mapping->a_ops &&
+				inode->i_mapping->a_ops->commit_write)
+			return inode->i_mapping->a_ops->commit_write(file,
+					page, from, to);
+
+		return -EINVAL;
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.a_commit_write.file = file;
+	args.args.a_commit_write.page = page;
+	args.args.a_commit_write.from = from;
+	args.args.a_commit_write.to = to;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_AOP_COMMINT_WRITE;
+	else
+		BUG();
+
+	idx_start = chain_flt_idx(chain, flt);
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rinode->ri_aop_old && rinode->ri_aop_old->commit_write)
+			rv = rinode->ri_aop_old->commit_write(
+					args.args.a_commit_write.file,
+					args.args.a_commit_write.page,
+					args.args.a_commit_write.from,
+					args.args.a_commit_write.to);
+		else
+			rv = -EINVAL;
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+	rv = args.retv.rv_int;
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	return rv;
+}
+
+int rfs_commit_write_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_commit_write_call(flt, args->a_commit_write.file,
+			args->a_commit_write.page,
+			args->a_commit_write.from,
+			args->a_commit_write.to);
+}
+
+int rfs_commit_write(struct file *file, struct page *page, unsigned from, unsigned to)
+{
+	return rfs_commit_write_call(NULL, file, page, from, to);
+}
+
+static sector_t rfs_bmap_call(struct filter *flt, struct address_space *mapping, sector_t block)
+{
+	struct inode *inode = mapping->host;
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	sector_t rv = 0;
+	int idx_start = 0;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		if (inode->i_mapping && inode->i_mapping->a_ops &&
+				inode->i_mapping->a_ops->bmap)
+			return inode->i_mapping->a_ops->bmap(mapping,
+					block);
+
+		BUG();
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.a_bmap.mapping = mapping;
+	args.args.a_bmap.block = block;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_AOP_BMAP;
+	else
+		BUG();
+
+	idx_start = chain_flt_idx(chain, flt);
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rinode->ri_aop_old && rinode->ri_aop_old->bmap)
+			rv = rinode->ri_aop_old->bmap(
+					args.args.a_bmap.mapping,
+					args.args.a_bmap.block);
+		else
+			BUG();
+
+		args.retv.rv_sector = rv;
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+	rv = args.retv.rv_sector;
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	return rv;
+}
+
+sector_t rfs_bmap_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_bmap_call(flt, args->a_bmap.mapping, args->a_bmap.block);
+}
+
+sector_t rfs_bmap(struct address_space *mapping, sector_t block)
+{
+	return rfs_bmap_call(NULL, mapping, block);
+}
+
+static void rfs_invalidatepage_call(struct filter *flt, struct page *page, unsigned long offset)
+{
+	struct inode *inode = page->mapping->host;
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	int idx_start = 0;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		if (inode->i_mapping && inode->i_mapping->a_ops &&
+				inode->i_mapping->a_ops->invalidatepage)
+			inode->i_mapping->a_ops->invalidatepage(page, offset);
+
+		return;
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.a_invalidatepage.page = page;
+	args.args.a_invalidatepage.offset = offset;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_AOP_INVALIDATEPAGE;
+	else
+		BUG();
+
+	idx_start = chain_flt_idx(chain, flt);
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rinode->ri_aop_old && rinode->ri_aop_old->invalidatepage)
+			rinode->ri_aop_old->invalidatepage(
+					args.args.a_invalidatepage.page,
+					args.args.a_invalidatepage.offset);
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
+}
+
+void rfs_invalidatepage_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	rfs_invalidatepage_call(flt, args->a_invalidatepage.page, args->a_invalidatepage.offset);
+}
+
+void rfs_invalidatepage(struct page *page, unsigned long offset)
+{
+	rfs_invalidatepage_call(NULL, page, offset);
+}
+
+static int rfs_releasepage_call(struct filter *flt, struct page *page, gfp_t flags)
+{
+	struct inode *inode = page->mapping->host;
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	int rv = 0;
+	int idx_start = 0;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		if (inode->i_mapping && inode->i_mapping->a_ops &&
+				inode->i_mapping->a_ops->releasepage)
+			return inode->i_mapping->a_ops->releasepage(page, flags);
+
+		return -EINVAL;
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.a_releasepage.page = page;
+	args.args.a_releasepage.flags = flags;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_AOP_RELEASEPAGE;
+	else
+		BUG();
+
+	idx_start = chain_flt_idx(chain, flt);
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rinode->ri_aop_old && rinode->ri_aop_old->releasepage)
+			rv = rinode->ri_aop_old->releasepage(
+					args.args.a_releasepage.page,
+					args.args.a_releasepage.flags);
+		else
+			rv = -EINVAL;
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+	rv = args.retv.rv_int;
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	return rv;
+}
+
+int rfs_releasepage_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_releasepage_call(flt, args->a_releasepage.page,
+			args->a_releasepage.flags);
+}
+
+int rfs_releasepage(struct page *page, gfp_t flags)
+{
+	return rfs_releasepage_call(NULL, page, flags);
+}
+
+static ssize_t rfs_direct_IO_call(struct filter *flt, int rw, struct kiocb *iocb,
+		const struct iovec *iov, loff_t offset, unsigned long nr_segs)
+{
+	struct inode *inode = iocb->ki_filp->f_dentry->d_inode;
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	ssize_t rv = 0;
+	int idx_start = 0;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		if (inode->i_mapping && inode->i_mapping->a_ops &&
+				inode->i_mapping->a_ops->direct_IO)
+			return inode->i_mapping->a_ops->direct_IO(rw, iocb, iov,
+					offset, nr_segs);
+
+		BUG();
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.a_direct_IO.rw = rw;
+	args.args.a_direct_IO.iocb = iocb;
+	args.args.a_direct_IO.iov = iov;
+	args.args.a_direct_IO.offset = offset;
+	args.args.a_direct_IO.nr_segs = nr_segs;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_AOP_DIRECT_IO;
+	else
+		BUG();
+
+	idx_start = chain_flt_idx(chain, flt);
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rinode->ri_aop_old && rinode->ri_aop_old->direct_IO)
+			rv = rinode->ri_aop_old->direct_IO(
+					args.args.a_direct_IO.rw,
+					args.args.a_direct_IO.iocb,
+					args.args.a_direct_IO.iov,
+					args.args.a_direct_IO.offset,
+					args.args.a_direct_IO.nr_segs);
+		else
+			BUG();
+
+		args.retv.rv_ssize = rv;
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+	rv = args.retv.rv_ssize;
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	return rv;
+}
+
+ssize_t rfs_direct_IO_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_direct_IO_call(flt, args->a_direct_IO.rw,
+			args->a_direct_IO.iocb,
+			args->a_direct_IO.iov,
+			args->a_direct_IO.offset,
+			args->a_direct_IO.nr_segs);
+}
+
+ssize_t rfs_direct_IO(int rw, struct kiocb *iocb, const struct iovec *iov, loff_t offset, unsigned long nr_segs)
+{
+	return rfs_direct_IO_call(NULL, rw, iocb, iov, offset, nr_segs);
+}
+
+static struct page* rfs_get_xip_page_call(struct filter *flt, struct address_space *mapping, sector_t offset, int create)
+{
+	struct inode *inode = mapping->host;
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	struct page *rv = 0;
+	int idx_start = 0;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		if (inode->i_mapping && inode->i_mapping->a_ops &&
+				inode->i_mapping->a_ops->get_xip_page)
+			return inode->i_mapping->a_ops->get_xip_page(mapping,
+					offset, create);
+
+		BUG();
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.a_get_xip_page.mapping = mapping;
+	args.args.a_get_xip_page.offset = offset;
+	args.args.a_get_xip_page.create = create;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_AOP_GET_XIP_PAGE;
+	else
+		BUG();
+
+	idx_start = chain_flt_idx(chain, flt);
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rinode->ri_aop_old && rinode->ri_aop_old->get_xip_page)
+			rv = rinode->ri_aop_old->get_xip_page(
+					args.args.a_get_xip_page.mapping,
+					args.args.a_get_xip_page.offset,
+					args.args.a_get_xip_page.create);
+		else
+			BUG();
+
+		args.retv.rv_page = rv;
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+	rv = args.retv.rv_page;
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	return rv;
+
+}
+
+struct page* rfs_get_xip_page_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_get_xip_page_call(flt, args->a_get_xip_page.mapping,
+			args->a_get_xip_page.offset,
+			args->a_get_xip_page.create);
+}
+
+struct page* rfs_get_xip_page(struct address_space *mapping, sector_t offset,
+		int create)
+{
+	return rfs_get_xip_page_call(NULL, mapping, offset, create);
+}
+
+static int rfs_migratepage_call(struct filter *flt,
+		struct address_space *mapping,
+		struct page *newpage,
+		struct page *page)
+{
+	struct inode *inode = mapping->host;
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	int rv = 0;
+	int idx_start = 0;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		if (inode->i_mapping && inode->i_mapping->a_ops &&
+				inode->i_mapping->a_ops->migratepage)
+			return inode->i_mapping->a_ops->migratepage(mapping,
+					newpage, page);
+
+		return -EINVAL;
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.a_migratepage.mapping = mapping;
+	args.args.a_migratepage.newpage = newpage;
+	args.args.a_migratepage.page = page;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_AOP_MIGRATEPAGE;
+	else
+		BUG();
+
+	idx_start = chain_flt_idx(chain, flt);
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rinode->ri_aop_old && rinode->ri_aop_old->migratepage)
+			rv = rinode->ri_aop_old->migratepage(
+					args.args.a_migratepage.mapping,
+					args.args.a_migratepage.newpage,
+					args.args.a_migratepage.page);
+		else
+			rv = -EINVAL;
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+	rv = args.retv.rv_int;
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	return rv;
+}
+
+int rfs_migratepage_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_migratepage_call(flt, args->a_migratepage.mapping,
+			args->a_migratepage.newpage,
+			args->a_migratepage.page);
+}
+
+int rfs_migratepage(struct address_space * mapping, struct page *newpage,
+		struct page *page)
+{
+	return rfs_migratepage_call(NULL, mapping, newpage, page);
+}
+
+static int rfs_launder_page_call(struct filter *flt, struct page *page)
+{
+	struct inode *inode = page->mapping->host;
+	struct rinode *rinode = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	int rv = 0;
+	int idx_start = 0;
+
+	rinode = rinode_find(inode);
+	if (!rinode) {
+		if (inode->i_mapping && inode->i_mapping->a_ops &&
+				inode->i_mapping->a_ops->launder_page)
+			return inode->i_mapping->a_ops->launder_page(page);
+
+		return -EINVAL;
+	}
+
+	spin_lock(&rinode->ri_lock);
+	chain = chain_get(rinode->ri_chain);
+	spin_unlock(&rinode->ri_lock);
+
+	args.args.a_launder_page.page = page;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_AOP_LAUNDER_PAGE;
+	else
+		BUG();
+
+	idx_start = chain_flt_idx(chain, flt);
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rinode->ri_aop_old && rinode->ri_aop_old->launder_page)
+			rv = rinode->ri_aop_old->launder_page(args.args.a_launder_page.page);
+		else
+			rv = -EINVAL;
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+	rv = args.retv.rv_int;
+
+	chain_put(chain);
+	rinode_put(rinode);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	return rv;
+}
+
+int rfs_launder_page_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_launder_page_call(flt, args->a_launder_page.page);
+}
+
+int rfs_launder_page(struct page *page)
+{
+	return rfs_launder_page_call(NULL, page);
 }
 
 static void rinode_set_reg_ops(struct rinode *rinode, char *ops)
@@ -1194,6 +2093,71 @@ static void rinode_set_reg_ops(struct rinode *rinode, char *ops)
 		rinode->ri_aop_new.writepage = rfs_writepage;
 	else
 		rinode->ri_aop_new.writepage = rinode->ri_aop_old ? rinode->ri_aop_old->writepage : NULL;
+
+	if (ops[RFS_REG_AOP_READPAGES])
+		rinode->ri_aop_new.readpages = rfs_readpages;
+	else
+		rinode->ri_aop_new.readpages = rinode->ri_aop_old ? rinode->ri_aop_old->readpages : NULL;
+
+	if (ops[RFS_REG_AOP_WRITEPAGES])
+		rinode->ri_aop_new.writepages = rfs_writepages;
+	else
+		rinode->ri_aop_new.writepages = rinode->ri_aop_old ? rinode->ri_aop_old->writepages : NULL;
+
+	if (ops[RFS_REG_AOP_SYNC_PAGE])
+		rinode->ri_aop_new.sync_page = rfs_sync_page;
+	else
+		rinode->ri_aop_new.sync_page = rinode->ri_aop_old ? rinode->ri_aop_old->sync_page : NULL;
+
+	if (ops[RFS_REG_AOP_SET_PAGE_DIRTY])
+		rinode->ri_aop_new.set_page_dirty = rfs_set_page_dirty;
+	else
+		rinode->ri_aop_new.set_page_dirty = rinode->ri_aop_old ? rinode->ri_aop_old->set_page_dirty : NULL;
+
+	if (ops[RFS_REG_AOP_PREPARE_WRITE])
+		rinode->ri_aop_new.prepare_write = rfs_prepare_write;
+	else
+		rinode->ri_aop_new.prepare_write = rinode->ri_aop_old ? rinode->ri_aop_old->prepare_write : NULL;
+
+	if (ops[RFS_REG_AOP_COMMINT_WRITE])
+		rinode->ri_aop_new.commit_write = rfs_commit_write;
+	else
+		rinode->ri_aop_new.commit_write = rinode->ri_aop_old ? rinode->ri_aop_old->commit_write : NULL;
+
+	if (ops[RFS_REG_AOP_BMAP])
+		rinode->ri_aop_new.bmap = rfs_bmap;
+	else
+		rinode->ri_aop_new.bmap = rinode->ri_aop_old ? rinode->ri_aop_old->bmap : NULL;
+
+	if (ops[RFS_REG_AOP_INVALIDATEPAGE])
+		rinode->ri_aop_new.invalidatepage = rfs_invalidatepage;
+	else
+		rinode->ri_aop_new.invalidatepage = rinode->ri_aop_old ? rinode->ri_aop_old->invalidatepage : NULL;
+
+	if (ops[RFS_REG_AOP_RELEASEPAGE])
+		rinode->ri_aop_new.releasepage = rfs_releasepage;
+	else
+		rinode->ri_aop_new.releasepage = rinode->ri_aop_old ? rinode->ri_aop_old->releasepage : NULL;
+
+	if (ops[RFS_REG_AOP_DIRECT_IO])
+		rinode->ri_aop_new.direct_IO = rfs_direct_IO;
+	else
+		rinode->ri_aop_new.direct_IO = rinode->ri_aop_old ? rinode->ri_aop_old->direct_IO : NULL;
+
+	if (ops[RFS_REG_AOP_GET_XIP_PAGE])
+		rinode->ri_aop_new.get_xip_page = rfs_get_xip_page;
+	else
+		rinode->ri_aop_new.get_xip_page = rinode->ri_aop_old ? rinode->ri_aop_old->get_xip_page : NULL;
+
+	if (ops[RFS_REG_AOP_MIGRATEPAGE])
+		rinode->ri_aop_new.migratepage = rfs_migratepage;
+	else
+		rinode->ri_aop_new.migratepage = rinode->ri_aop_old ? rinode->ri_aop_old->migratepage : NULL;
+
+	if (ops[RFS_REG_AOP_LAUNDER_PAGE])
+		rinode->ri_aop_new.launder_page = rfs_launder_page;
+	else
+		rinode->ri_aop_new.launder_page = rinode->ri_aop_old ? rinode->ri_aop_old->launder_page : NULL;
 }
 
 static void rinode_set_dir_ops(struct rinode *rinode, char *ops)
@@ -1451,4 +2415,18 @@ EXPORT_SYMBOL(rfs_detach_data_inode);
 EXPORT_SYMBOL(rfs_get_data_inode);
 EXPORT_SYMBOL(rfs_readpage_subcall);
 EXPORT_SYMBOL(rfs_writepage_subcall);
+EXPORT_SYMBOL(rfs_readpages_subcall);
+EXPORT_SYMBOL(rfs_writepages_subcall);
+EXPORT_SYMBOL(rfs_sync_page_subcall);
+EXPORT_SYMBOL(rfs_set_page_dirty_subcall);
+EXPORT_SYMBOL(rfs_prepare_write_subcall);
+EXPORT_SYMBOL(rfs_commit_write_subcall);
+EXPORT_SYMBOL(rfs_bmap_subcall);
+EXPORT_SYMBOL(rfs_invalidatepage_subcall);
+EXPORT_SYMBOL(rfs_releasepage_subcall);
+EXPORT_SYMBOL(rfs_direct_IO_subcall);
+EXPORT_SYMBOL(rfs_get_xip_page_subcall);
+EXPORT_SYMBOL(rfs_migratepage_subcall);
+EXPORT_SYMBOL(rfs_launder_page_subcall);
+
 

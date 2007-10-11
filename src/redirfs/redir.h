@@ -79,6 +79,7 @@ struct chain *chain_rem_flt(struct chain *chain, struct filter *flt);
 void chain_get_ops(struct chain *chain, char *ops);
 struct chain *chain_copy(struct chain *src);
 int chain_cmp(struct chain *chain1, struct chain *chain2);
+inline int chain_flt_idx(struct chain *chain, struct filter *flt);
 
 
 struct rpath {

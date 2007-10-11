@@ -573,14 +573,7 @@ static ssize_t rfs_read_call(struct filter *flt, struct file *file, char __user 
 	else
 		BUG();
 
-	if (flt) {
-		idx_start = chain_find_flt(chain, flt);
-
-		if (idx_start == -1)
-			idx_start = chain->c_flts_nr;
-		else
-			idx_start++;
-	}
+	idx_start = chain_flt_idx(chain, flt);
 
 	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
 		if (rfile->rf_op_old && rfile->rf_op_old->read)
@@ -656,14 +649,7 @@ ssize_t rfs_write_call(struct filter *flt, struct file *file, const char __user 
 	else
 		BUG();
 
-	if (flt) {
-		idx_start = chain_find_flt(chain, flt);
-
-		if (idx_start == -1)
-			idx_start = chain->c_flts_nr;
-		else
-			idx_start++;
-	}
+	idx_start = chain_flt_idx(chain, flt);
 
 	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
 		if (rfile->rf_op_old && rfile->rf_op_old->write)

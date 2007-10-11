@@ -188,3 +188,19 @@ int chain_cmp(struct chain *chain1, struct chain *chain2)
 	return 0;
 }
 
+inline int chain_flt_idx(struct chain *chain, struct filter *flt)
+{
+	int idx = 0;
+
+	if (flt) {
+		idx = chain_find_flt(chain, flt);
+
+		if (idx == -1)
+			idx = chain->c_flts_nr;
+		else
+			idx++;
+	}
+
+	return idx;
+}
+
