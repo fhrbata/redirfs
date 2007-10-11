@@ -102,6 +102,8 @@ enum rfs_op_id {
 	RFS_REG_FOP_LLSEEK,
 	RFS_REG_FOP_READ,
 	RFS_REG_FOP_WRITE,
+	RFS_REG_FOP_AIO_READ,
+	RFS_REG_FOP_AIO_WRITE,
 	RFS_REG_FOP_FLUSH,
 
 	RFS_DIR_FOP_OPEN,
@@ -114,6 +116,8 @@ enum rfs_op_id {
 	RFS_CHR_FOP_LLSEEK,
 	RFS_CHR_FOP_READ,
 	RFS_CHR_FOP_WRITE,
+	RFS_CHR_FOP_AIO_READ,
+	RFS_CHR_FOP_AIO_WRITE,
 	RFS_CHR_FOP_FLUSH,
 
 	RFS_BLK_FOP_OPEN,
@@ -121,6 +125,8 @@ enum rfs_op_id {
 	RFS_BLK_FOP_LLSEEK,
 	RFS_BLK_FOP_READ,
 	RFS_BLK_FOP_WRITE,
+	RFS_BLK_FOP_AIO_READ,
+	RFS_BLK_FOP_AIO_WRITE,
 	RFS_BLK_FOP_FLUSH,
 
 	RFS_FIFO_FOP_OPEN,
@@ -128,6 +134,8 @@ enum rfs_op_id {
 	RFS_FIFO_FOP_LLSEEK,
 	RFS_FIFO_FOP_READ,
 	RFS_FIFO_FOP_WRITE,
+	RFS_FIFO_FOP_AIO_READ,
+	RFS_FIFO_FOP_AIO_WRITE,
 	RFS_FIFO_FOP_FLUSH,
 
 	RFS_LNK_FOP_OPEN,
@@ -135,6 +143,8 @@ enum rfs_op_id {
 	RFS_LNK_FOP_LLSEEK,
 	RFS_LNK_FOP_READ,
 	RFS_LNK_FOP_WRITE,
+	RFS_LNK_FOP_AIO_READ,
+	RFS_LNK_FOP_AIO_WRITE,
 	RFS_LNK_FOP_FLUSH,
 
 	RFS_REG_AOP_READPAGE,
@@ -295,6 +305,20 @@ union rfs_op_args {
 		size_t count;
 		loff_t *pos;
 	} f_write;
+
+	struct {
+		struct kiocb *iocb;
+		const struct iovec *iov;
+		unsigned long nr_segs;
+		loff_t pos;
+	} f_aio_read;
+
+	struct {
+		struct kiocb *iocb;
+		const struct iovec *iov;
+		unsigned long nr_segs;
+		loff_t pos;
+	} f_aio_write;
 
 	struct {
 		struct file *file;
@@ -491,6 +515,8 @@ int rfs_get_kobject(rfs_filter filter, struct kobject **kobj);
 
 ssize_t rfs_read_subcall(rfs_filter flt, union rfs_op_args *args);
 ssize_t rfs_write_subcall(rfs_filter flt, union rfs_op_args *args);
+ssize_t rfs_aio_read_subcall(rfs_filter flt, union rfs_op_args *args);
+ssize_t rfs_aio_write_subcall(rfs_filter flt, union rfs_op_args *args);
 int rfs_readpage_subcall(rfs_filter flt, union rfs_op_args *args);
 int rfs_writepage_subcall(rfs_filter flt, union rfs_op_args *args);
 int rfs_readpages_subcall(rfs_filter flt, union rfs_op_args *args);

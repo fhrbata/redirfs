@@ -577,9 +577,16 @@ static ssize_t rfs_read_call(struct filter *flt, struct file *file, char __user 
 
 	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
 		if (rfile->rf_op_old && rfile->rf_op_old->read)
-			rv = rfile->rf_op_old->read(file, buf, count, pos);
+			rv = rfile->rf_op_old->read(args.args.f_read.file,
+					args.args.f_read.buf,
+					args.args.f_read.count,
+					args.args.f_read.pos);
 		else
-			rv = do_sync_read(file, buf, count, pos);
+			rv = do_sync_read(args.args.f_read.file,
+					args.args.f_read.buf,
+					args.args.f_read.count,
+					args.args.f_read.pos);
+
 
 		args.retv.rv_ssize = rv;
 	}
@@ -653,9 +660,15 @@ ssize_t rfs_write_call(struct filter *flt, struct file *file, const char __user 
 
 	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
 		if (rfile->rf_op_old && rfile->rf_op_old->write)
-			rv = rfile->rf_op_old->write(file, buf, count, pos);
+			rv = rfile->rf_op_old->write(args.args.f_write.file,
+					args.args.f_write.buf,
+					args.args.f_write.count,
+					args.args.f_write.pos);
 		else
-			rv = do_sync_write(file, buf, count, pos);
+			rv = do_sync_write(args.args.f_write.file,
+					args.args.f_write.buf,
+					args.args.f_write.count,
+					args.args.f_write.pos);
 
 		args.retv.rv_ssize = rv;
 	}
@@ -681,6 +694,172 @@ ssize_t rfs_write(struct file *file, const char __user *buf, size_t count, loff_
 	return rfs_write_call(NULL, file, buf, count, pos);
 }
 
+static ssize_t rfs_aio_read_call(struct filter *flt, struct kiocb *iocb,
+		const struct iovec *iov, unsigned long nr_segs, loff_t pos)
+{
+	struct rfile *rfile = NULL;
+	struct file *file = iocb->ki_filp;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	ssize_t rv = 0;
+	int idx_start = 0;
+	umode_t mode;
+
+	rfile = rfile_find(file);
+	if (!rfile) {
+		if (file->f_op && file->f_op->aio_read)
+			return file->f_op->aio_read(iocb, iov, nr_segs, pos);
+
+		return -EINVAL;
+	}
+
+	spin_lock(&rfile->rf_lock);
+	chain = chain_get(rfile->rf_chain);
+	spin_unlock(&rfile->rf_lock);
+
+	args.args.f_aio_read.iocb = iocb;
+	args.args.f_aio_read.iov = iov;
+	args.args.f_aio_read.nr_segs = nr_segs;
+	args.args.f_aio_read.pos = pos;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	mode = file->f_dentry->d_inode->i_mode;
+
+	if (S_ISREG(mode))
+		args.type.id = RFS_REG_FOP_AIO_READ;
+	else if (S_ISLNK(mode))
+		args.type.id = RFS_LNK_FOP_AIO_READ;
+	else if (S_ISCHR(mode))
+		args.type.id = RFS_CHR_FOP_AIO_READ;
+	else if (S_ISBLK(mode))
+		args.type.id = RFS_BLK_FOP_AIO_READ;
+	else if (S_ISFIFO(mode))
+		args.type.id = RFS_FIFO_FOP_AIO_READ;
+	else
+		BUG();
+
+	idx_start = chain_flt_idx(chain, flt);
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rfile->rf_op_old && rfile->rf_op_old->aio_read)
+			rv = rfile->rf_op_old->aio_read(args.args.f_aio_read.iocb,
+					args.args.f_aio_read.iov,
+					args.args.f_aio_read.nr_segs,
+					args.args.f_aio_read.pos);
+		else
+			rv = -EINVAL;
+
+		args.retv.rv_ssize = rv;
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+	rv = args.retv.rv_ssize;
+
+	rfile_put(rfile);
+	chain_put(chain);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	return rv;
+}
+
+ssize_t rfs_aio_read_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_aio_read_call(flt, args->f_aio_read.iocb, args->f_aio_read.iov,
+			args->f_aio_read.nr_segs, args->f_aio_read.pos);
+}
+
+ssize_t rfs_aio_read(struct kiocb *iocb, const struct iovec *iov,
+		unsigned long nr_segs, loff_t pos)
+{
+	return rfs_aio_read_call(NULL, iocb, iov, nr_segs, pos);
+}
+
+static ssize_t rfs_aio_write_call(struct filter *flt, struct kiocb *iocb,
+		const struct iovec *iov, unsigned long nr_segs, loff_t pos)
+{
+	struct rfile *rfile = NULL;
+	struct file *file = iocb->ki_filp;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	ssize_t rv = 0;
+	int idx_start = 0;
+	umode_t mode;
+
+	rfile = rfile_find(file);
+	if (!rfile) {
+		if (file->f_op && file->f_op->aio_write)
+			return file->f_op->aio_write(iocb, iov, nr_segs, pos);
+
+		return -EINVAL;
+	}
+
+	spin_lock(&rfile->rf_lock);
+	chain = chain_get(rfile->rf_chain);
+	spin_unlock(&rfile->rf_lock);
+
+	args.args.f_aio_write.iocb = iocb;
+	args.args.f_aio_write.iov = iov;
+	args.args.f_aio_write.nr_segs = nr_segs;
+	args.args.f_aio_write.pos = pos;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	mode = file->f_dentry->d_inode->i_mode;
+
+	if (S_ISREG(mode))
+		args.type.id = RFS_REG_FOP_AIO_WRITE;
+	else if (S_ISLNK(mode))
+		args.type.id = RFS_LNK_FOP_AIO_WRITE;
+	else if (S_ISCHR(mode))
+		args.type.id = RFS_CHR_FOP_AIO_WRITE;
+	else if (S_ISBLK(mode))
+		args.type.id = RFS_BLK_FOP_AIO_WRITE;
+	else if (S_ISFIFO(mode))
+		args.type.id = RFS_FIFO_FOP_AIO_WRITE;
+	else
+		BUG();
+
+	idx_start = chain_flt_idx(chain, flt);
+
+	if (!rfs_precall_flts(idx_start, chain, &cont, &args)) {
+		if (rfile->rf_op_old && rfile->rf_op_old->aio_write)
+			rv = rfile->rf_op_old->aio_write(args.args.f_aio_write.iocb,
+					args.args.f_aio_write.iov,
+					args.args.f_aio_write.nr_segs,
+					args.args.f_aio_write.pos);
+		else
+			rv = -EINVAL;
+
+		args.retv.rv_ssize = rv;
+	}
+
+	rfs_postcall_flts(idx_start, chain, &cont, &args);
+	rv = args.retv.rv_ssize;
+
+	rfile_put(rfile);
+	chain_put(chain);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	return rv;
+}
+
+ssize_t rfs_aio_write_subcall(rfs_filter flt, union rfs_op_args *args)
+{
+	return rfs_aio_write_call(flt, args->f_aio_write.iocb, args->f_aio_write.iov,
+			args->f_aio_write.nr_segs, args->f_aio_write.pos);
+}
+
+ssize_t rfs_aio_write(struct kiocb *iocb, const struct iovec *iov,
+		unsigned long nr_segs, loff_t pos)
+{
+	return rfs_aio_write_call(NULL, iocb, iov, nr_segs, pos);
+}
+
 static void rfile_set_reg_ops(struct rfile *rfile, char *ops)
 {
 	if (ops[RFS_REG_FOP_READ])
@@ -692,6 +871,16 @@ static void rfile_set_reg_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.write = rfs_write;
 	else
 		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
+
+	if (ops[RFS_REG_FOP_AIO_READ])
+		rfile->rf_op_new.aio_read = rfs_aio_read;
+	else
+		rfile->rf_op_new.aio_read = rfile->rf_op_old ? rfile->rf_op_old->aio_read : NULL;
+
+	if (ops[RFS_REG_FOP_AIO_WRITE])
+		rfile->rf_op_new.aio_write = rfs_aio_write;
+	else
+		rfile->rf_op_new.aio_write = rfile->rf_op_old ? rfile->rf_op_old->aio_write : NULL;
 
 	if (ops[RFS_REG_FOP_LLSEEK])
 		rfile->rf_op_new.llseek = rfs_llseek;
@@ -729,6 +918,16 @@ static void rfile_set_chr_ops(struct rfile *rfile, char *ops)
 	else
 		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
 
+	if (ops[RFS_CHR_FOP_AIO_READ])
+		rfile->rf_op_new.aio_read = rfs_aio_read;
+	else
+		rfile->rf_op_new.aio_read = rfile->rf_op_old ? rfile->rf_op_old->aio_read : NULL;
+
+	if (ops[RFS_CHR_FOP_AIO_WRITE])
+		rfile->rf_op_new.aio_write = rfs_aio_write;
+	else
+		rfile->rf_op_new.aio_write = rfile->rf_op_old ? rfile->rf_op_old->aio_write : NULL;
+
 	if (ops[RFS_CHR_FOP_LLSEEK])
 		rfile->rf_op_new.llseek = rfs_llseek;
 	else
@@ -751,6 +950,16 @@ static void rfile_set_blk_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.write = rfs_write;
 	else
 		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
+
+	if (ops[RFS_BLK_FOP_AIO_READ])
+		rfile->rf_op_new.aio_read = rfs_aio_read;
+	else
+		rfile->rf_op_new.aio_read = rfile->rf_op_old ? rfile->rf_op_old->aio_read : NULL;
+
+	if (ops[RFS_BLK_FOP_AIO_WRITE])
+		rfile->rf_op_new.aio_write = rfs_aio_write;
+	else
+		rfile->rf_op_new.aio_write = rfile->rf_op_old ? rfile->rf_op_old->aio_write : NULL;
 
 	if (ops[RFS_BLK_FOP_LLSEEK])
 		rfile->rf_op_new.llseek = rfs_llseek;
@@ -775,6 +984,16 @@ static void rfile_set_fifo_ops(struct rfile *rfile, char *ops)
 	else
 		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
 
+	if (ops[RFS_FIFO_FOP_AIO_READ])
+		rfile->rf_op_new.aio_read = rfs_aio_read;
+	else
+		rfile->rf_op_new.aio_read = rfile->rf_op_old ? rfile->rf_op_old->aio_read : NULL;
+
+	if (ops[RFS_FIFO_FOP_AIO_WRITE])
+		rfile->rf_op_new.aio_write = rfs_aio_write;
+	else
+		rfile->rf_op_new.aio_write = rfile->rf_op_old ? rfile->rf_op_old->aio_write : NULL;
+
 	if (ops[RFS_FIFO_FOP_LLSEEK])
 		rfile->rf_op_new.llseek = rfs_llseek;
 	else
@@ -797,6 +1016,16 @@ static void rfile_set_lnk_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.write = rfs_write;
 	else
 		rfile->rf_op_new.write = rfile->rf_op_old ? rfile->rf_op_old->write : NULL;
+
+	if (ops[RFS_LNK_FOP_AIO_READ])
+		rfile->rf_op_new.aio_read = rfs_aio_read;
+	else
+		rfile->rf_op_new.aio_read = rfile->rf_op_old ? rfile->rf_op_old->aio_read : NULL;
+
+	if (ops[RFS_LNK_FOP_AIO_WRITE])
+		rfile->rf_op_new.aio_write = rfs_aio_write;
+	else
+		rfile->rf_op_new.aio_write = rfile->rf_op_old ? rfile->rf_op_old->aio_write : NULL;
 
 	if (ops[RFS_LNK_FOP_LLSEEK])
 		rfile->rf_op_new.llseek = rfs_llseek;
@@ -971,4 +1200,6 @@ EXPORT_SYMBOL(rfs_detach_data_file);
 EXPORT_SYMBOL(rfs_get_data_file);
 EXPORT_SYMBOL(rfs_read_subcall);
 EXPORT_SYMBOL(rfs_write_subcall);
+EXPORT_SYMBOL(rfs_aio_read_subcall);
+EXPORT_SYMBOL(rfs_aio_write_subcall);
 
