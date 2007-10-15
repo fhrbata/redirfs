@@ -19,6 +19,7 @@
 #include <linux/sched.h>
 #include <linux/mm_types.h>
 #include <linux/mount.h>
+#include <linux/mm.h>
 #include "redirfs.h"
 #include "debug.h"
 

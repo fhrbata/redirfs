@@ -101,6 +101,18 @@ static void rfs_detach_data(struct rdentry *rdentry, struct filter *flt)
 	spin_unlock(&rinode->ri_lock);
 }
 
+static inline void rfs_truncate_inode_pages(struct inode *inode)
+{
+	if (!inode)
+		return;
+
+	if (S_ISREG(inode->i_mode)) {
+		mutex_lock(&inode->i_mutex);
+		truncate_inode_pages(&inode->i_data, 0);
+		mutex_unlock(&inode->i_mutex);
+	}
+}
+
 int rfs_replace_ops(struct rpath *path_old, struct rpath *path_new, struct filter *flt)
 {
 	struct rdentry *rdentry;
@@ -169,6 +181,8 @@ int rfs_replace_ops(struct rpath *path_old, struct rpath *path_new, struct filte
 		rinode->ri_chain = chain_get(chain);
 
 		spin_unlock(&rinode->ri_lock);
+
+		rfs_truncate_inode_pages(rinode->ri_inode);
 	}
 
 	rdentry_put(rdentry);
@@ -271,6 +285,8 @@ int rfs_replace_ops_cb(struct dentry *dentry, void *data)
 
 	spin_unlock(&rinode->ri_lock);
 
+	rfs_truncate_inode_pages(rinode->ri_inode);
+
 	rdentry_put(rdentry);
 
 	return 0;
@@ -310,6 +326,8 @@ int rfs_restore_ops_cb(struct dentry *dentry, void *data)
 
 	rdentry_del(dentry);
 
+	rfs_truncate_inode_pages(dentry->d_inode);
+
 	spin_lock(&rdentry->rd_lock);
 	list_for_each_entry_safe(rfile, tmp, &rdentry->rd_rfiles, rf_rdentry_list) {
 		rfile_del(rfile->rf_file);
@@ -347,6 +365,8 @@ int rfs_set_ops(struct dentry *dentry, struct rpath *path)
 
 	if (rinode)
 		rinode_set_ops(rinode, ops);
+
+	rfs_truncate_inode_pages(dentry->d_inode);
 
 	rdentry_put(rdentry);
 
@@ -405,6 +425,7 @@ int rfs_set_ops_cb(struct dentry *dentry, void *data)
 		spin_unlock(&rinode->ri_lock);
 
 		rinode_set_ops(rinode, path->p_ops);
+		rfs_truncate_inode_pages(dentry->d_inode);
 	}
 
 	spin_lock(&rdentry->rd_lock);
