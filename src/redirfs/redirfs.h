@@ -8,6 +8,7 @@
 #include <linux/sysfs.h>
 #include <linux/kobject.h>
 #include <linux/types.h>
+#include <linux/aio.h>
 
 #define RFS_VERSION "0.2"
 
