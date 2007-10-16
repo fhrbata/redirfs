@@ -446,7 +446,7 @@ struct entry {
 	struct dentry *e_dentry;
 };
 
-int rfs_walk_dcache(struct dentry *root,
+int rfs_walk_dcache(struct dentry *root, int flags,
 		    int (*dcb)(struct dentry *dentry, void *dentry_data),
 		    void *dcb_data,
 		    int (*mcb)(struct dentry *dentry, void *dentry_data),
@@ -478,23 +478,28 @@ int rfs_walk_dcache(struct dentry *root,
 	while (!list_empty(&dirs)) {
 		dir = list_entry(dirs.next, struct entry, e_list);
 
-		res = dcb(dir->e_dentry, dcb_data);
+		if (!(flags & RFS_WALK_DCACHE_SKIP_ROOT) || dir->e_dentry != root) {
+			res = dcb(dir->e_dentry, dcb_data);
 
-		if (res < 0)
-			goto err;
+			if (res < 0)
+				goto err;
 
-		if (res > 0)
-			goto next_dir;
+			if (res > 0)
+				goto next_dir;
+		}
 
 		inode = dir->e_dentry->d_inode;
 		if (!inode)
 			goto next_dir;
 
+		if (!(flags & RFS_WALK_DCACHE_NOLOCK_ROOT) || dir->e_dentry != root) {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16)
-		down(&inode->i_sem);
+			down(&inode->i_sem);
 #else
-		mutex_lock(&inode->i_mutex);
+			mutex_lock(&inode->i_mutex);
 #endif
+		}
+
 		spin_lock(&dcache_lock);
 
 		head = &dir->e_dentry->d_subdirs;
@@ -525,11 +530,14 @@ int rfs_walk_dcache(struct dentry *root,
 
 		spin_unlock(&dcache_lock);
 
+		if (!(flags & RFS_WALK_DCACHE_NOLOCK_ROOT) || dir->e_dentry != root) {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16)
-		up(&inode->i_sem);
+			up(&inode->i_sem);
 #else
-		mutex_unlock(&inode->i_mutex);
+			mutex_unlock(&inode->i_mutex);
 #endif
+		}
+
 		list_for_each_entry_safe(sib, tmp, &sibs, e_list) {
 			dentry = sib->e_dentry;
 			itmp = dentry->d_inode;
@@ -539,6 +547,9 @@ int rfs_walk_dcache(struct dentry *root,
 					goto err;
 				goto next_sib;
 			}
+
+			if (S_ISDIR(itmp->i_mode) && (flags & RFS_WALK_DCACHE_NO_SUBTREE))
+				goto next_sib;
 
 			subdir = kmalloc(sizeof(struct entry), GFP_KERNEL);
 			if (!subdir) 
@@ -563,11 +574,13 @@ next_dir:
 err_lock:
 	spin_unlock(&dcache_lock);
 
+	if (!(flags & RFS_WALK_DCACHE_NOLOCK_ROOT) || dir->e_dentry != root) {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16)
-	up(&inode->i_sem);
+		up(&inode->i_sem);
 #else
-	mutex_unlock(&inode->i_mutex);
+		mutex_unlock(&inode->i_mutex);
 #endif
+	}
 
 err:
 	BUG();

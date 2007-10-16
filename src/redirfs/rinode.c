@@ -695,7 +695,6 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct namei
 	struct rfs_args args;
 	struct dentry *rv = NULL;
 	struct context cont;
-	struct rfile *rfile = NULL;
 
 	parent = rinode_find(dir);
 	if (!parent) {
@@ -775,7 +774,6 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct namei
 	}
 
 exit:
-	rfile_put(rfile);
 	rdentry_put(rdentry);
 	rinode_put(parent);
 	path_put(path_set);
