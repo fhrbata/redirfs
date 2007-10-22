@@ -1,0 +1,308 @@
+RedirFS
+
+Note: This paper requires some basic knowledge about VFS implementation in the
+Linux kernel and Linux kernel internals.
+
+Content
+	1. Abstract
+	2. Features
+	3. RedirFS Objects
+	4. VFS Object Operations Replacement
+	5. RedirFS Connection with VFS
+	6. Walking Through the Dentry Cache
+	7. Filters Call Chain
+	8. Subcalls
+	9. Private Data
+	10. Path Management
+	11. Sysfs Interface
+	12. Filters
+	13. References
+
+1. Abstract
+
+RedirFS or redirecting filesystem is a new layer between virtual filesystem
+switch (VFS) and filesystem drivers. It is implemented as an out-of-kernel
+module for Linux 2.6 and it provides framework allowing modification of
+filesystem calls in the VFS layer. RedirFS in itself does not provide any
+additional functionality and if it is loaded into the Linux kernel it just
+occupies some memory space and it does practically nothing. Now you maybe ask
+yourself a question: So what is it good for? RedirFS is intended to be used by
+so-called filters. Filter is a linux kernel module (LKM) using the RedirFS
+framework. Each filter can add some useful functionality to existing filesystems
+like transparent compression, transparent encryption, merging contents of
+several directories into the one, allowing writing to a read-only media and
+other. Filter can set pre and post callback functions for selected filesystem
+calls (e.g read, open) and include or exclude directories or single files for
+which its callback functions will be called. Every filter has its priority which
+is an unique number defining in which order will be filters called. RedirFS
+manages all filters and it calls their callback functions in order specified by
+their priorities. While RedirFS is located in the VFS layer, filters can be used
+generally over all filesystems (e.g. ext2, nfs, proc). In addition RedirFS
+allows filters to be on-the-fly registered and unregistered.
+
+2. Features
+
+* provides framework allowing to redirect filesystem calls in the VFS layer
+* is implemented as an out-of-kernel module for Linux 2.6
+* is able to register, unregister and manage one or more filters
+* allows filter to set its callback functions on-the-fly
+* allows filter to include and exclude its paths on-the-fly
+* allows filter to forward data from pre to post callback function
+* allows filter to attach its private data to VFS objects
+* allows filter to do subcalls for selected filesystem calls
+* calls pre and post callback function of filters in fixed order specified by
+  their priorities  (call chain) 
+* reacts on return value from filter and it is able to interrupt filters call
+  chain
+* redirects only operations selected by one or more filters, all other
+  operations go directly to the filesystem with no time overhead
+* modifies only VFS objects which belong to paths selected by one or more
+  filters
+
+3. RedirFS Objects 
+
+RedirFS is based on replacing operations of VFS objects - file, dentry, inode
+and address_space. RedirFS creates for each file, dentry and inode object
+corresponding RedirFS object. To avoid confusion with VFS objects RedirFS
+objects are called rfile, rdentry and rinode. RedirFS object exists along with
+the corresponding VFS object and it is connected with VFS object via the VFS
+object operations. Each of RedirFS object contains new operations for VFS object
+and all other information which are needed to call all interested filters.
+RedirFS objects, beside they are connected with VFS objects, are connected with
+each other. The rfile objects contains pointer to the rdentry object. The
+rdentry object contains pointer to the rinode object and a list of all rfile
+objects opened for it. This list is used when the operations of VFS objects are
+restored to the original operations so RedirFS can easily find out witch VFS
+files were modified. And the rinode object contains list of all rdentries
+created for it. To synchronize RedirFS objects creation the rdentry object is
+created using the dentry d_lock and rinode is created using the inode i_lock.
+The rfile object creation is unique and it can not be created twice so no
+synchronization is needed.
+
+4. VFS Object Operations Replacement
+
+RedirFS creates new operations for each VFS object. This allows RedirFS to set
+for different VFS objects different operations. For example disk based
+filesystems has only one set of operations for regular file inodes. Each regular
+file inode for such filesystem has pointer to the same inode operations in the
+filesystem driver. RedirFS creates for each such inode a new set of inode
+operations.
+
+The VFS layer does not know anything about RedirFS. It just calls operations
+which are set for its objects. As mentioned before RedirFS replaces those
+operations so VFS layer calls functions in the RedirFS framework. For example
+when a filter is interested in some inode operation, RedirFS creates for this
+inode a rinode object. This rinode object contains new inode_operations and
+pointer to the original inode_operations. The new inode_operations in the rinode
+object are initialized with values of original inode_operations, operations in
+which is filter interested are replaced with RedirFS operations. The new
+inode_operations within the rinode object are assigned to the inode object and
+pointer to the old inode_operations is stored in the rinode. The new operations
+stay same as the original operations until one or more filters want to set pre
+or post callback function for the specific operation. Thanks to this approach
+there is no time overhead for operations for which filters did not set pre or
+post callbacks. However there are several operations which need to be replaced
+every time. This is because RedirFS needs to keep track of creating and deleting
+VFS objects so it can replace operations for newly created objects and on the
+other hand restore operations when the VFS objects are deleted. Follows the list
+of operations which need to be redirected to RedirFS every time:
+
+file_operations:
+ * open - all
+ * release - all
+ * readdir - dir (due to network filesystems)
+
+dentry_operations:
+ * d_iput - all
+ * d_release - all
+
+inode_operations:
+ * mkdir - dir
+ * create - dir
+ * link - dir
+ * symlink - dir
+ * mknod - dir
+ * lookup - all
+
+Note: all - all file types, dir - only directory
+
+5. RedirFS Connection with VFS
+
+While VFS object pointer to its operations set points to the operations stored
+within the RedirFS object, RedirFS can easily obtain the RedirFS object
+corresponding to the VFS object through the content_of kernel macro. This means
+that VFS and RedirFS objects are connected through operations. RedirFS object is
+deleted when filters are no more interested in the VFS object operations. This
+can lead to a situation when the VFS layer calls the RedirFS operation but right
+before the RedirFS object is obtained it is deleted. In this situation RedirFS
+knows that the VFS object operations were set back to the original operations
+and it just calls the original operation. If the original operation is not
+implemented by the filesystem, RedirFS calls proper default VFS operation or it
+returns an error. How RedirFS finds out that the operations were set back to the
+original ones? The trick is that RedirFS sets for each new operations set one
+fixed RedirFS operation. For inode it is lookup, for dentry d_iput and for file
+open operation. So RedirFS just finds out if this fixed operation is set in the
+VFS object operations set. If it is, it is safe to use content_of macro and get
+the corresponding RedirFS object. In addition RedirFS is using rcu for
+synchronization when pointers to the VFS objects operations are changed. This
+ensures that nobody else will manipulate with the pointer while RedirFS is
+comparing pointers. Moreover RedirFS objects are using proper reference
+counting. Thanks to this approaches VFS object operations pointer can be safely
+changed and RedirFS objects can be on-the-fly created and deleted. RedirFS is
+using the fact that pointer assignment in Linux kernel is atomic.
+
+6. Walking Through the Dentry Cache
+
+RedirFS is replacing operations of VFS objects for paths selected by filters.
+This is done by walking through the VFS dcache. Since dcache_lock is exported by
+the Linux kernel, RedirFS can safely go through selected dentry subtree and
+replace operations for dentry and inode objects while each dentry object has a
+pointer to its inode object. There is one exception for so-called negative
+dentries. Negative dentry does not have pointer to the inode and it is used for
+path lookup speed-up for files which do not exist. There is no safe way how to
+find out which file objects are already opened for dentry object. This means
+that RedirFS is not able to modify operations of files which were opened before
+inode operations for selected file were replaced. So filters can set their pre
+and post callback function only for files opened after the inode operations for
+selected files were replaced. 
+
+For going through the dcache RedirFS implements the general rfs_walk_dcache
+function. This function goes through dentry subtree starting by dentry object
+passed to it as argument and for each dentry in this subtree it calls callback
+functions passed to it as arguments. This function is using for each level in
+the subtree the parent inode i_mutex to make sure that nobody else can add or
+remove objects in this subtree level while RedirFS is modifying objects
+operations. RedirFS is using this function for replacing, restoring and setting
+VFS objects operations.
+
+During walking through the dentry cache the dentry operations are replaced for
+each dentry and inode operations along with address space operations for each
+inode. The address space operations are replaced only for regular files because
+they have their address space operations set by a filesystem and stored in the
+i_data inode attribute. For other file types, like block device which change the
+whole address_space object in the file open function, it is not possible for now
+to replace their address space operations. Moreover RedirFS has to use the
+truncate_inode_page function to invalidate the page cache for inode every time
+the operations are changed. File operations in the inode objects are
+replaced with generic RedirFS file operations which implement only open
+operation. File operations for file are replaced after the VFS file object is
+created because file operations can be changed during open call. This is used by
+the special files like char device or fifo. RedirFS is using the same principle
+for replacing file operations like special files do.
+
+7. Filters Call Chain
+
+Each RedirFS object contains pointer to the so-called filters call chain.
+Filters call chain is a list of filters which are interested in one or more
+operations of VFS object ordered by their priorities. This list tells RedirFS
+which Filters have to be called before (pre callbacks) and after
+(post-callbacks) the original operation. Each filter can finish or stop
+proceeded operation in its pre callback function. This means that the original
+operation will not be called. Filter can finish proceeded operation by returning
+an error code or by finishing it. Operations can be finished by e.g. RedirFS
+subcalls. Filters call chain for newly created RedirFS object is inherited from
+his parent. This happens when new VFS object is created (e.g. new file is
+created).
+
+8. RedirFS Subcalls
+
+Subcalls are RedirFS functions for selected VFS operations. Subcall calls only
+filters which are in the filter call chain past the filter which called the
+subcall. This allows filter to call the same VFS operation with its own or
+different arguments.
+
+9. Private Data
+
+The post callback functions will be called for each filter for which its pre
+callback function was called. This is because filter can attach its private data
+per operation in the pre callback function and it has to detach them in the post
+callback function. Filters are also allowed to attach their private data to each
+VFS object. When the VFS object is going to be deleted RedirFS will notify each
+filter which has its private data attached to this object to detach them. Filter
+attaching its private data to the VFS object via RedirFS also has to provide
+along with its data the callback function which will be called when the VFS
+object or corresponding RedirFS object will be deleted. Private data for filters
+are kept in a list in the RedirFS object corresponding to the VFS object.
+
+10. Path Management
+
+Paths selected by filters are in the RedirFS represented by the rpath structure.
+Filters can include or exclude directory subtrees or even single path (file or
+directory). Rpath objects are connected in trees and the root of each tree is
+stored in the global path_list list. When filter wants to add new path for its
+callbacks, RedirFS checks if corresponding rpath already exists (maybe some
+other filter added it). If it does not exist RedirFS creates new rpath object,
+adds it to the rpath tree and if this new rpath has a parent rpath it inherits
+all filters from parent rpath. As mentioned previously each RedirFS object has
+pointer to the filters call chain. Filters call chain represents list of filters
+attached to the rpath. Each RedirFS object has pointer to the filters call chain
+of rpath it belongs to. RedirFS implements general rfs_path_walk function which
+goes through all rpaths in the rpaths tree and for each rpath it calls a
+callback function. Starting rpath and the callback function are passed as
+arguments to this function. If starting rpath is NULL it goes through all rpaths
+in all trees. Each rpath object contains full pathname of path it represents.
+This is used for finding rpath object for the corresponding path entered by a
+filter in the rpath tree. The rpath object contains pointer to the dentry object
+to which it belongs to. The dentry object is found with the path_lookup function
+exported by the VFS. So when RedirFS has the rpath object it knows the root
+dentry object which is then used in the rfs_walk_dcache function to replace,
+restore or set VFS objects operations. The path_list is protected by the
+path_list_mutex which means that only one process can manipulate rpath tree, use
+the rfs_walk_path and rfs_walk_dcache function. To ensure that RedirFS will
+change operations belonging only the the selected rpath, each rdentry object
+contains rd_root flags. If this flag is set it means that this dentry object is
+belonging to other rpath and rfs_walk_dcache has to skip subtree with this
+dentry.
+
+While filter can select single path, the rpath object has to be able to handle
+situation when one filter includes path subtree and other filter includes the
+same path but as a single path. In this case rpath has two filters call chains.
+One local chain with both filters only for objects belonging to the single path
+and second chain with one filter for all objects in the subtree. When rpath has
+the same filters in the filters call chain as its parent it is deleted and all
+RedirFS objects switch to the parent rpath. If rpath has no filters in the
+filters call chain it is deleted along with all RedirFS objects which belong to
+this rpath and operations of all VFS objects for this rpath are restored to the
+original operations. The rpath management is unfortunately more complicated
+because filters can also exclude paths subtrees and single paths. This means
+that rpath object has four filters call chains - global include, global exclude,
+local include and local exclude. Before rpath is removed, RedirFS also has to
+check the exclude chains.
+
+11. Sysfs Interface
+
+RedirFS creates for filter some basic attributes in the sysfs filesystem. For
+each filter is created a directory /sys/fs/redirfs/<filter name>. This directory
+contains following files (attributes):
+
+active   - activate or deactivate filter
+paths    - list of included and exclude paths, path can be  set via this file
+control  - flags if filter is accepting setting via the sysfs interface
+priority - filter's priority
+
+
+12. Filters
+
+Filter is in the RedirFS represented by the filter structure. Each filter has a
+name, unique priority number, set of pre and post callback operations and set of
+paths. Filter's name is used for the directory name in the sysfs filesystem.
+Filter can register a callback function to receive settings via the sysfs
+interface but it can ignore it and use its own way how to set paths. Pre and
+post callback filter's functions are stored in arrays - f_pre_cbs for pre
+callbacks and f_post_cbs for post callbacks. As mentioned before each path
+has a filters call chain. RedirFS makes a new operations for VFS objects for
+selected rpath by unification of all callback functions of all filters in the
+filters call chain and it goes through the dentry cache and set these new
+operations to VFS objects.
+
+13. References
+
+[1] Bovet, P. B., Cesati, M.: Understanding the Linux Kernel. 3rd Edition,
+    U.S.A., O'Reilly 2005
+
+[2] Love, R.: Linux Kernel Development. 2nd Edition, Indianapolis, Indiana,
+    Novel Press 2005
+
+[3] Alessandro Rubini, Jonathan Corbet: Linux Device Drivers, 2nd Edition,
+    U.S.A., O'Reilly 2001
+    
