@@ -127,7 +127,7 @@ static int __init dummyflt_init(void)
 		goto error;
 	}
 
-	printk(KERN_INFO "Dummy Filter Version " RFS_VERSION " <www.redirfs.org>\n");
+	printk(KERN_INFO "Dummy Filter Version " DUMMYFLT_VERSION " <www.redirfs.org>\n");
 
 	return 0;
 
