@@ -1,3 +1,6 @@
+	* commit 341, Paolo Ambrosio <paolo.ambrosio@gmail.com>, 2007-11-02
+	- fixed typo RFS_REG_AOP_COMMINT_WRITE =>  RFS_REG_AOP_COMMIT_WRITE
+
 Version 0.2
 	* rewritten from scratch
 
