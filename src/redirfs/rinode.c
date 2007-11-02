@@ -1531,7 +1531,7 @@ static int rfs_commit_write_call(struct filter *flt, struct file *file,
 	INIT_LIST_HEAD(&cont.data_list);
 
 	if (S_ISREG(inode->i_mode))
-		args.type.id = RFS_REG_AOP_COMMINT_WRITE;
+		args.type.id = RFS_REG_AOP_COMMIT_WRITE;
 	else
 		BUG();
 
@@ -2109,7 +2109,7 @@ static void rinode_set_reg_ops(struct rinode *rinode, char *ops)
 	else
 		rinode->ri_aop_new.prepare_write = rinode->ri_aop_old ? rinode->ri_aop_old->prepare_write : NULL;
 
-	if (ops[RFS_REG_AOP_COMMINT_WRITE])
+	if (ops[RFS_REG_AOP_COMMIT_WRITE])
 		rinode->ri_aop_new.commit_write = rfs_commit_write;
 	else
 		rinode->ri_aop_new.commit_write = rinode->ri_aop_old ? rinode->ri_aop_old->commit_write : NULL;
