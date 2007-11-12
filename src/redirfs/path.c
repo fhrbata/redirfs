@@ -403,8 +403,9 @@ int rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 
 				path->p_inchain = chain_get(inchain);
 				path->p_exchain = chain_get(exchain);
-				path->p_flags |= RFS_PATH_SUBTREE;
 			}
+
+			path->p_flags |= RFS_PATH_SUBTREE;
 		}
 	}
 

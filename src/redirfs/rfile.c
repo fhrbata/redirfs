@@ -444,7 +444,9 @@ int rfs_readdir(struct file *file, void *buf, filldir_t filler)
 
 	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 		if (rfile->rf_op_old && rfile->rf_op_old->readdir)
-			rv = rfile->rf_op_old->readdir(args.args.f_readdir.file, args.args.f_readdir.buf, args.args.f_readdir.filldir);
+			rv = rfile->rf_op_old->readdir(args.args.f_readdir.file,
+					args.args.f_readdir.buf,
+					args.args.f_readdir.filldir);
 		else
 			rv = -ENOTDIR;
 
@@ -457,8 +459,12 @@ int rfs_readdir(struct file *file, void *buf, filldir_t filler)
 	mutex_lock(&path_list_mutex);
 	data_cb.path = rfile->rf_path;
 	data_cb.filter = NULL;
-	if (rfs_walk_dcache(file->f_dentry, RFS_WALK_DCACHE_READDIR, rfs_replace_ops_cb, &data_cb, NULL, NULL))
-		BUG();
+	if (rfile->rf_path->p_flags & RFS_PATH_SUBTREE) {
+		if (rfs_walk_dcache(file->f_dentry, RFS_WALK_DCACHE_READDIR,
+					rfs_replace_ops_cb, &data_cb, NULL,
+					NULL))
+			BUG();
+	}
 	mutex_unlock(&path_list_mutex);
 
 	rfile_put(rfile);

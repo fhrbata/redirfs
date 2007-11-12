@@ -451,6 +451,14 @@ int flt_add_cb(struct rpath *path, void *data)
 			chain_put(path->p_exchain);
 			path->p_exchain = exchain;
 		}
+
+		ops = ops_alloc();
+		if (IS_ERR(ops))
+			return PTR_ERR(ops);
+
+		chain_get_ops(path->p_inchain, ops->o_ops);
+		ops_put(path->p_ops);
+		path->p_ops = ops;
 	}
 
 	if (path->p_flags & RFS_PATH_SINGLE) {
@@ -492,16 +500,6 @@ int flt_add_cb(struct rpath *path, void *data)
 
 	if (!inchain && (path->p_flags & RFS_PATH_SUBTREE))
 		return 0;
-
-	if (path->p_flags & RFS_PATH_SUBTREE) {
-		ops = ops_alloc();
-		if (IS_ERR(ops))
-			return PTR_ERR(ops);
-
-		chain_get_ops(path_go->p_inchain, ops->o_ops);
-		ops_put(path_go->p_ops);
-		path_go->p_ops = ops;
-	}
 
 	data_cb.path = path_go;
 	data_cb.filter = NULL;
