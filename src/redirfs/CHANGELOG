@@ -1,5 +1,9 @@
+	* commit 346, Frantisek Hrbata <frantisek.hrbata@redirfs.org>, 2007-11-12
+	- fixed bug 09: crash on rdentry_set_ops when changing path
+	- fixed bug 10: include subtree after include single path causes crash
+
 	* commit 341, Paolo Ambrosio <paolo.ambrosio@gmail.com>, 2007-11-02
-	- fixed typo RFS_REG_AOP_COMMINT_WRITE =>  RFS_REG_AOP_COMMIT_WRITE
+	- fixed typo RFS_REG_AOP_COMMINT_WRITE => RFS_REG_AOP_COMMIT_WRITE
 
 Version 0.2
 	* rewritten from scratch
