@@ -367,6 +367,8 @@ static inline int rfs_d_compare_default(struct qstr *name1, struct qstr *name2)
 int rfs_d_compare(struct dentry *dentry, struct qstr *name1, struct qstr *name2)
 {
 	struct rdentry *rdentry = NULL;
+	struct rdentry *rchild = NULL;
+	struct dentry *child = NULL;
 	struct chain *chain = NULL;
 	struct inode *inode = NULL;
 	struct rfs_args args;
@@ -421,7 +423,13 @@ int rfs_d_compare(struct dentry *dentry, struct qstr *name1, struct qstr *name2)
 
 	rfs_postcall_flts(0, chain, &cont, &args);
 	rv = args.retv.rv_int;
-
+	
+	child = container_of(name1, struct dentry, d_name);
+	rchild = rdentry_find(child);
+	if (!rchild)
+		__d_drop(child);
+	
+	rdentry_put(rchild);
 	rdentry_put(rdentry);
 	chain_put(chain);
 
@@ -681,15 +689,12 @@ static void rdentry_set_dir_ops(struct rdentry *rdentry, char *ops)
 	else
 		rdentry->rd_op_new.d_hash = rdentry->rd_op_old ? rdentry->rd_op_old->d_hash : NULL;
 
-	if (ops[RFS_DIR_DOP_D_COMPARE])
-		rdentry->rd_op_new.d_compare = rfs_d_compare;
-	else
-		rdentry->rd_op_new.d_compare = rdentry->rd_op_old ? rdentry->rd_op_old->d_compare : NULL;
-
 	if (ops[RFS_DIR_DOP_D_DELETE])
 		rdentry->rd_op_new.d_delete = rfs_d_delete;
 	else
 		rdentry->rd_op_new.d_delete = rdentry->rd_op_old ? rdentry->rd_op_old->d_delete : NULL;
+
+	rdentry->rd_op_new.d_compare = rfs_d_compare;
 }
 
 static void rdentry_set_lnk_ops(struct rdentry *rdentry, char *ops)

@@ -5,7 +5,6 @@ unsigned long long rfile_cnt = 0;
 spinlock_t rfile_cnt_lock = SPIN_LOCK_UNLOCKED;
 extern atomic_t rfiles_freed;
 extern wait_queue_head_t rfiles_wait;
-extern struct mutex path_list_mutex;
 
 struct file_operations rfs_file_ops = {
 	.owner = THIS_MODULE,
@@ -416,7 +415,6 @@ int rfs_readdir(struct file *file, void *buf, filldir_t filler)
 	struct chain *chain = NULL;
 	struct rfs_args args;
 	struct context cont;
-	struct dcache_data_cb data_cb; 
 	int rv = 0;
 
 	rfile = rfile_find(file);
@@ -455,17 +453,6 @@ int rfs_readdir(struct file *file, void *buf, filldir_t filler)
 
 	rfs_postcall_flts(0, chain, &cont, &args);
 	rv = args.retv.rv_int;
-
-	mutex_lock(&path_list_mutex);
-	data_cb.path = rfile->rf_path;
-	data_cb.filter = NULL;
-	if (rfile->rf_path->p_flags & RFS_PATH_SUBTREE) {
-		if (rfs_walk_dcache(file->f_dentry, RFS_WALK_DCACHE_READDIR,
-					rfs_replace_ops_cb, &data_cb, NULL,
-					NULL))
-			BUG();
-	}
-	mutex_unlock(&path_list_mutex);
 
 	rfile_put(rfile);
 	chain_put(chain);
@@ -910,12 +897,15 @@ static void rfile_set_reg_ops(struct rfile *rfile, char *ops)
 
 static void rfile_set_dir_ops(struct rfile *rfile, char *ops)
 {
+	if (ops[RFS_DIR_FOP_READDIR])
+		rfile->rf_op_new.readdir = rfs_readdir;
+	else
+		rfile->rf_op_new.readdir = rfile->rf_op_old ? rfile->rf_op_old->readdir : NULL;
+
 	if (ops[RFS_DIR_FOP_FLUSH])
 		rfile->rf_op_new.flush = rfs_flush;
 	else
 		rfile->rf_op_new.flush = rfile->rf_op_old ? rfile->rf_op_old->flush : NULL;
-
-	rfile->rf_op_new.readdir = rfs_readdir;
 }
 
 static void rfile_set_chr_ops(struct rfile *rfile, char *ops)

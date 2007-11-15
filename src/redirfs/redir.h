@@ -23,11 +23,6 @@
 #include "redirfs.h"
 #include "debug.h"
 
-#define RFS_WALK_DCACHE_SKIP_ROOT	1
-#define RFS_WALK_DCACHE_NOLOCK_ROOT	2
-#define RFS_WALK_DCACHE_NO_SUBTREE	4
-#define RFS_WALK_DCACHE_READDIR		(RFS_WALK_DCACHE_SKIP_ROOT | RFS_WALK_DCACHE_NOLOCK_ROOT | RFS_WALK_DCACHE_NO_SUBTREE)
-
 struct rdentry;
 struct rinode;
 struct rpath;
@@ -215,7 +210,7 @@ int rfs_restore_ops_cb(struct dentry *dentry, void *data);
 int rfs_set_path_cb(struct dentry *dentry, void *data);
 int rfs_set_ops(struct dentry *dentry, struct rpath *path);
 int rfs_set_ops_cb(struct dentry *dentry, void *data);
-int rfs_walk_dcache(struct dentry *root, int flags, int (*)(struct dentry *, void *), void *, int (*)(struct dentry *, void *), void *);
+int rfs_walk_dcache(struct dentry *root, int (*)(struct dentry *, void *), void *, int (*)(struct dentry *, void *), void *);
 int rfs_precall_flts(int idx_start, struct chain *chain, struct context *cont, struct rfs_args *args);
 void rfs_postcall_flts(int idx_start, struct chain *chain, struct context *cont, struct rfs_args *args);
 

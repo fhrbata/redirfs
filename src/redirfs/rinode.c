@@ -740,7 +740,11 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct namei
 	if (!chain_set)
 		goto exit;
 
-	rdentry = rdentry_add(dentry);
+	if (!rv || IS_ERR(rv))
+		goto exit;
+
+	rdentry = rdentry_add(rv);
+
 	if (IS_ERR(rdentry)) {
 		BUG();
 		goto exit;
