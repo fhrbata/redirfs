@@ -897,6 +897,62 @@ exit:
 	return rv;
 }
 
+int rfs_rename(struct inode *old_dir, struct dentry *old_dentry, struct inode *new_dir, struct dentry *new_dentry)
+{
+	struct rinode *rold_dir = NULL;
+	struct chain *chain = NULL;
+	struct rfs_args args;
+	struct context cont;
+	int rv = 0;
+
+	rold_dir = rinode_find(old_dir);
+	if (!rold_dir) {
+		if (old_dir->i_op && old_dir->i_op->rename)
+			return old_dir->i_op->rename(old_dir, old_dentry, new_dir, new_dentry);
+		else
+			return -EPERM;
+	}
+
+	spin_lock(&rold_dir->ri_lock);
+	chain = chain_get(rold_dir->ri_chain);
+	spin_unlock(&rold_dir->ri_lock);
+
+	args.args.i_rename.old_dir = old_dir;
+	args.args.i_rename.old_dentry = old_dentry;
+	args.args.i_rename.new_dir = new_dir;
+	args.args.i_rename.new_dentry = new_dentry;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	if (S_ISDIR(old_dir->i_mode))
+		args.type.id = RFS_DIR_IOP_RENAME;
+	else
+		BUG();
+
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
+		if (rold_dir->ri_op_old && rold_dir->ri_op_old->rename)
+			rv = rold_dir->ri_op_old->rename(old_dir, old_dentry, new_dir, new_dentry);
+		else
+			rv = -EPERM;
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(0, chain, &cont, &args);
+	rv = args.retv.rv_int;
+
+	rinode_put(rold_dir);
+	chain_put(chain);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	/*****************************************************************
+	 * WE NEED TO CHANGE RECURSIVELY THE OPERATIONS FOR ALL FILTERS! *
+	 *****************************************************************/
+
+	return rv;
+}
+
 int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 {
 	struct rinode *rinode = NULL;
@@ -2160,6 +2216,11 @@ static void rinode_set_dir_ops(struct rinode *rinode, char *ops)
 		rinode->ri_op_new.unlink = rfs_unlink;
 	else
 		rinode->ri_op_new.unlink = rinode->ri_op_old ? rinode->ri_op_old->unlink : NULL;
+
+	if (ops[RFS_DIR_IOP_RENAME])
+		rinode->ri_op_new.rename = rfs_rename;
+	else
+		rinode->ri_op_new.rename = rinode->ri_op_old ? rinode->ri_op_old->rename : NULL;
 
 	if (ops[RFS_DIR_IOP_PERMISSION])
 		rinode->ri_op_new.permission = rfs_permission;

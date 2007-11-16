@@ -80,6 +80,7 @@ enum rfs_op_id {
 	RFS_DIR_IOP_MKDIR,
 	RFS_DIR_IOP_RMDIR,
 	RFS_DIR_IOP_MKNOD,
+	RFS_DIR_IOP_RENAME,
 	RFS_DIR_IOP_PERMISSION,
 	RFS_DIR_IOP_SETATTR,
 
@@ -254,6 +255,13 @@ union rfs_op_args {
 		int mode;
 		dev_t rdev;
 	} i_mknod;
+
+	struct {
+		struct inode *old_dir;
+		struct dentry *old_dentry;
+		struct inode *new_dir;
+		struct dentry *new_dentry;
+	} i_rename;
 
 	struct {
 		struct inode *inode;
