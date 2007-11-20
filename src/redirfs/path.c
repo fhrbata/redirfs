@@ -42,9 +42,37 @@ int path_normalize(const char *path, char *buf, int len)
 	return 0;
 }
 
-struct rpath *path_alloc(const char *path_name)
+unsigned int path_get_hash(struct vfsmount *mnt, struct dentry *dentry)
 {
-	struct nameidata nd;
+	struct vfsmount *mnt_orig;
+	struct dentry *dentry_orig;
+	unsigned int hash = 0;
+
+	spin_lock(&dcache_lock);
+
+	hash = (int)dentry;
+again:
+	while (!IS_ROOT(dentry)) {
+		hash += (int)dentry->d_parent;
+		dentry = dentry->d_parent;
+	}
+
+	mnt_orig = mntget(mnt);
+	dentry_orig = dget(dentry);
+
+	if (!follow_up(&mnt, &dentry)) {
+		mntput(mnt_orig);
+		dput(dentry_orig);
+	} else
+		goto again;
+
+	spin_unlock(&dcache_lock);
+
+	return hash;
+}
+
+struct rpath *path_alloc(const char *path_name, struct nameidata *nd)
+{
 	struct rpath *path;
 	char *path_buf;
 	int path_len;
@@ -52,16 +80,12 @@ struct rpath *path_alloc(const char *path_name)
 	if (!path_name)
 		return ERR_PTR(-EINVAL);
 
-	if (path_lookup(path_name, LOOKUP_FOLLOW, &nd))
-		return ERR_PTR(-ENOENT);
-
 	path_len = strlen(path_name);
 
 	path = kmalloc(sizeof(struct rpath), GFP_KERNEL);
 	path_buf = kmalloc(path_len + 1, GFP_KERNEL);
 
 	if (!path || !path_buf) {
-		path_release(&nd);
 		kfree(path);
 		kfree(path_buf);
 		return ERR_PTR(-ENOMEM);
@@ -70,12 +94,14 @@ struct rpath *path_alloc(const char *path_name)
 	strncpy(path_buf, path_name, path_len);
 	path_buf[path_len] = 0;
 
+	path->p_hash = path_get_hash(nd->mnt, nd->dentry);
+	path->p_dhash = nd->dentry->d_name.hash;
 	path->p_inchain = NULL;
 	path->p_exchain = NULL;
 	path->p_inchain_local = NULL;
 	path->p_exchain_local = NULL;
-	path->p_dentry = dget(nd.dentry);
-	path->p_mnt = mntget(nd.mnt);
+	path->p_dentry = dget(nd->dentry);
+	path->p_mnt = mntget(nd->mnt);
 	path->p_path = path_buf;
 	path->p_len = path_len;
 	path->p_parent = NULL;
@@ -87,8 +113,6 @@ struct rpath *path_alloc(const char *path_name)
 	INIT_LIST_HEAD(&path->p_sibpath);
 	INIT_LIST_HEAD(&path->p_subpath);
 	INIT_LIST_HEAD(&path->p_rem);
-
-	path_release(&nd);
 
 	return path;
 }
@@ -177,7 +201,7 @@ struct rpath *path_find(const char *path_name, int parent)
 	return found;
 }
 
-struct rpath *path_add(const char *path_name)
+struct rpath *path_add(const char *path_name, struct nameidata *nd)
 {
 	struct rpath *path;
 	struct rpath *parent;
@@ -192,7 +216,7 @@ struct rpath *path_add(const char *path_name)
 	if (path) 
 		return path;
 
-	path = path_alloc(path_name);
+	path = path_alloc(path_name, nd);
 
 	if (IS_ERR(path))
 		return path;
@@ -341,17 +365,18 @@ int rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 		}
 	}
 
-	path_release(&nd);
-
 	path_len = strlen(path_info->path) + 1;
 	path_name = kmalloc(path_len, GFP_KERNEL);
 
-	if (!path_name)
+	if (!path_name) {
+		path_release(&nd);
 		return -ENOMEM;
+	}
 	
 	retv = path_normalize(path_info->path, path_name, path_len);
 	if (retv) {
 		kfree(path_name);
+		path_release(&nd);
 		return retv;
 	}
 
@@ -421,7 +446,7 @@ int rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 	}
 
 	if (!path) {
-		path = path_add(path_name);
+		path = path_add(path_name, &nd);
 		if (IS_ERR(path)) {
 			retv = PTR_ERR(path);
 			goto exit;
@@ -473,6 +498,7 @@ int rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info)
 	}
 
 exit:
+	path_release(&nd);
 	chain_put(inchain);
 	chain_put(exchain);
 	path_put(path);

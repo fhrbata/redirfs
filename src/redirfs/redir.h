@@ -87,6 +87,8 @@ struct rpath {
 	char *p_path;
 	int p_len;
 	int p_flags;
+	unsigned int p_hash;
+	unsigned int p_dhash;
 	struct dentry *p_dentry;
 	struct vfsmount *p_mnt;
 	unsigned long long p_count;
@@ -104,7 +106,7 @@ struct rpath {
 };
 
 int path_del(struct rpath *path);
-struct rpath *path_alloc(const char *path_name);
+struct rpath *path_alloc(const char *path_name, struct nameidata *nd);
 struct rpath *path_get(struct rpath *path);
 void path_put(struct rpath *path);
 void path_add_rdentry(struct rpath *path, struct rdentry *rdentry);
@@ -112,6 +114,7 @@ void path_del_rdentry(struct rpath *path, struct rdentry *rdentry);
 int rfs_path_walk(struct rpath *path, int walkcb(struct rpath*, void*), void *datacb);
 void path_rem(struct rpath *path);
 int path_flt_info(struct filter *flt, char *buf, int size);
+unsigned int path_get_hash(struct vfsmount *mnt, struct dentry *dentry);
 
 struct rfile {
 	struct list_head rf_rdentry_list;
@@ -207,6 +210,7 @@ struct rfs_priv_data *rfs_find_data(struct list_head *head, struct filter *flt);
 int rfs_replace_ops(struct rpath *path_old, struct rpath *path_new, struct filter *flt);
 int rfs_replace_ops_cb(struct dentry *dentry, void *data);
 int rfs_restore_ops_cb(struct dentry *dentry, void *data);
+int rfs_rename_cb(struct dentry *dentry, void *data);
 int rfs_set_path_cb(struct dentry *dentry, void *data);
 int rfs_set_ops(struct dentry *dentry, struct rpath *path);
 int rfs_set_ops_cb(struct dentry *dentry, void *data);

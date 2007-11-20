@@ -12,6 +12,7 @@ extern unsigned long long rinode_cnt;
 extern spinlock_t rinode_cnt_lock;
 extern unsigned long long rfile_cnt;
 extern spinlock_t rfile_cnt_lock;
+extern struct list_head path_rem_list;
 
 int rfs_precall_flts(int idx_start, struct chain *chain, struct context *cont, struct rfs_args *args)
 {
@@ -75,6 +76,40 @@ static void rfs_remove_data(struct list_head *head, struct filter *filter)
 
 	list_del(&data->list);
 	rfs_put_data(data);
+}
+
+static void rfs_detach_all_data(struct rdentry *rdentry)
+{
+	struct rinode *rinode = rdentry->rd_rinode;
+	struct rfile *rfile;
+	struct rfs_priv_data *data;
+	struct rfs_priv_data *tmp;
+
+	spin_lock(&rdentry->rd_lock);
+	list_for_each_entry_safe(data, tmp, &rdentry->rd_data, list) {
+		list_del(&data->list);
+		rfs_put_data(data);
+	}
+	
+	list_for_each_entry(rfile, &rdentry->rd_rfiles, rf_rdentry_list) {
+		spin_lock(&rfile->rf_lock);
+		list_for_each_entry_safe(data, tmp, &rfile->rf_data, list) {
+			list_del(&data->list);
+			rfs_put_data(data);
+		}
+		spin_unlock(&rfile->rf_lock);
+	}
+	spin_unlock(&rdentry->rd_lock);
+
+	if (!rinode)
+		return;
+
+	spin_lock(&rinode->ri_lock);
+	list_for_each_entry_safe(data, tmp, &rinode->ri_data, list) {
+		list_del(&data->list);
+		rfs_put_data(data);
+	}
+	spin_unlock(&rinode->ri_lock);
 }
 
 static void rfs_detach_data(struct rdentry *rdentry, struct filter *flt)
@@ -338,6 +373,51 @@ int rfs_restore_ops_cb(struct dentry *dentry, void *data)
 	rdentry_put(rdentry);
 
 	return 0; 
+}
+
+int rfs_rename_cb(struct dentry *dentry, void *data)
+{
+	struct rfile *rfile;
+	struct rfile *tmp;
+	struct rdentry *rdentry;
+	struct rpath *rpath;
+
+	rdentry = rdentry_find(dentry);
+	if (!rdentry)
+		return 0;
+
+	rdentry_del(dentry);
+	
+	rfs_truncate_inode_pages(dentry->d_inode);
+
+	spin_lock(&rdentry->rd_lock);
+	list_for_each_entry_safe(rfile, tmp, &rdentry->rd_rfiles, rf_rdentry_list) {
+		rfile_del(rfile->rf_file);
+	}
+	spin_unlock(&rdentry->rd_lock);
+
+	rfs_detach_all_data(rdentry);
+
+	if (rdentry->rd_root) {
+		rpath = rdentry->rd_path;
+		chain_put(rpath->p_inchain);
+		chain_put(rpath->p_exchain);
+		chain_put(rpath->p_inchain_local);
+		chain_put(rpath->p_exchain_local);
+		ops_put(rpath->p_ops);
+		ops_put(rpath->p_ops_local);
+		rpath->p_inchain = NULL;
+		rpath->p_exchain = NULL;
+		rpath->p_inchain_local = NULL;
+		rpath->p_exchain_local = NULL;
+		rpath->p_ops = NULL;
+		rpath->p_ops_local = NULL;
+		list_add_tail(&rpath->p_rem, &path_rem_list);
+	}
+
+	rdentry_put(rdentry);
+
+	return 0;
 }
 
 int rfs_set_ops(struct dentry *dentry, struct rpath *path)

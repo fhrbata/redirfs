@@ -5,6 +5,8 @@ unsigned long long rinode_cnt = 0;
 spinlock_t rinode_cnt_lock = SPIN_LOCK_UNLOCKED;
 extern atomic_t rinodes_freed;
 extern wait_queue_head_t rinodes_wait;
+extern struct mutex path_list_mutex;
+extern struct list_head path_rem_list;
 
 struct rinode *rinode_alloc(struct inode *inode)
 {
@@ -740,10 +742,13 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry, struct namei
 	if (!chain_set)
 		goto exit;
 
-	if (!rv || IS_ERR(rv))
+	if (IS_ERR(rv))
 		goto exit;
 
-	rdentry = rdentry_add(rv);
+	if (rv)
+		rdentry = rdentry_add(rv);
+	else
+		rdentry = rdentry_add(dentry);
 
 	if (IS_ERR(rdentry)) {
 		BUG();
@@ -897,10 +902,13 @@ exit:
 	return rv;
 }
 
-int rfs_rename(struct inode *old_dir, struct dentry *old_dentry, struct inode *new_dir, struct dentry *new_dentry)
+int rfs_rename(struct inode *old_dir, struct dentry *old_dentry, struct inode
+		*new_dir, struct dentry *new_dentry)
 {
 	struct rinode *rold_dir = NULL;
 	struct chain *chain = NULL;
+	struct rpath *loop;
+	struct rpath *tmp;
 	struct rfs_args args;
 	struct context cont;
 	int rv = 0;
@@ -908,7 +916,8 @@ int rfs_rename(struct inode *old_dir, struct dentry *old_dentry, struct inode *n
 	rold_dir = rinode_find(old_dir);
 	if (!rold_dir) {
 		if (old_dir->i_op && old_dir->i_op->rename)
-			return old_dir->i_op->rename(old_dir, old_dentry, new_dir, new_dentry);
+			return old_dir->i_op->rename(old_dir, old_dentry,
+					new_dir, new_dentry);
 		else
 			return -EPERM;
 	}
@@ -931,7 +940,11 @@ int rfs_rename(struct inode *old_dir, struct dentry *old_dentry, struct inode *n
 
 	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 		if (rold_dir->ri_op_old && rold_dir->ri_op_old->rename)
-			rv = rold_dir->ri_op_old->rename(old_dir, old_dentry, new_dir, new_dentry);
+			rv = rold_dir->ri_op_old->rename(
+					args.args.i_rename.old_dir,
+					args.args.i_rename.old_dentry,
+					args.args.i_rename.new_dir,
+					args.args.i_rename.new_dentry);
 		else
 			rv = -EPERM;
 
@@ -941,14 +954,25 @@ int rfs_rename(struct inode *old_dir, struct dentry *old_dentry, struct inode *n
 	rfs_postcall_flts(0, chain, &cont, &args);
 	rv = args.retv.rv_int;
 
+	if (rv)
+		goto exit;
+
+	mutex_lock(&path_list_mutex);
+	if (rfs_walk_dcache(old_dentry, rfs_rename_cb, NULL,
+				NULL, NULL))
+		BUG();
+
+	list_for_each_entry_safe(loop, tmp, &path_rem_list, p_rem) {
+		list_del(&loop->p_rem);
+		path_rem(loop);
+	}
+	mutex_unlock(&path_list_mutex);
+
+exit:
 	rinode_put(rold_dir);
 	chain_put(chain);
 
 	BUG_ON(!list_empty(&cont.data_list));
-
-	/*****************************************************************
-	 * WE NEED TO CHANGE RECURSIVELY THE OPERATIONS FOR ALL FILTERS! *
-	 *****************************************************************/
 
 	return rv;
 }
@@ -997,7 +1021,10 @@ int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 
 	if (!rfs_precall_flts(0, chain, &cont, &args)) {
 		if (rinode->ri_op_old && rinode->ri_op_old->permission)
-			rv = rinode->ri_op_old->permission(args.args.i_permission.inode, args.args.i_permission.mask, args.args.i_permission.nd);
+			rv = rinode->ri_op_old->permission(
+					args.args.i_permission.inode,
+					args.args.i_permission.mask,
+					args.args.i_permission.nd);
 		else {
 			submask = args.args.i_permission.mask & ~MAY_APPEND;
 			rv = generic_permission(args.args.i_permission.inode, submask, NULL);
@@ -2217,11 +2244,6 @@ static void rinode_set_dir_ops(struct rinode *rinode, char *ops)
 	else
 		rinode->ri_op_new.unlink = rinode->ri_op_old ? rinode->ri_op_old->unlink : NULL;
 
-	if (ops[RFS_DIR_IOP_RENAME])
-		rinode->ri_op_new.rename = rfs_rename;
-	else
-		rinode->ri_op_new.rename = rinode->ri_op_old ? rinode->ri_op_old->rename : NULL;
-
 	if (ops[RFS_DIR_IOP_PERMISSION])
 		rinode->ri_op_new.permission = rfs_permission;
 	else
@@ -2242,6 +2264,7 @@ static void rinode_set_dir_ops(struct rinode *rinode, char *ops)
 	rinode->ri_op_new.link = rfs_link;
 	rinode->ri_op_new.mknod = rfs_mknod;
 	rinode->ri_op_new.symlink = rfs_symlink;
+	rinode->ri_op_new.rename = rfs_rename;
 }
 
 static void rinode_set_chr_ops(struct rinode *rinode, char *ops)
