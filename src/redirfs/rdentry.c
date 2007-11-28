@@ -30,6 +30,8 @@ struct rdentry *rdentry_alloc(struct dentry* dentry)
 	rdentry->rd_chain = NULL;
 	rdentry->rd_ops = NULL;
 	rdentry->rd_root = 0;
+	rdentry->rd_mnt = NULL;
+	rdentry->rd_mounted = 0;
 	atomic_set(&rdentry->rd_count, 1);
 	spin_lock_init(&rdentry->rd_lock);
 
@@ -139,6 +141,19 @@ struct rdentry *rdentry_add(struct dentry *dentry)
 
 	rdentry = rdentry_find(dentry);
 
+	/* Fast workaround for the isofs_lookup function. It assigns
+	 * dentry operations for the new dentry from the root dentry.
+	 * This leads to the situation when one rdentry object can be
+	 * found for more dentry objects.
+	 *
+	 * isofs_lookup: dentry->d_op = dir->i_sb->s_root->d_op;
+	 */
+	if (rdentry && (rdentry->rd_dentry != dentry)) {
+		rdentry_new->rd_op_old = rdentry->rd_op_old;
+		rdentry_put(rdentry);
+		rdentry = NULL;
+	}
+
 	if (rdentry) {
 		rdentry_put(rdentry_new);
 		rdentry_new = NULL;
@@ -197,6 +212,7 @@ void rdentry_del(struct dentry *dentry)
 {
 	struct rdentry *rdentry = NULL;
 	struct rinode *rinode = NULL;
+	struct vfsmount *mnt = NULL;
 
 
 	spin_lock(&dentry->d_lock);
@@ -208,6 +224,12 @@ void rdentry_del(struct dentry *dentry)
 	}
 
 	rcu_assign_pointer(dentry->d_op, rdentry->rd_op_old);
+	spin_lock(&rdentry->rd_lock);
+	mnt = rdentry->rd_mnt;
+	rdentry->rd_mnt = NULL;
+	spin_unlock(&rdentry->rd_lock);
+
+	mntput(mnt);
 
 	rinode = rdentry->rd_rinode;
 
@@ -236,6 +258,7 @@ int rfs_d_revalidate(struct dentry *dentry, struct nameidata *nd)
 	struct rpath *loop;
 	struct rpath *tmp;
 	unsigned int hash = 0;
+	struct dcache_data_cb data_cb;
 	int rv = 1;
 
 	rdentry = rdentry_find(dentry);
@@ -291,7 +314,23 @@ int rfs_d_revalidate(struct dentry *dentry, struct nameidata *nd)
 	if (rv <= 0) 
 		goto exit;
 
+	rdentry_put(rdentry);
+
 	mutex_lock(&path_list_mutex);
+
+	rdentry = rdentry_find(dentry);
+	if (!rdentry)
+		goto unlock;
+
+	if (d_mountpoint(dentry)) {
+		if (dentry->d_mounted != rdentry->rd_mounted) {
+			data_cb.path = rdentry->rd_path;
+			data_cb.filter = NULL;
+			if (rfs_walk_dcache(dentry, rdentry->rd_path->p_mnt,
+						rfs_replace_ops_cb, &data_cb))
+				BUG();
+		}
+	}
 
 	if (!rdentry->rd_root)
 		goto unlock;
@@ -304,7 +343,7 @@ int rfs_d_revalidate(struct dentry *dentry, struct nameidata *nd)
 		if (dentry->d_name.hash == rdentry->rd_path->p_dhash)
 			goto unlock;
 	
-	if (rfs_walk_dcache(dentry, rfs_rename_cb, NULL, NULL, NULL))
+	if (rfs_walk_dcache(dentry, rdentry->rd_path->p_mnt, rfs_rename_cb, NULL))
 		BUG();
 	
 	list_for_each_entry_safe(loop, tmp, &path_rem_list, p_rem) {

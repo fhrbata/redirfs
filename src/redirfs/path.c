@@ -44,29 +44,40 @@ int path_normalize(const char *path, char *buf, int len)
 
 unsigned int path_get_hash(struct vfsmount *mnt, struct dentry *dentry)
 {
-	struct vfsmount *mnt_orig;
-	struct dentry *dentry_orig;
+	struct dentry *dentry_start;
+	struct dentry *dentry_mnt;
 	unsigned int hash = 0;
 
-	spin_lock(&dcache_lock);
+	mntget(mnt);
+	dentry_start = dget(dentry);
 
 	hash = (int)dentry;
+
+	spin_lock(&dcache_lock);
 again:
 	while (!IS_ROOT(dentry)) {
 		hash += (int)dentry->d_parent;
 		dentry = dentry->d_parent;
 	}
 
-	mnt_orig = mntget(mnt);
-	dentry_orig = dget(dentry);
+	dentry_mnt = dget(dentry);
+	spin_unlock(&dcache_lock);
 
-	if (!follow_up(&mnt, &dentry)) {
-		mntput(mnt_orig);
-		dput(dentry_orig);
-	} else
+	while (dentry_mnt == mnt->mnt_root && follow_up(&mnt, &dentry_mnt));
+
+	dput(dentry_start);
+	dentry_start = dentry_mnt;
+	dentry = dentry_start;
+
+	spin_lock(&dcache_lock);
+
+	if (!IS_ROOT(dentry))
 		goto again;
 
 	spin_unlock(&dcache_lock);
+
+	mntput(mnt);
+	dput(dentry_start);
 
 	return hash;
 }
@@ -549,10 +560,15 @@ int path_flt_info(struct filter *flt, char *buf, int size)
 int path_dpath(struct rdentry *rdentry, struct rpath *path, char *buffer, int size)
 {
 	struct dentry *dentry;
+	struct dentry *start_dentry;
 	struct dentry *path_dentry = NULL;
+	struct rdentry *mnt_rdentry;
+	struct vfsmount *mnt_vfsmnt;
+	struct dentry *mnt_dentry;
 	unsigned long flags;
 	char *end;
 	int len;
+	int mounted;
 
 	spin_lock_irqsave(&path->p_lock, flags);
 	if (path->p_dentry)
@@ -562,7 +578,6 @@ int path_dpath(struct rdentry *rdentry, struct rpath *path, char *buffer, int si
 	if (!path_dentry)
 		return -ENODATA;
 
-	dentry = rdentry->rd_dentry;
 	end = buffer + size;
 	len = size;
 
@@ -574,35 +589,78 @@ int path_dpath(struct rdentry *rdentry, struct rpath *path, char *buffer, int si
 	*--end = '\0';
 	size--;
 
+	start_dentry = dget(rdentry->rd_dentry);
+	dentry = start_dentry;
+
 	spin_lock(&dcache_lock);
 
 	while (path_dentry != dentry) {
-		end -= dentry->d_name.len;
-		size -= dentry->d_name.len + 1; /* dentry name + slash */
-		if (size < 0) {
+		mounted = 0;
+
+		mnt_rdentry = rdentry_find(dentry);
+		if (!mnt_rdentry) {
 			spin_unlock(&dcache_lock);
 			dput(path_dentry);
-			return -ENAMETOOLONG;
+			dput(start_dentry);
+			return -ENODATA;
 		}
-		memcpy(end, dentry->d_name.name, dentry->d_name.len);
-		*--end = '/';
-		dentry = dentry->d_parent;
+
+		spin_lock(&mnt_rdentry->rd_lock);
+		if (mnt_rdentry->rd_mnt) {
+			mnt_vfsmnt = mntget(mnt_rdentry->rd_mnt);
+			mnt_dentry = dget(dentry);
+			mounted = 1;
+		}
+		spin_unlock(&mnt_rdentry->rd_lock);
+
+		rdentry_put(mnt_rdentry);
+
+		if (mounted && !mnt_vfsmnt) {
+			spin_unlock(&dcache_lock);
+			dput(path_dentry);
+			dput(start_dentry);
+			return -ENODATA;
+		}
+
+		if (mounted) {
+			spin_unlock(&dcache_lock);
+			while (mnt_dentry == mnt_vfsmnt->mnt_root &&
+			       follow_up(&mnt_vfsmnt, &mnt_dentry));
+
+			mntput(mnt_vfsmnt);
+			dput(start_dentry);
+			start_dentry = mnt_dentry;
+			dentry = start_dentry;
+
+			spin_lock(&dcache_lock);
+
+		} else {
+
+			end -= dentry->d_name.len;
+			size -= dentry->d_name.len + 1; /* dentry name + slash */
+			if (size < 0) {
+				spin_unlock(&dcache_lock);
+				dput(path_dentry);
+				dput(start_dentry);
+				return -ENAMETOOLONG;
+			}
+			memcpy(end, dentry->d_name.name, dentry->d_name.len);
+			*--end = '/';
+			dentry = dentry->d_parent;
+		}
 	}
+
+	spin_unlock(&dcache_lock);
+	dput(start_dentry);
+	dput(path_dentry);
 
 	end -= path->p_len;
 	size -= path->p_len;
-	if (size < 0) {
-		spin_unlock(&dcache_lock);
-		dput(path_dentry);
+	if (size < 0)
 		return -ENAMETOOLONG;
-	}
 
 	memcpy(end, path->p_path, path->p_len);
 	memmove(buffer, end, len - size);
-
-	spin_unlock(&dcache_lock);
-
-	dput(path_dentry);
 
 	return 0;
 }

@@ -409,7 +409,7 @@ int flt_rem_local(struct rpath *path, struct filter *flt)
 		data_cb.path = path;
 		data_cb.filter = flt;
 
-		retv = rfs_restore_ops_cb(path->p_dentry, &data_cb);
+		retv = rfs_restore_ops_cb(path->p_dentry, path->p_mnt, &data_cb);
 	}
 
 
@@ -504,7 +504,7 @@ int flt_add_cb(struct rpath *path, void *data)
 	data_cb.path = path_go;
 	data_cb.filter = NULL;
 
-	retv = rfs_walk_dcache(path->p_dentry, rfs_replace_ops_cb, &data_cb, NULL, NULL);
+	retv = rfs_walk_dcache(path->p_dentry, path->p_mnt, rfs_replace_ops_cb, &data_cb);
 
 	if (retv)
 		return retv;
@@ -625,13 +625,13 @@ int flt_rem_cb(struct rpath *path, void *data)
 		data_cb.path = path_go;
 		data_cb.filter = flt;
 
-		retv = rfs_walk_dcache(path->p_dentry, rfs_replace_ops_cb, &data_cb, NULL, NULL);
+		retv = rfs_walk_dcache(path->p_dentry, path->p_mnt, rfs_replace_ops_cb, &data_cb);
 
 	} else {
 		data_cb.path = path;
 		data_cb.filter = flt;
 
-		retv = rfs_walk_dcache(path->p_dentry, rfs_restore_ops_cb, &data_cb, NULL, NULL);
+		retv = rfs_walk_dcache(path->p_dentry, path->p_mnt, rfs_restore_ops_cb, &data_cb);
 	}
 
 	if (retv)
@@ -669,7 +669,7 @@ int flt_set_ops_cb(struct rpath *path, void *data)
 		ops_put(path->p_ops);
 		path->p_ops = ops;
 
-		return rfs_walk_dcache(path->p_dentry, rfs_set_ops_cb, path, NULL, NULL);
+		return rfs_walk_dcache(path->p_dentry, path->p_mnt, rfs_set_ops_cb, path);
 	}
 
 	return 0;

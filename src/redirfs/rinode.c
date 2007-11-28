@@ -958,8 +958,7 @@ int rfs_rename(struct inode *old_dir, struct dentry *old_dentry, struct inode
 		goto exit;
 
 	mutex_lock(&path_list_mutex);
-	if (rfs_walk_dcache(old_dentry, rfs_rename_cb, NULL,
-				NULL, NULL))
+	if (rfs_walk_dcache(old_dentry, rold_dir->ri_path->p_mnt, rfs_rename_cb, NULL))
 		BUG();
 
 	list_for_each_entry_safe(loop, tmp, &path_rem_list, p_rem) {
