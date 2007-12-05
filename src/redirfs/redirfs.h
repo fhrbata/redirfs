@@ -516,7 +516,7 @@ int rfs_detach_data_file(rfs_filter filter, struct file *file, struct rfs_priv_d
 int rfs_get_data_inode(rfs_filter filter, struct inode *inode, struct rfs_priv_data **data);
 int rfs_get_data_dentry(rfs_filter filter, struct dentry *dentry, struct rfs_priv_data **data);
 int rfs_get_data_file(rfs_filter filter, struct file *file, struct rfs_priv_data **data);
-int rfs_get_filename(struct dentry *dentry, char *buffer, int size);
+int rfs_get_filename(struct dentry *dentry, struct vfsmount *mnt, char *buffer, int size);
 
 int rfs_register_attribute(rfs_filter filter, struct rfs_flt_attribute *attr);
 int rfs_unregister_attribute(rfs_filter filter, struct rfs_flt_attribute *attr);

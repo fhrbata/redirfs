@@ -144,7 +144,6 @@ int rfs_open(struct inode *inode, struct file *file);
 struct rdentry {
 	struct list_head rd_rinode_list;
 	struct list_head rd_rfiles;
-	struct vfsmount *rd_mnt;
 	struct rcu_head rd_rcu;
 	struct dentry *rd_dentry;
 	struct dentry_operations *rd_op_old;
@@ -155,7 +154,6 @@ struct rdentry {
 	spinlock_t rd_lock;
 	atomic_t rd_count;
 	int rd_root;
-	int rd_mounted;
 	struct ops *rd_ops;
 	struct list_head rd_data;
 };
@@ -210,13 +208,13 @@ struct context {
 struct rfs_priv_data *rfs_find_data(struct list_head *head, struct filter *flt);
 
 int rfs_replace_ops(struct rpath *path_old, struct rpath *path_new, struct filter *flt);
-int rfs_replace_ops_cb(struct dentry *dentry, struct vfsmount *mnt, void *data);
-int rfs_restore_ops_cb(struct dentry *dentry, struct vfsmount *mnt, void *data);
-int rfs_set_ops_cb(struct dentry *dentry, struct vfsmount *mnt, void *data);
-int rfs_rename_cb(struct dentry *dentry, struct vfsmount *mnt, void *data);
+int rfs_replace_ops_cb(struct dentry *dentry, void *data);
+int rfs_restore_ops_cb(struct dentry *dentry, void *data);
+int rfs_set_ops_cb(struct dentry *dentry, void *data);
+int rfs_rename_cb(struct dentry *dentry, void *data);
 int rfs_set_path_cb(struct dentry *dentry, void *data);
 int rfs_set_ops(struct dentry *dentry, struct rpath *path);
-int rfs_walk_dcache(struct dentry *root, struct vfsmount *mnt, int (*)(struct dentry *, struct vfsmount *, void *), void *);
+int rfs_walk_dcache(struct dentry *root, struct vfsmount *mnt, int (*)(struct dentry *, void *), void *);
 int rfs_precall_flts(int idx_start, struct chain *chain, struct context *cont, struct rfs_args *args);
 void rfs_postcall_flts(int idx_start, struct chain *chain, struct context *cont, struct rfs_args *args);
 

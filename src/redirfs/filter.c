@@ -409,7 +409,7 @@ int flt_rem_local(struct rpath *path, struct filter *flt)
 		data_cb.path = path;
 		data_cb.filter = flt;
 
-		retv = rfs_restore_ops_cb(path->p_dentry, path->p_mnt, &data_cb);
+		retv = rfs_restore_ops_cb(path->p_dentry, &data_cb);
 	}
 
 

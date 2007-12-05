@@ -163,7 +163,6 @@ int rfs_replace_ops(struct rpath *path_old, struct rpath *path_new, struct filte
 	if (path_old->p_flags & RFS_PATH_SINGLE) {
 		chain = path_new->p_inchain_local;
 		ops = path_new->p_ops_local;
-
 	} else {
 		chain = path_new->p_inchain;
 		ops = path_new->p_ops;
@@ -217,7 +216,7 @@ int rfs_replace_ops(struct rpath *path_old, struct rpath *path_new, struct filte
 
 		spin_unlock(&rinode->ri_lock);
 
-		rfs_truncate_inode_pages(rinode->ri_inode);
+		rfs_truncate_inode_pages(rdentry->rd_dentry->d_inode);
 	}
 
 	rdentry_put(rdentry);
@@ -225,7 +224,7 @@ int rfs_replace_ops(struct rpath *path_old, struct rpath *path_new, struct filte
 	return 0;
 }
 
-int rfs_replace_ops_cb(struct dentry *dentry, struct vfsmount *mnt, void *data)
+int rfs_replace_ops_cb(struct dentry *dentry, void *data)
 {
 	struct rpath *path;
 	struct filter *flt;
@@ -281,13 +280,7 @@ int rfs_replace_ops_cb(struct dentry *dentry, struct vfsmount *mnt, void *data)
 	rdentry_set_ops(rdentry, path->p_ops);
 
 	spin_lock(&rdentry->rd_lock);
-	if (mnt) {
-		mntput(rdentry->rd_mnt);
-		rdentry->rd_mnt = mntget(mnt);
-	}
 
-	rdentry->rd_mounted = dentry->d_mounted;
-	
 	path_put(rdentry->rd_path);
 	chain_put(rdentry->rd_chain);
 	ops_put(rdentry->rd_ops);
@@ -326,14 +319,14 @@ int rfs_replace_ops_cb(struct dentry *dentry, struct vfsmount *mnt, void *data)
 
 	spin_unlock(&rinode->ri_lock);
 
-	rfs_truncate_inode_pages(rinode->ri_inode);
+	rfs_truncate_inode_pages(dentry->d_inode);
 
 	rdentry_put(rdentry);
 
 	return 0;
 }
 
-int rfs_restore_ops_cb(struct dentry *dentry, struct vfsmount *mnt, void *data)
+int rfs_restore_ops_cb(struct dentry *dentry, void *data)
 {
 	struct rfile *rfile;
 	struct rfile *tmp;
@@ -381,7 +374,7 @@ int rfs_restore_ops_cb(struct dentry *dentry, struct vfsmount *mnt, void *data)
 	return 0; 
 }
 
-int rfs_rename_cb(struct dentry *dentry, struct vfsmount *mnt, void *data)
+int rfs_rename_cb(struct dentry *dentry, void *data)
 {
 	struct rfile *rfile;
 	struct rfile *tmp;
@@ -459,7 +452,7 @@ int rfs_set_ops(struct dentry *dentry, struct rpath *path)
 	return 0;
 }
 
-int rfs_set_ops_cb(struct dentry *dentry, struct vfsmount *mnt, void *data)
+int rfs_set_ops_cb(struct dentry *dentry, void *data)
 {
 	struct rpath *path = (struct rpath *)data;
 	struct rdentry *rdentry = rdentry_find(dentry);
@@ -531,11 +524,10 @@ struct entry {
 	struct list_head e_list;
 	struct dentry *e_dentry;
 	struct vfsmount *e_mnt;
-	int e_mounted;
 };
 
 int rfs_walk_dcache(struct dentry *root, struct vfsmount *mnt,
-		    int (*dcb)(struct dentry *, struct vfsmount *, void *),
+		    int (*dcb)(struct dentry *, void *),
 		    void *dcb_data)
 {
 	LIST_HEAD(dirs);
@@ -562,7 +554,6 @@ int rfs_walk_dcache(struct dentry *root, struct vfsmount *mnt,
 	INIT_LIST_HEAD(&dir->e_list);
 	dir->e_dentry = dget(root);
 	dir->e_mnt =mntget(mnt);
-	dir->e_mounted = 0;
 	list_add_tail(&dir->e_list, &dirs);
 
 	mnt_dentry = dget(dir->e_dentry);
@@ -580,7 +571,6 @@ int rfs_walk_dcache(struct dentry *root, struct vfsmount *mnt,
 			INIT_LIST_HEAD(&dir->e_list);
 			dir->e_dentry = dget(mnt_dentry);
 			dir->e_mnt = mntget(mnt_vfsmnt);
-			dir->e_mounted = 1;
 			list_add_tail(&dir->e_list, &dirs);
 
 		}
@@ -591,10 +581,7 @@ int rfs_walk_dcache(struct dentry *root, struct vfsmount *mnt,
 	while (!list_empty(&dirs)) {
 		dir = list_entry(dirs.next, struct entry, e_list);
 
-		if (dir->e_mounted)
-			res = dcb(dir->e_dentry, dir->e_mnt, dcb_data);
-		else
-			res = dcb(dir->e_dentry, NULL, dcb_data);
+		res = dcb(dir->e_dentry, dcb_data);
 
 		if (res < 0)
 			goto err;
@@ -652,7 +639,7 @@ int rfs_walk_dcache(struct dentry *root, struct vfsmount *mnt,
 			itmp = dentry->d_inode;
 
 			if (!itmp || !S_ISDIR(itmp->i_mode)) {
-				if (dcb(dentry, NULL, dcb_data))
+				if (dcb(dentry, dcb_data))
 					goto err;
 				goto next_sib;
 			}
@@ -664,7 +651,6 @@ int rfs_walk_dcache(struct dentry *root, struct vfsmount *mnt,
 			INIT_LIST_HEAD(&subdir->e_list);
 			subdir->e_dentry = dget(sib->e_dentry);
 			subdir->e_mnt = mntget(sib->e_mnt);
-			subdir->e_mounted = 0;
 			list_add_tail(&subdir->e_list, &dirs);
 
 			mnt_dentry = dget(subdir->e_dentry);
@@ -681,7 +667,6 @@ int rfs_walk_dcache(struct dentry *root, struct vfsmount *mnt,
 					INIT_LIST_HEAD(&subdir->e_list);
 					subdir->e_dentry = dget(mnt_dentry);
 					subdir->e_mnt = mntget(mnt_vfsmnt);
-					subdir->e_mounted = 1;
 					list_add_tail(&subdir->e_list, &dirs);
 
 				}
