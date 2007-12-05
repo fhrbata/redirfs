@@ -120,7 +120,8 @@ static int avflt_cmd_getname(struct avflt_ucheck *ucheck)
 		return -ENOENT;
 	}
 
-	rv = rfs_get_filename(check->file->f_dentry, fn_buf, PAGE_SIZE);
+	rv = rfs_get_filename(check->file->f_dentry, check->file->f_vfsmnt,
+			fn_buf, PAGE_SIZE);
 	if (rv) {
 		avflt_check_put(check);
 		return rv;
