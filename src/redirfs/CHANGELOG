@@ -2,9 +2,12 @@
 	- fixed bug 09: crash on rdentry_set_ops when changing path
 	- fixed bug 10: include subtree after include single path causes crash
 	- fixed bug 11: added rename support
+	- added support for sub-mounts and sub-unmounts
+	- added support for rename
 
 	* Paolo Ambrosio <paolo.ambrosio@gmail.com>
 	- fixed typo RFS_REG_AOP_COMMINT_WRITE => RFS_REG_AOP_COMMIT_WRITE
+	- fixed bug 12: added mmap callback
 
 Version 0.2
 	* rewritten from scratch
