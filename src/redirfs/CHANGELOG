@@ -4,6 +4,7 @@
 	- fixed bug 11: added rename support
 	- added support for sub-mounts and sub-unmounts
 	- added support for rename
+	- changed rfs_get_filename interface, now it requires vfsmount object
 
 	* Paolo Ambrosio <paolo.ambrosio@gmail.com>
 	- fixed typo RFS_REG_AOP_COMMINT_WRITE => RFS_REG_AOP_COMMIT_WRITE
