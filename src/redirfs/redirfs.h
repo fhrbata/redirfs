@@ -106,6 +106,7 @@ enum rfs_op_id {
 	RFS_REG_FOP_WRITE,
 	RFS_REG_FOP_AIO_READ,
 	RFS_REG_FOP_AIO_WRITE,
+	RFS_REG_FOP_MMAP,
 	RFS_REG_FOP_FLUSH,
 
 	RFS_DIR_FOP_OPEN,
@@ -288,6 +289,11 @@ union rfs_op_args {
 		struct file *file;
 		fl_owner_t id;
 	} f_flush;
+
+	struct {
+		struct file *file;
+		struct vm_area_struct *vma;
+	} f_mmap;
 
 	struct {
 		struct file *file;

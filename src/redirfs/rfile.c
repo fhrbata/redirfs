@@ -348,6 +348,57 @@ int rfs_release(struct inode *inode, struct file *file)
 	return rv;
 }
 
+int rfs_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	struct rfile *rfile = NULL;
+	struct chain *chain = NULL;
+	struct inode *inode = NULL;
+	struct rfs_args args;
+	struct context cont;
+	int rv = 0;
+
+	rfile = rfile_find(file);
+	if (!rfile) {
+		if (file->f_op && file->f_op->mmap)
+			return file->f_op->mmap(file, vma);
+
+		return rv;
+	}
+
+	spin_lock(&rfile->rf_lock);
+	chain = chain_get(rfile->rf_chain);
+	spin_unlock(&rfile->rf_lock);
+
+	args.args.f_mmap.file = file;
+	args.args.f_mmap.vma = vma;
+
+	INIT_LIST_HEAD(&cont.data_list);
+
+	inode = file->f_dentry->d_inode;
+
+	if (S_ISREG(inode->i_mode))
+		args.type.id = RFS_REG_FOP_MMAP;
+	else 
+		BUG();
+
+	if (!rfs_precall_flts(0, chain, &cont, &args)) {
+		if (rfile->rf_op_old && rfile->rf_op_old->mmap)
+			rv = rfile->rf_op_old->mmap(args.args.f_mmap.file, args.args.f_mmap.vma);
+
+		args.retv.rv_int = rv;
+	}
+
+	rfs_postcall_flts(0, chain, &cont, &args);
+	rv = args.retv.rv_int;
+
+	rfile_put(rfile);
+	chain_put(chain);
+
+	BUG_ON(!list_empty(&cont.data_list));
+
+	return rv;
+}
+
 int rfs_flush(struct file *file, fl_owner_t id)
 {
 	struct rfile *rfile = NULL;
@@ -888,6 +939,11 @@ static void rfile_set_reg_ops(struct rfile *rfile, char *ops)
 		rfile->rf_op_new.llseek = rfs_llseek;
 	else
 		rfile->rf_op_new.llseek = rfile->rf_op_old ? rfile->rf_op_old->llseek : NULL;
+
+	if (ops[RFS_REG_FOP_MMAP])
+		rfile->rf_op_new.mmap = rfs_mmap;
+	else
+		rfile->rf_op_new.mmap = rfile->rf_op_old ? rfile->rf_op_old->mmap : NULL;
 
 	if (ops[RFS_REG_FOP_FLUSH])
 		rfile->rf_op_new.flush = rfs_flush;
