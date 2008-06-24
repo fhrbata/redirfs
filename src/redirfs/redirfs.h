@@ -1,4 +1,27 @@
-#if !defined(_REDIRFS_H)
+/*
+ * RedirFS: Redirecting File System
+ * Written by Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+ *
+ * Copyright (C) 2008 Frantisek Hrbata
+ * All rights reserved.
+ *
+ * This file is part of RedirFS.
+ *
+ * RedirFS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * RedirFS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with RedirFS. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifndef _REDIRFS_H
 #define _REDIRFS_H
 
 #include <linux/kernel.h>
@@ -10,176 +33,206 @@
 #include <linux/types.h>
 #include <linux/aio.h>
 
-#define RFS_VERSION "0.2"
+#define REDIRFS_VERSION "0.3"
 
-enum rfs_op_id {
-	RFS_NONE_DOP_D_REVALIDATE,
-	RFS_NONE_DOP_D_HASH,
-	RFS_NONE_DOP_D_COMPARE,
-	RFS_NONE_DOP_D_DELETE,
-	RFS_NONE_DOP_D_RELEASE,
-	RFS_NONE_DOP_D_IPUT,
+#define REDIRFS_PATH_ADD		1
+#define REDIRFS_PATH_REM		2
+#define REDIRFS_PATH_INCLUDE		4
+#define REDIRFS_PATH_EXCLUDE		8
 
-	RFS_REG_DOP_D_REVALIDATE,
-	RFS_REG_DOP_D_HASH,
-	RFS_REG_DOP_D_COMPARE,
-	RFS_REG_DOP_D_DELETE,
-	RFS_REG_DOP_D_RELEASE,
-	RFS_REG_DOP_D_IPUT,
+#define REDIRFS_CTL_ACTIVATE		1
+#define REDIRFS_CTL_DEACTIVATE		2
+#define REDIRFS_CTL_SET_PATH		4
+#define REDIRFS_CTL_UNREGISTER		8
+#define REDIRFS_CTL_REMOVE_PATHS	16
 
-	RFS_DIR_DOP_D_REVALIDATE,
-	RFS_DIR_DOP_D_HASH,
-	RFS_DIR_DOP_D_COMPARE,
-	RFS_DIR_DOP_D_DELETE,
-	RFS_DIR_DOP_D_RELEASE,
-	RFS_DIR_DOP_D_IPUT,
+#define REDIRFS_FILTER_ATTRIBUTE(__name, __mode, __show, __store) \
+	__ATTR(__name, __mode, __show, __store)
 
-	RFS_CHR_DOP_D_REVALIDATE,
-	RFS_CHR_DOP_D_HASH,
-	RFS_CHR_DOP_D_COMPARE,
-	RFS_CHR_DOP_D_DELETE,
-	RFS_CHR_DOP_D_RELEASE,
-	RFS_CHR_DOP_D_IPUT,
+enum redirfs_op_id {
+	REDIRFS_NONE_DOP_D_REVALIDATE,
+	REDIRFS_NONE_DOP_D_HASH,
+	REDIRFS_NONE_DOP_D_COMPARE,
+	REDIRFS_NONE_DOP_D_DELETE,
+	REDIRFS_NONE_DOP_D_RELEASE,
+	REDIRFS_NONE_DOP_D_IPUT,
+	REDIRFS_NODE_DOP_D_NAME,
 
-	RFS_BLK_DOP_D_REVALIDATE,
-	RFS_BLK_DOP_D_HASH,
-	RFS_BLK_DOP_D_COMPARE,
-	RFS_BLK_DOP_D_DELETE,
-	RFS_BLK_DOP_D_RELEASE,
-	RFS_BLK_DOP_D_IPUT,
+	REDIRFS_REG_DOP_D_REVALIDATE,
+	REDIRFS_REG_DOP_D_HASH,
+	REDIRFS_REG_DOP_D_COMPARE,
+	REDIRFS_REG_DOP_D_DELETE,
+	REDIRFS_REG_DOP_D_IPUT,
+	REDIRFS_REG_DOP_D_NAME,
 
-	RFS_FIFO_DOP_D_REVALIDATE,
-	RFS_FIFO_DOP_D_HASH,
-	RFS_FIFO_DOP_D_COMPARE,
-	RFS_FIFO_DOP_D_DELETE,
-	RFS_FIFO_DOP_D_RELEASE,
-	RFS_FIFO_DOP_D_IPUT,
+	REDIRFS_DIR_DOP_D_REVALIDATE,
+	REDIRFS_DIR_DOP_D_HASH,
+	REDIRFS_DIR_DOP_D_COMPARE,
+	REDIRFS_DIR_DOP_D_DELETE,
+	REDIRFS_DIR_DOP_D_IPUT,
+	REDIRFS_DIR_DOP_D_NAME,
 
-	RFS_LNK_DOP_D_REVALIDATE,
-	RFS_LNK_DOP_D_HASH,
-	RFS_LNK_DOP_D_COMPARE,
-	RFS_LNK_DOP_D_DELETE,
-	RFS_LNK_DOP_D_RELEASE,
-	RFS_LNK_DOP_D_IPUT,
+	REDIRFS_CHR_DOP_D_REVALIDATE,
+	REDIRFS_CHR_DOP_D_HASH,
+	REDIRFS_CHR_DOP_D_COMPARE,
+	REDIRFS_CHR_DOP_D_DELETE,
+	REDIRFS_CHR_DOP_D_IPUT,
+	REDIRFS_CHR_DOP_D_NAME,
 
-	RFS_SOCK_DOP_D_REVALIDATE,
-	RFS_SOCK_DOP_D_HASH,
-	RFS_SOCK_DOP_D_COMPARE,
-	RFS_SOCK_DOP_D_DELETE,
-	RFS_SOCK_DOP_D_RELEASE,
-	RFS_SOCK_DOP_D_IPUT,
+	REDIRFS_BLK_DOP_D_REVALIDATE,
+	REDIRFS_BLK_DOP_D_HASH,
+	REDIRFS_BLK_DOP_D_COMPARE,
+	REDIRFS_BLK_DOP_D_DELETE,
+	REDIRFS_BLK_DOP_D_IPUT,
+	REDIRFS_BLK_DOP_D_NAME,
 
-	RFS_REG_IOP_PERMISSION,
-	RFS_REG_IOP_SETATTR,
+	REDIRFS_FIFO_DOP_D_REVALIDATE,
+	REDIRFS_FIFO_DOP_D_HASH,
+	REDIRFS_FIFO_DOP_D_COMPARE,
+	REDIRFS_FIFO_DOP_D_DELETE,
+	REDIRFS_FIFO_DOP_D_IPUT,
+	REDIRFS_FIFO_DOP_D_NAME,
 
-	RFS_DIR_IOP_CREATE,
-	RFS_DIR_IOP_LOOKUP,
-	RFS_DIR_IOP_LINK,
-	RFS_DIR_IOP_UNLINK,
-	RFS_DIR_IOP_SYMLINK,
-	RFS_DIR_IOP_MKDIR,
-	RFS_DIR_IOP_RMDIR,
-	RFS_DIR_IOP_MKNOD,
-	RFS_DIR_IOP_RENAME,
-	RFS_DIR_IOP_PERMISSION,
-	RFS_DIR_IOP_SETATTR,
+	REDIRFS_LNK_DOP_D_REVALIDATE,
+	REDIRFS_LNK_DOP_D_HASH,
+	REDIRFS_LNK_DOP_D_COMPARE,
+	REDIRFS_LNK_DOP_D_DELETE,
+	REDIRFS_LNK_DOP_D_IPUT,
+	REDIRFS_LNK_DOP_D_NAME,
 
-	RFS_CHR_IOP_PERMISSION,
-	RFS_CHR_IOP_SETATTR,
+	REDIRFS_SOCK_DOP_D_REVALIDATE,
+	REDIRFS_SOCK_DOP_D_HASH,
+	REDIRFS_SOCK_DOP_D_COMPARE,
+	REDIRFS_SOCK_DOP_D_DELETE,
+	REDIRFS_SOCK_DOP_D_IPUT,
+	REDIRFS_SOCK_DOP_D_NAME,
 
-	RFS_BLK_IOP_PERMISSION,
-	RFS_BLK_IOP_SETATTR,
+	REDIRFS_REG_IOP_PERMISSION,
+	REDIRFS_REG_IOP_SETATTR,
 
-	RFS_FIFO_IOP_PERMISSION,
-	RFS_FIFO_IOP_SETATTR,
+	REDIRFS_DIR_IOP_CREATE,
+	REDIRFS_DIR_IOP_LOOKUP,
+	REDIRFS_DIR_IOP_LINK,
+	REDIRFS_DIR_IOP_UNLINK,
+	REDIRFS_DIR_IOP_SYMLINK,
+	REDIRFS_DIR_IOP_MKDIR,
+	REDIRFS_DIR_IOP_RMDIR,
+	REDIRFS_DIR_IOP_MKNOD,
+	REDIRFS_DIR_IOP_RENAME,
+	REDIRFS_DIR_IOP_PERMISSION,
+	REDIRFS_DIR_IOP_SETATTR,
 
-	RFS_LNK_IOP_PERMISSION,
-	RFS_LNK_IOP_SETATTR,
+	REDIRFS_CHR_IOP_PERMISSION,
+	REDIRFS_CHR_IOP_SETATTR,
 
-	RFS_SOCK_IOP_PERMISSION,
-	RFS_SOCK_IOP_SETATTR,
+	REDIRFS_BLK_IOP_PERMISSION,
+	REDIRFS_BLK_IOP_SETATTR,
 
-	RFS_REG_FOP_OPEN,
-	RFS_REG_FOP_RELEASE,
-	RFS_REG_FOP_LLSEEK,
-	RFS_REG_FOP_READ,
-	RFS_REG_FOP_WRITE,
-	RFS_REG_FOP_AIO_READ,
-	RFS_REG_FOP_AIO_WRITE,
-	RFS_REG_FOP_MMAP,
-	RFS_REG_FOP_FLUSH,
+	REDIRFS_FIFO_IOP_PERMISSION,
+	REDIRFS_FIFO_IOP_SETATTR,
 
-	RFS_DIR_FOP_OPEN,
-	RFS_DIR_FOP_RELEASE,
-	RFS_DIR_FOP_READDIR,
-	RFS_DIR_FOP_FLUSH,
+	REDIRFS_LNK_IOP_PERMISSION,
+	REDIRFS_LNK_IOP_SETATTR,
 
-	RFS_CHR_FOP_OPEN,
-	RFS_CHR_FOP_RELEASE,
-	RFS_CHR_FOP_LLSEEK,
-	RFS_CHR_FOP_READ,
-	RFS_CHR_FOP_WRITE,
-	RFS_CHR_FOP_AIO_READ,
-	RFS_CHR_FOP_AIO_WRITE,
-	RFS_CHR_FOP_FLUSH,
+	REDIRFS_SOCK_IOP_PERMISSION,
+	REDIRFS_SOCK_IOP_SETATTR,
 
-	RFS_BLK_FOP_OPEN,
-	RFS_BLK_FOP_RELEASE,
-	RFS_BLK_FOP_LLSEEK,
-	RFS_BLK_FOP_READ,
-	RFS_BLK_FOP_WRITE,
-	RFS_BLK_FOP_AIO_READ,
-	RFS_BLK_FOP_AIO_WRITE,
-	RFS_BLK_FOP_FLUSH,
+	REDIRFS_REG_FOP_OPEN,
+	REDIRFS_REG_FOP_RELEASE,
+	REDIRFS_REG_FOP_LLSEEK,
+	REDIRFS_REG_FOP_READ,
+	REDIRFS_REG_FOP_WRITE,
+	REDIRFS_REG_FOP_AIO_READ,
+	REDIRFS_REG_FOP_AIO_WRITE,
+	REDIRFS_REG_FOP_MMAP,
+	REDIRFS_REG_FOP_FLUSH,
 
-	RFS_FIFO_FOP_OPEN,
-	RFS_FIFO_FOP_RELEASE,
-	RFS_FIFO_FOP_LLSEEK,
-	RFS_FIFO_FOP_READ,
-	RFS_FIFO_FOP_WRITE,
-	RFS_FIFO_FOP_AIO_READ,
-	RFS_FIFO_FOP_AIO_WRITE,
-	RFS_FIFO_FOP_FLUSH,
+	REDIRFS_DIR_FOP_OPEN,
+	REDIRFS_DIR_FOP_RELEASE,
+	REDIRFS_DIR_FOP_READDIR,
+	REDIRFS_DIR_FOP_FLUSH,
 
-	RFS_LNK_FOP_OPEN,
-	RFS_LNK_FOP_RELEASE,
-	RFS_LNK_FOP_LLSEEK,
-	RFS_LNK_FOP_READ,
-	RFS_LNK_FOP_WRITE,
-	RFS_LNK_FOP_AIO_READ,
-	RFS_LNK_FOP_AIO_WRITE,
-	RFS_LNK_FOP_FLUSH,
+	REDIRFS_CHR_FOP_OPEN,
+	REDIRFS_CHR_FOP_RELEASE,
+	REDIRFS_CHR_FOP_LLSEEK,
+	REDIRFS_CHR_FOP_READ,
+	REDIRFS_CHR_FOP_WRITE,
+	REDIRFS_CHR_FOP_AIO_READ,
+	REDIRFS_CHR_FOP_AIO_WRITE,
+	REDIRFS_CHR_FOP_FLUSH,
 
-	RFS_REG_AOP_READPAGE,
-	RFS_REG_AOP_WRITEPAGE,
-	RFS_REG_AOP_READPAGES,
-	RFS_REG_AOP_WRITEPAGES,
-	RFS_REG_AOP_SYNC_PAGE,
-	RFS_REG_AOP_SET_PAGE_DIRTY,
-	RFS_REG_AOP_PREPARE_WRITE,
-	RFS_REG_AOP_COMMIT_WRITE,
-	RFS_REG_AOP_BMAP,
-	RFS_REG_AOP_INVALIDATEPAGE,
-	RFS_REG_AOP_RELEASEPAGE,
-	RFS_REG_AOP_DIRECT_IO,
-	RFS_REG_AOP_GET_XIP_PAGE,
-	RFS_REG_AOP_MIGRATEPAGE,
-	RFS_REG_AOP_LAUNDER_PAGE,
+	REDIRFS_BLK_FOP_OPEN,
+	REDIRFS_BLK_FOP_RELEASE,
+	REDIRFS_BLK_FOP_LLSEEK,
+	REDIRFS_BLK_FOP_READ,
+	REDIRFS_BLK_FOP_WRITE,
+	REDIRFS_BLK_FOP_AIO_READ,
+	REDIRFS_BLK_FOP_AIO_WRITE,
+	REDIRFS_BLK_FOP_FLUSH,
 
-	RFS_OP_END
+	REDIRFS_FIFO_FOP_OPEN,
+	REDIRFS_FIFO_FOP_RELEASE,
+	REDIRFS_FIFO_FOP_LLSEEK,
+	REDIRFS_FIFO_FOP_READ,
+	REDIRFS_FIFO_FOP_WRITE,
+	REDIRFS_FIFO_FOP_AIO_READ,
+	REDIRFS_FIFO_FOP_AIO_WRITE,
+	REDIRFS_FIFO_FOP_FLUSH,
+
+	REDIRFS_LNK_FOP_OPEN,
+	REDIRFS_LNK_FOP_RELEASE,
+	REDIRFS_LNK_FOP_LLSEEK,
+	REDIRFS_LNK_FOP_READ,
+	REDIRFS_LNK_FOP_WRITE,
+	REDIRFS_LNK_FOP_AIO_READ,
+	REDIRFS_LNK_FOP_AIO_WRITE,
+	REDIRFS_LNK_FOP_FLUSH,
+
+	REDIRFS_REG_AOP_READPAGE,
+	REDIRFS_REG_AOP_WRITEPAGE,
+	REDIRFS_REG_AOP_READPAGES,
+	REDIRFS_REG_AOP_WRITEPAGES,
+	REDIRFS_REG_AOP_SYNC_PAGE,
+	REDIRFS_REG_AOP_SET_PAGE_DIRTY,
+	REDIRFS_REG_AOP_PREPARE_WRITE,
+	REDIRFS_REG_AOP_COMMIT_WRITE,
+	REDIRFS_REG_AOP_BMAP,
+	REDIRFS_REG_AOP_INVALIDATEPAGE,
+	REDIRFS_REG_AOP_RELEASEPAGE,
+	REDIRFS_REG_AOP_DIRECT_IO,
+	REDIRFS_REG_AOP_GET_XIP_PAGE,
+	REDIRFS_REG_AOP_MIGRATEPAGE,
+	REDIRFS_REG_AOP_LAUNDER_PAGE,
+
+	REDIRFS_OP_END
 };
 
-enum rfs_op_call {
-	RFS_PRECALL,
-	RFS_POSTCALL
+enum redirfs_op_call {
+	REDIRFS_PRECALL,
+	REDIRFS_POSTCALL
 };
 
-enum rfs_retv {
-	RFS_STOP,
-	RFS_CONTINUE
+enum redirfs_rv {
+	REDIRFS_STOP,
+	REDIRFS_CONTINUE
 };
 
-union rfs_op_args {
+typedef void *redirfs_filter;
+typedef void *redirfs_context;
+typedef void *redirfs_path;
+
+union redirfs_op_rv {
+	int		rv_int;
+	ssize_t		rv_ssize;
+	unsigned int	rv_uint;
+	unsigned long	rv_ulong;
+	loff_t		rv_loff;
+	struct dentry	*rv_dentry;
+	sector_t	rv_sector;
+	struct page	*rv_page;
+};
+
+union redirfs_op_args {
 	struct {
 		struct dentry *dentry;
 		struct nameidata *nd;
@@ -419,150 +472,84 @@ union rfs_op_args {
 	} a_launder_page;
 };
 
-
-union rfs_op_retv {
-	int		rv_int;
-	ssize_t		rv_ssize;
-	unsigned int	rv_uint;
-	unsigned long	rv_ulong;
-	loff_t		rv_loff;
-	struct dentry	*rv_dentry;
-	sector_t	rv_sector;
-	struct page	*rv_page;
+struct redirfs_op_type {
+	enum redirfs_op_id id;
+	enum redirfs_op_call call;
 };
 
-struct rfs_op_type {
-	enum rfs_op_id id;
-	enum rfs_op_call call;
+struct redirfs_args {
+	union redirfs_op_args args;
+	union redirfs_op_rv rv;
+	struct redirfs_op_type type;
 };
 
-typedef void* rfs_filter;
-typedef void* rfs_context;
-
-struct rfs_args {
-	union rfs_op_args args;
-	union rfs_op_retv retv;
-	struct rfs_op_type type;
-};
-
-#define RFS_PATH_SINGLE		1	
-#define RFS_PATH_SUBTREE	2
-#define RFS_PATH_INCLUDE	4	
-#define RFS_PATH_EXCLUDE	8
-
-struct rfs_path_info {
-	char *path;
+struct redirfs_path_info {
+	struct dentry *dentry;
+	struct vfsmount *mnt;
 	int flags;
 };
 
-struct rfs_op_info {
-	enum rfs_op_id op_id;
-	enum rfs_retv (*pre_cb)(rfs_context, struct rfs_args *);
-	enum rfs_retv (*post_cb)(rfs_context, struct rfs_args *);
+struct redirfs_op_info {
+	enum redirfs_op_id op_id;
+	enum redirfs_rv (*pre_cb)(redirfs_context, struct redirfs_args *);
+	enum redirfs_rv (*post_cb)(redirfs_context, struct redirfs_args *);
 };
 
-struct rfs_flt_attribute {
-	struct attribute attr;
-	ssize_t (*show)(rfs_filter filter, struct rfs_flt_attribute *attr, char *buf);
-	ssize_t (*store)(rfs_filter filter, struct rfs_flt_attribute *attr, const char *buf, size_t size);
-	void *data;
+struct redirfs_paths {
+	redirfs_path *path;
+	int nr;
 };
 
-enum rfs_ctl_id {
-	RFS_CTL_ACTIVATE,
-	RFS_CTL_DEACTIVATE,
-	RFS_CTL_SETPATH
+union redirfs_ctl_data {
+	struct redirfs_path_info path_info;
 };
 
-union rfs_ctl_data {
-	struct rfs_path_info path_info;
+struct redirfs_ctl {
+	int id;
+	union redirfs_ctl_data data;
 };
 
-struct rfs_priv_data {
-	struct list_head list;
-	atomic_t cnt;
-	rfs_filter flt;
-	void (*cb)(struct rfs_priv_data *);
-};
-
-struct rfs_cont_data {
-	struct list_head list;
-	rfs_filter flt;
-};
-
-struct rfs_ctl {
-	enum rfs_ctl_id id;
-	union rfs_ctl_data data;
-};
-
-struct rfs_filter_info {
-	char *name;
+struct redirfs_filter_info {
+	struct module *owner;
+	const char *name;
 	int priority;
 	int active;
-	int (*ctl_cb)(struct rfs_ctl *ctl);
+	int ctl_id;
+	int (*ctl_cb)(struct redirfs_ctl *ctl);
 };
 
-int rfs_register_filter(rfs_filter *filter, struct rfs_filter_info *filter_info);
-int rfs_set_operations(rfs_filter filter, struct rfs_op_info *op_info);
-int rfs_set_path(rfs_filter filter, struct rfs_path_info *path_info);
-int rfs_unregister_filter(rfs_filter filter);
-int rfs_activate_filter(rfs_filter filter);
-int rfs_deactivate_filter(rfs_filter filter);
+struct redirfs_filter_attribute {
+	struct attribute attr;
+	ssize_t (*show)(redirfs_filter filter,
+			struct redirfs_filter_attribute *attr, char *buf);
+	ssize_t (*store)(redirfs_filter filter,
+			struct redirfs_filter_attribute *attr, const char *buf,
+			size_t count);
+};
 
-int rfs_init_data(struct rfs_priv_data *data, rfs_filter filter, void (*cb)(struct rfs_priv_data *));
-void rfs_put_data(struct rfs_priv_data *data);
-struct rfs_priv_data *rfs_get_data(struct rfs_priv_data *data);
-
-int rfs_attach_data_inode(rfs_filter filter, struct inode *inode, struct rfs_priv_data *data, struct rfs_priv_data **exist);
-int rfs_attach_data_dentry(rfs_filter filter, struct dentry *dentry, struct rfs_priv_data *data, struct rfs_priv_data **exist);
-int rfs_attach_data_file(rfs_filter filter, struct file *file, struct rfs_priv_data *data, struct rfs_priv_data **exist);
-int rfs_detach_data_inode(rfs_filter filter, struct inode *inode, struct rfs_priv_data **data);
-int rfs_detach_data_dentry(rfs_filter filter, struct dentry *dentry, struct rfs_priv_data **data);
-int rfs_detach_data_file(rfs_filter filter, struct file *file, struct rfs_priv_data **data);
-int rfs_get_data_inode(rfs_filter filter, struct inode *inode, struct rfs_priv_data **data);
-int rfs_get_data_dentry(rfs_filter filter, struct dentry *dentry, struct rfs_priv_data **data);
-int rfs_get_data_file(rfs_filter filter, struct file *file, struct rfs_priv_data **data);
-int rfs_get_filename(struct dentry *dentry, struct vfsmount *mnt, char *buffer, int size);
-
-int rfs_register_attribute(rfs_filter filter, struct rfs_flt_attribute *attr);
-int rfs_unregister_attribute(rfs_filter filter, struct rfs_flt_attribute *attr);
-int rfs_get_kobject(rfs_filter filter, struct kobject **kobj);
-
-ssize_t rfs_read_subcall(rfs_filter flt, union rfs_op_args *args);
-ssize_t rfs_write_subcall(rfs_filter flt, union rfs_op_args *args);
-ssize_t rfs_aio_read_subcall(rfs_filter flt, union rfs_op_args *args);
-ssize_t rfs_aio_write_subcall(rfs_filter flt, union rfs_op_args *args);
-int rfs_readpage_subcall(rfs_filter flt, union rfs_op_args *args);
-int rfs_writepage_subcall(rfs_filter flt, union rfs_op_args *args);
-int rfs_readpages_subcall(rfs_filter flt, union rfs_op_args *args);
-int rfs_readpages_subcall(rfs_filter flt, union rfs_op_args *args);
-void rfs_sync_page_subcall(rfs_filter flt, union rfs_op_args *args);
-int rfs_set_page_dirty_subcall(rfs_filter flt, union rfs_op_args *args);
-int rfs_prepare_write_subcall(rfs_filter flt, union rfs_op_args *args);
-int rfs_commit_write_subcall(rfs_filter flt, union rfs_op_args *args);
-sector_t rfs_bmap_subcall(rfs_filter flt, union rfs_op_args *args);
-void rfs_invalidatepage_subcall(rfs_filter flt, union rfs_op_args *args);
-int rfs_releasepage_subcall(rfs_filter flt, union rfs_op_args *args);
-ssize_t rfs_direct_IO_subcall(rfs_filter flt, union rfs_op_args *args);
-struct page* rfs_get_xip_page_subcall(rfs_filter flt, union rfs_op_args *args);
-int rfs_migratepage_subcall(rfs_filter flt, union rfs_op_args *args);
-int rfs_launder_page_subcall(rfs_filter flt, union rfs_op_args *args);
-
-int rfs_init_data_cont(struct rfs_cont_data *data, rfs_filter filter);
-int rfs_attach_data_cont(rfs_filter filter, rfs_context *context, struct rfs_cont_data *data);
-int rfs_detach_data_cont(rfs_filter filter, rfs_context context, struct rfs_cont_data **data);
-
-#define rfs_flt_attr(__name, __mode, __show, __store, __data)	\
-struct rfs_flt_attribute rfs_flt_attr_##__name = { 		\
-	.attr = { 						\
-		.name  = __stringify(__name), 			\
-		.mode  = __mode, 				\
-		.owner = THIS_MODULE				\
-	}, 							\
-	.show = __show, 					\
-	.store = __store, 					\
-	.data = __data						\
-}
+int redirfs_create_attribute(redirfs_filter filter,
+		struct redirfs_filter_attribute *attr);
+int redirfs_remove_attribute(redirfs_filter filter,
+		struct redirfs_filter_attribute *attr);
+struct kobject *redirfs_filter_kobject(redirfs_filter filter);
+int redirfs_set_path(redirfs_filter filter, struct redirfs_path_info *info);
+int redirfs_get_path(redirfs_filter filter, struct redirfs_path_info *info,
+		redirfs_path *path);
+void redirfs_put_path(redirfs_path *path);
+int redirfs_get_paths(redirfs_filter filter, struct redirfs_paths *paths);
+void redirfs_put_paths(struct redirfs_paths *paths);
+int redirfs_get_path_info(redirfs_filter filter, redirfs_path path,
+		struct redirfs_path_info *info);
+int redirfs_remove_paths(redirfs_filter filter);
+int redirfs_register_filter(redirfs_filter *filter,
+		struct redirfs_filter_info *info);
+int redirfs_unregister_filter(redirfs_filter filter);
+void redirfs_delete_filter(redirfs_filter filter);
+int redirfs_set_operations(redirfs_filter filter, struct redirfs_op_info ops[]);
+int redirfs_activate_filter(redirfs_filter filter);
+int redirfs_deactivate_filter(redirfs_filter filter);
+int redirfs_get_filename(struct vfsmount *mnt, struct dentry *dentry, char *buf,
+		int size);
 
 #endif
 
