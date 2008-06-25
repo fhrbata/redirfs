@@ -216,13 +216,21 @@ int rfs_open(struct inode *inode, struct file *file)
 		if (file->f_op && file->f_op->open)
 			return file->f_op->open(inode, file);
 
-		return -ENOSYS;
+		return 0;
 	}
 
 	fops_put(file->f_op);
 	file->f_op = fops_get(rinode->fop_old);
 
 	rdentry = rfs_dentry_find(file->f_dentry);
+	if (!rdentry) {
+		rfs_inode_put(rinode);
+		if (file->f_op && file->f_op->open)
+			return file->f_op->open(inode, file);
+
+		return 0;
+	}
+
 	rinfo = rfs_dentry_get_rinfo(rdentry);
 	rfs_dentry_put(rdentry);
 	rfs_context_init(&rcont, 0);

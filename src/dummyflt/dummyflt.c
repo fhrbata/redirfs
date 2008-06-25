@@ -109,7 +109,7 @@ static int __init dummyflt_init(void)
 	}
 
 	printk(KERN_INFO "Dummy Filter Version "
-			DUMMYFLT_VERSION "<www.redirfs.org>\n");
+			DUMMYFLT_VERSION " <www.redirfs.org>\n");
 
 	return 0;
 }

@@ -224,14 +224,14 @@ struct rfs_chain *rfs_chain_join(struct rfs_chain *rch1, struct rfs_chain *rch2)
 		} else if (rch1->rflts[k]->priority < rch2->rflts[l]->priority) {
 			rch->rflts[i++] = rfs_flt_get(rch1->rflts[k++]);
 		} else
-			rch->rflts[i++] = rfs_flt_get(rch1->rflts[l++]);
+			rch->rflts[i++] = rfs_flt_get(rch2->rflts[l++]);
 	}
 
 	while (k != rch1->rflts_nr)
 		rch->rflts[i++] = rfs_flt_get(rch1->rflts[k++]);
 
 	while (l != rch2->rflts_nr)
-		rch->rflts[i++] = rfs_flt_get(rch1->rflts[l++]);
+		rch->rflts[i++] = rfs_flt_get(rch2->rflts[l++]);
 
 	return rch;
 }
