@@ -651,12 +651,72 @@ int rfs_mknod(struct inode * dir, struct dentry *dentry, int mode, dev_t rdev)
 	return rargs.rv.rv_int;
 }
 
+int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
+{
+	struct rfs_inode *rinode;
+	struct rfs_info *rinfo;
+	struct rfs_context rcont;
+	struct redirfs_args rargs;
+	int submask;
+
+	submask = mask & ~MAY_APPEND;
+	rinode = rfs_inode_find(inode);
+	if (!rinode) {
+		if (inode->i_op && inode->i_op->permission)
+			return inode->i_op->permission(inode, mask, nd);
+		return generic_permission(inode, submask, NULL);
+	}
+
+	rinfo = rfs_inode_get_rinfo(rinode);
+	rfs_context_init(&rcont, 0);
+
+	if (S_ISREG(inode->i_mode))
+		rargs.type.id = REDIRFS_REG_IOP_PERMISSION;
+	else if (S_ISDIR(inode->i_mode))
+		rargs.type.id = REDIRFS_DIR_IOP_PERMISSION;
+	else if (S_ISLNK(inode->i_mode))
+		rargs.type.id = REDIRFS_LNK_IOP_PERMISSION;
+	else if (S_ISCHR(inode->i_mode))
+		rargs.type.id = REDIRFS_CHR_IOP_PERMISSION;
+	else if (S_ISBLK(inode->i_mode))
+		rargs.type.id = REDIRFS_BLK_IOP_PERMISSION;
+	else if (S_ISFIFO(inode->i_mode))
+		rargs.type.id = REDIRFS_FIFO_IOP_PERMISSION;
+	else 
+		rargs.type.id = REDIRFS_SOCK_IOP_PERMISSION;
+
+	rargs.args.i_permission.inode = inode;
+	rargs.args.i_permission.mask = mask;
+	rargs.args.i_permission.nd = nd;
+
+	if (!rfs_precall_flts(rinfo->rchain, &rcont, &rargs)) {
+		if (rinode->op_old && rinode->op_old->permission)
+			rargs.rv.rv_int = rinode->op_old->permission(
+					rargs.args.i_permission.inode,
+					rargs.args.i_permission.mask,
+					rargs.args.i_permission.nd);
+		else
+			rargs.rv.rv_int = generic_permission(inode, submask,
+					NULL);
+	}
+
+	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
+	rfs_context_deinit(&rcont);
+
+	rfs_inode_put(rinode);
+	rfs_info_put(rinfo);
+	return rargs.rv.rv_int;
+}
+
 static void rfs_inode_set_ops_reg(struct rfs_inode *rinode)
 {
+	RFS_SET_IOP(rinode, REDIRFS_REG_IOP_PERMISSION, permission);
 }
 
 static void rfs_inode_set_ops_dir(struct rfs_inode *rinode)
 {
+	RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_PERMISSION, permission);
+
 	rinode->op_new.mkdir = rfs_mkdir;
 	rinode->op_new.create = rfs_create;
 	rinode->op_new.link = rfs_link;
@@ -666,22 +726,27 @@ static void rfs_inode_set_ops_dir(struct rfs_inode *rinode)
 
 static void rfs_inode_set_ops_lnk(struct rfs_inode *rinode)
 {
+	RFS_SET_IOP(rinode, REDIRFS_LNK_IOP_PERMISSION, permission);
 }
 
 static void rfs_inode_set_ops_chr(struct rfs_inode *rinode)
 {
+	RFS_SET_IOP(rinode, REDIRFS_CHR_IOP_PERMISSION, permission);
 }
 
 static void rfs_inode_set_ops_blk(struct rfs_inode *rinode)
 {
+	RFS_SET_IOP(rinode, REDIRFS_BLK_IOP_PERMISSION, permission);
 }
 
 static void rfs_inode_set_ops_fifo(struct rfs_inode *rinode)
 {
+	RFS_SET_IOP(rinode, REDIRFS_FIFO_IOP_PERMISSION, permission);
 }
 
 static void rfs_inode_set_ops_sock(struct rfs_inode *rinode)
 {
+	RFS_SET_IOP(rinode, REDIRFS_SOCK_IOP_PERMISSION, permission);
 }
 
 static void rfs_inode_set_aops_reg(struct rfs_inode *rinode)

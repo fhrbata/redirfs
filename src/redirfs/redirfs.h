@@ -50,159 +50,166 @@
 	__ATTR(__name, __mode, __show, __store)
 
 enum redirfs_op_id {
-	REDIRFS_NONE_DOP_D_REVALIDATE,
-	REDIRFS_NONE_DOP_D_HASH,
-	REDIRFS_NONE_DOP_D_COMPARE,
-	REDIRFS_NONE_DOP_D_DELETE,
+	/* REDIRFS_NONE_DOP_D_REVALIDATE, */
+	/* REDIRFS_NONE_DOP_D_HASH, */
+	/* REDIRFS_NONE_DOP_D_COMPARE, */
+	/* REDIRFS_NONE_DOP_D_DELETE, */
 	REDIRFS_NONE_DOP_D_RELEASE,
 	REDIRFS_NONE_DOP_D_IPUT,
-	REDIRFS_NODE_DOP_D_NAME,
+	/* REDIRFS_NODE_DOP_D_NAME, */
 
-	REDIRFS_REG_DOP_D_REVALIDATE,
-	REDIRFS_REG_DOP_D_HASH,
-	REDIRFS_REG_DOP_D_COMPARE,
-	REDIRFS_REG_DOP_D_DELETE,
+	/* REDIRFS_REG_DOP_D_REVALIDATE, */
+	/* REDIRFS_REG_DOP_D_HASH, */
+	/* REDIRFS_REG_DOP_D_COMPARE, */
+	/* REDIRFS_REG_DOP_D_DELETE, */
+	REDIRFS_REG_DOP_D_RELEASE,
 	REDIRFS_REG_DOP_D_IPUT,
-	REDIRFS_REG_DOP_D_NAME,
+	/* REDIRFS_REG_DOP_D_NAME, */
 
-	REDIRFS_DIR_DOP_D_REVALIDATE,
-	REDIRFS_DIR_DOP_D_HASH,
-	REDIRFS_DIR_DOP_D_COMPARE,
-	REDIRFS_DIR_DOP_D_DELETE,
+	/* REDIRFS_DIR_DOP_D_REVALIDATE, */
+	/* REDIRFS_DIR_DOP_D_HASH, */
+	/* REDIRFS_DIR_DOP_D_COMPARE, */
+	/* REDIRFS_DIR_DOP_D_DELETE, */
+	REDIRFS_DIR_DOP_D_RELEASE,
 	REDIRFS_DIR_DOP_D_IPUT,
-	REDIRFS_DIR_DOP_D_NAME,
+	/* REDIRFS_DIR_DOP_D_NAME, */
 
-	REDIRFS_CHR_DOP_D_REVALIDATE,
-	REDIRFS_CHR_DOP_D_HASH,
-	REDIRFS_CHR_DOP_D_COMPARE,
-	REDIRFS_CHR_DOP_D_DELETE,
+	/* REDIRFS_CHR_DOP_D_REVALIDATE, */
+	/* REDIRFS_CHR_DOP_D_HASH, */
+	/* REDIRFS_CHR_DOP_D_COMPARE, */
+	/* REDIRFS_CHR_DOP_D_DELETE, */
+	REDIRFS_CHR_DOP_D_RELEASE,
 	REDIRFS_CHR_DOP_D_IPUT,
-	REDIRFS_CHR_DOP_D_NAME,
+	/* REDIRFS_CHR_DOP_D_NAME, */
 
-	REDIRFS_BLK_DOP_D_REVALIDATE,
-	REDIRFS_BLK_DOP_D_HASH,
-	REDIRFS_BLK_DOP_D_COMPARE,
-	REDIRFS_BLK_DOP_D_DELETE,
+	/* REDIRFS_BLK_DOP_D_REVALIDATE, */
+	/* REDIRFS_BLK_DOP_D_HASH, */
+	/* REDIRFS_BLK_DOP_D_COMPARE, */
+	/* REDIRFS_BLK_DOP_D_DELETE, */
+	REDIRFS_BLK_DOP_D_RELEASE,
 	REDIRFS_BLK_DOP_D_IPUT,
-	REDIRFS_BLK_DOP_D_NAME,
+	/* REDIRFS_BLK_DOP_D_NAME, */
 
-	REDIRFS_FIFO_DOP_D_REVALIDATE,
-	REDIRFS_FIFO_DOP_D_HASH,
-	REDIRFS_FIFO_DOP_D_COMPARE,
-	REDIRFS_FIFO_DOP_D_DELETE,
+	/* REDIRFS_FIFO_DOP_D_REVALIDATE, */
+	/* REDIRFS_FIFO_DOP_D_HASH, */
+	/* REDIRFS_FIFO_DOP_D_COMPARE, */
+	/* REDIRFS_FIFO_DOP_D_DELETE, */
+	REDIRFS_FIFO_DOP_D_RELEASE,
 	REDIRFS_FIFO_DOP_D_IPUT,
-	REDIRFS_FIFO_DOP_D_NAME,
+	/* REDIRFS_FIFO_DOP_D_NAME, */
 
-	REDIRFS_LNK_DOP_D_REVALIDATE,
-	REDIRFS_LNK_DOP_D_HASH,
-	REDIRFS_LNK_DOP_D_COMPARE,
-	REDIRFS_LNK_DOP_D_DELETE,
+	/* REDIRFS_LNK_DOP_D_REVALIDATE, */
+	/* REDIRFS_LNK_DOP_D_HASH, */
+	/* REDIRFS_LNK_DOP_D_COMPARE, */
+	/* REDIRFS_LNK_DOP_D_DELETE, */
+	REDIRFS_LNK_DOP_D_RELEASE,
 	REDIRFS_LNK_DOP_D_IPUT,
-	REDIRFS_LNK_DOP_D_NAME,
+	/* REDIRFS_LNK_DOP_D_NAME, */
 
-	REDIRFS_SOCK_DOP_D_REVALIDATE,
-	REDIRFS_SOCK_DOP_D_HASH,
-	REDIRFS_SOCK_DOP_D_COMPARE,
-	REDIRFS_SOCK_DOP_D_DELETE,
+	/* REDIRFS_SOCK_DOP_D_REVALIDATE, */
+	/* REDIRFS_SOCK_DOP_D_HASH, */
+	/* REDIRFS_SOCK_DOP_D_COMPARE, */
+	/* REDIRFS_SOCK_DOP_D_DELETE, */
+	REDIRFS_SOCK_DOP_D_RELEASE,
 	REDIRFS_SOCK_DOP_D_IPUT,
-	REDIRFS_SOCK_DOP_D_NAME,
+	/* REDIRFS_SOCK_DOP_D_NAME, */
 
 	REDIRFS_REG_IOP_PERMISSION,
-	REDIRFS_REG_IOP_SETATTR,
+	/* REDIRFS_REG_IOP_SETATTR, */
 
 	REDIRFS_DIR_IOP_CREATE,
 	REDIRFS_DIR_IOP_LOOKUP,
 	REDIRFS_DIR_IOP_LINK,
-	REDIRFS_DIR_IOP_UNLINK,
-	REDIRFS_DIR_IOP_SYMLINK,
+	/* REDIRFS_DIR_IOP_UNLINK, */
+	REDIRFS_DIR_IOP_SYMLINK, 
 	REDIRFS_DIR_IOP_MKDIR,
-	REDIRFS_DIR_IOP_RMDIR,
+	/* REDIRFS_DIR_IOP_RMDIR, */
 	REDIRFS_DIR_IOP_MKNOD,
-	REDIRFS_DIR_IOP_RENAME,
+	/* REDIRFS_DIR_IOP_RENAME, */
 	REDIRFS_DIR_IOP_PERMISSION,
-	REDIRFS_DIR_IOP_SETATTR,
+	/* REDIRFS_DIR_IOP_SETATTR, */
 
 	REDIRFS_CHR_IOP_PERMISSION,
-	REDIRFS_CHR_IOP_SETATTR,
+	/* REDIRFS_CHR_IOP_SETATTR, */
 
 	REDIRFS_BLK_IOP_PERMISSION,
-	REDIRFS_BLK_IOP_SETATTR,
+	/* REDIRFS_BLK_IOP_SETATTR, */
 
 	REDIRFS_FIFO_IOP_PERMISSION,
-	REDIRFS_FIFO_IOP_SETATTR,
+	/* REDIRFS_FIFO_IOP_SETATTR, */
 
 	REDIRFS_LNK_IOP_PERMISSION,
-	REDIRFS_LNK_IOP_SETATTR,
+	/* REDIRFS_LNK_IOP_SETATTR, */
 
 	REDIRFS_SOCK_IOP_PERMISSION,
-	REDIRFS_SOCK_IOP_SETATTR,
+	/* REDIRFS_SOCK_IOP_SETATTR, */
 
 	REDIRFS_REG_FOP_OPEN,
 	REDIRFS_REG_FOP_RELEASE,
-	REDIRFS_REG_FOP_LLSEEK,
-	REDIRFS_REG_FOP_READ,
-	REDIRFS_REG_FOP_WRITE,
-	REDIRFS_REG_FOP_AIO_READ,
-	REDIRFS_REG_FOP_AIO_WRITE,
-	REDIRFS_REG_FOP_MMAP,
-	REDIRFS_REG_FOP_FLUSH,
+	/* REDIRFS_REG_FOP_LLSEEK, */
+	/* REDIRFS_REG_FOP_READ, */
+	/* REDIRFS_REG_FOP_WRITE, */
+	/* REDIRFS_REG_FOP_AIO_READ, */
+	/* REDIRFS_REG_FOP_AIO_WRITE, */
+	/* REDIRFS_REG_FOP_MMAP, */
+	/* REDIRFS_REG_FOP_FLUSH, */
 
 	REDIRFS_DIR_FOP_OPEN,
 	REDIRFS_DIR_FOP_RELEASE,
-	REDIRFS_DIR_FOP_READDIR,
-	REDIRFS_DIR_FOP_FLUSH,
+	/* REDIRFS_DIR_FOP_READDIR, */
+	/* REDIRFS_DIR_FOP_FLUSH, */
 
 	REDIRFS_CHR_FOP_OPEN,
 	REDIRFS_CHR_FOP_RELEASE,
-	REDIRFS_CHR_FOP_LLSEEK,
-	REDIRFS_CHR_FOP_READ,
-	REDIRFS_CHR_FOP_WRITE,
-	REDIRFS_CHR_FOP_AIO_READ,
-	REDIRFS_CHR_FOP_AIO_WRITE,
-	REDIRFS_CHR_FOP_FLUSH,
+	/* REDIRFS_CHR_FOP_LLSEEK, */
+	/* REDIRFS_CHR_FOP_READ, */
+	/* REDIRFS_CHR_FOP_WRITE, */
+	/* REDIRFS_CHR_FOP_AIO_READ, */
+	/* REDIRFS_CHR_FOP_AIO_WRITE, */
+	/* REDIRFS_CHR_FOP_FLUSH, */
 
 	REDIRFS_BLK_FOP_OPEN,
 	REDIRFS_BLK_FOP_RELEASE,
-	REDIRFS_BLK_FOP_LLSEEK,
-	REDIRFS_BLK_FOP_READ,
-	REDIRFS_BLK_FOP_WRITE,
-	REDIRFS_BLK_FOP_AIO_READ,
-	REDIRFS_BLK_FOP_AIO_WRITE,
-	REDIRFS_BLK_FOP_FLUSH,
+	/* REDIRFS_BLK_FOP_LLSEEK, */
+	/* REDIRFS_BLK_FOP_READ, */
+	/* REDIRFS_BLK_FOP_WRITE, */
+	/* REDIRFS_BLK_FOP_AIO_READ, */
+	/* REDIRFS_BLK_FOP_AIO_WRITE, */
+	/* REDIRFS_BLK_FOP_FLUSH, */
 
 	REDIRFS_FIFO_FOP_OPEN,
 	REDIRFS_FIFO_FOP_RELEASE,
-	REDIRFS_FIFO_FOP_LLSEEK,
-	REDIRFS_FIFO_FOP_READ,
-	REDIRFS_FIFO_FOP_WRITE,
-	REDIRFS_FIFO_FOP_AIO_READ,
-	REDIRFS_FIFO_FOP_AIO_WRITE,
-	REDIRFS_FIFO_FOP_FLUSH,
+	/* REDIRFS_FIFO_FOP_LLSEEK, */
+	/* REDIRFS_FIFO_FOP_READ, */
+	/* REDIRFS_FIFO_FOP_WRITE, */
+	/* REDIRFS_FIFO_FOP_AIO_READ, */
+	/* REDIRFS_FIFO_FOP_AIO_WRITE, */
+	/* REDIRFS_FIFO_FOP_FLUSH, */
 
 	REDIRFS_LNK_FOP_OPEN,
 	REDIRFS_LNK_FOP_RELEASE,
-	REDIRFS_LNK_FOP_LLSEEK,
-	REDIRFS_LNK_FOP_READ,
-	REDIRFS_LNK_FOP_WRITE,
-	REDIRFS_LNK_FOP_AIO_READ,
-	REDIRFS_LNK_FOP_AIO_WRITE,
-	REDIRFS_LNK_FOP_FLUSH,
+	/* REDIRFS_LNK_FOP_LLSEEK, */
+	/* REDIRFS_LNK_FOP_READ, */
+	/* REDIRFS_LNK_FOP_WRITE, */
+	/* REDIRFS_LNK_FOP_AIO_READ, */
+	/* REDIRFS_LNK_FOP_AIO_WRITE, */
+	/* REDIRFS_LNK_FOP_FLUSH, */
 
-	REDIRFS_REG_AOP_READPAGE,
-	REDIRFS_REG_AOP_WRITEPAGE,
-	REDIRFS_REG_AOP_READPAGES,
-	REDIRFS_REG_AOP_WRITEPAGES,
-	REDIRFS_REG_AOP_SYNC_PAGE,
-	REDIRFS_REG_AOP_SET_PAGE_DIRTY,
-	REDIRFS_REG_AOP_PREPARE_WRITE,
-	REDIRFS_REG_AOP_COMMIT_WRITE,
-	REDIRFS_REG_AOP_BMAP,
-	REDIRFS_REG_AOP_INVALIDATEPAGE,
-	REDIRFS_REG_AOP_RELEASEPAGE,
-	REDIRFS_REG_AOP_DIRECT_IO,
-	REDIRFS_REG_AOP_GET_XIP_PAGE,
-	REDIRFS_REG_AOP_MIGRATEPAGE,
-	REDIRFS_REG_AOP_LAUNDER_PAGE,
+	/* REDIRFS_REG_AOP_READPAGE, */
+	/* REDIRFS_REG_AOP_WRITEPAGE, */
+	/* REDIRFS_REG_AOP_READPAGES, */
+	/* REDIRFS_REG_AOP_WRITEPAGES, */
+	/* REDIRFS_REG_AOP_SYNC_PAGE, */
+	/* REDIRFS_REG_AOP_SET_PAGE_DIRTY, */
+	/* REDIRFS_REG_AOP_PREPARE_WRITE, */
+	/* REDIRFS_REG_AOP_COMMIT_WRITE, */
+	/* REDIRFS_REG_AOP_BMAP, */
+	/* REDIRFS_REG_AOP_INVALIDATEPAGE, */
+	/* REDIRFS_REG_AOP_RELEASEPAGE, */
+	/* REDIRFS_REG_AOP_DIRECT_IO, */
+	/* REDIRFS_REG_AOP_GET_XIP_PAGE, */
+	/* REDIRFS_REG_AOP_MIGRATEPAGE, */
+	/* REDIRFS_REG_AOP_LAUNDER_PAGE, */
 
 	REDIRFS_OP_END
 };
@@ -233,25 +240,33 @@ union redirfs_op_rv {
 };
 
 union redirfs_op_args {
+	/*
 	struct {
 		struct dentry *dentry;
 		struct nameidata *nd;
 	} d_revalidate;	
+	*/
 
+	/*
 	struct {
 		struct dentry *dentry;
 		struct qstr *name;
 	} d_hash;
+	*/
 
+	/*
 	struct {
 		struct dentry *dentry;
 		struct qstr *name1;
 		struct qstr *name2;
 	} d_compare;
+	*/
 
+	/*
 	struct {
 		struct dentry *dentry;
 	} d_delete;
+	*/
 
 	struct {
 		struct dentry *dentry;
@@ -281,10 +296,12 @@ union redirfs_op_args {
 		struct dentry *dentry;
 	} i_link;
 
+	/*
 	struct {
 		struct inode *dir;
 		struct dentry *dentry;
 	} i_unlink;
+	*/
 
 	struct {
 		struct inode *dir;
@@ -298,10 +315,12 @@ union redirfs_op_args {
 		int mode;
 	} i_mkdir;
 
+	/*
 	struct {
 		struct inode *dir;
 		struct dentry *dentry;
 	} i_rmdir;
+	*/
 
 	struct {
 		struct inode *dir;
@@ -310,12 +329,14 @@ union redirfs_op_args {
 		dev_t rdev;
 	} i_mknod;
 
+	/*
 	struct {
 		struct inode *old_dir;
 		struct dentry *old_dentry;
 		struct inode *new_dir;
 		struct dentry *new_dentry;
 	} i_rename;
+	*/
 
 	struct {
 		struct inode *inode;
@@ -323,10 +344,12 @@ union redirfs_op_args {
 		struct nameidata *nd;
 	} i_permission;
 
+	/*
 	struct {
 		struct dentry *dentry;
 		struct iattr *iattr;
 	} i_setattr;
+	*/
 
 	struct {
 		struct inode *inode;
@@ -338,115 +361,154 @@ union redirfs_op_args {
 		struct file *file;
 	} f_release;
 
+	/*
 	struct {
 		struct file *file;
 		fl_owner_t id;
 	} f_flush;
+	*/
 
+	/*
 	struct {
 		struct file *file;
 		struct vm_area_struct *vma;
 	} f_mmap;
+	*/
 
+	/*
 	struct {
 		struct file *file;
 		void *buf;
 		filldir_t filldir;
 	} f_readdir;
+	*/
 
+	/*
 	struct {
                 struct file *file;
                 loff_t offset;
                 int origin;
 	} f_llseek;
+	*/
 
+	/*
 	struct {
 		struct file *file;
 		char __user *buf;
 		size_t count;
 		loff_t *pos;
 	} f_read;
+	*/
 
+	/*
 	struct {
 		struct file *file;
 		const char __user *buf;
 		size_t count;
 		loff_t *pos;
 	} f_write;
+	*/
 
+	/*
 	struct {
 		struct kiocb *iocb;
 		const struct iovec *iov;
 		unsigned long nr_segs;
 		loff_t pos;
 	} f_aio_read;
+	*/
 
+	/*
 	struct {
 		struct kiocb *iocb;
 		const struct iovec *iov;
 		unsigned long nr_segs;
 		loff_t pos;
 	} f_aio_write;
+	*/
 
+	/*
 	struct {
 		struct file *file;
 		struct page *page;
 	} a_readpage;
+	*/
 
+	/*
 	struct {
 		struct page *page;
 		struct writeback_control *wbc;
 	} a_writepage;
+	*/
 
+	/*
 	struct {
 		struct file *file;
 		struct address_space *mapping;
 		struct list_head *pages;
 		unsigned nr_pages;
 	} a_readpages;
+	*/
 
+	/*
 	struct {
 		struct address_space *mapping;
 		struct writeback_control *wbc;
 	} a_writepages;
+	*/
 
+	/*
 	struct {
 		struct page *page;
 	} a_sync_page;
+	*/
 
+	/*
 	struct {
 		struct page *page;
 	} a_set_page_dirty;
+	*/
 
+	/*
 	struct {
 		struct file *file;
 		struct page *page;
 		unsigned from;
 		unsigned to;
 	} a_prepare_write;
+	*/
 
+	/*
 	struct {
 		struct file *file;
 		struct page *page;
 		unsigned from;
 		unsigned to;
 	} a_commit_write;
+	*/
 
+	/*
 	struct {
 		struct address_space *mapping;
 		sector_t block;
 	} a_bmap;
+	*/
 
+	/*
 	struct {
 		struct page *page;
 		unsigned long offset;
 	} a_invalidatepage;
+	*/
 
+	/*
 	struct {
 		struct page *page;
 		gfp_t flags;
 	} a_releasepage;
+	*/
 
+	/*
 	struct {
 		int rw;
 		struct kiocb *iocb;
@@ -454,22 +516,29 @@ union redirfs_op_args {
 		loff_t offset;
 		unsigned long nr_segs;
 	} a_direct_IO;
+	*/
 
+	/*
 	struct {
 		struct address_space *mapping;
 		sector_t offset;
 		int create;
 	} a_get_xip_page;
+	*/
 
+	/*
 	struct {
 		struct address_space *mapping;
 		struct page *newpage;
 		struct page *page;
 	} a_migratepage;
+	*/
 
+	/*
 	struct {
 		struct page *page;
 	} a_launder_page;
+	*/
 };
 
 struct redirfs_op_type {

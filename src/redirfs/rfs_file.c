@@ -183,11 +183,6 @@ void rfs_file_del(struct file *file)
 	rfs_file_put(rfile);
 }
 
-loff_t rfs_llseek(struct file *file, loff_t offset, int origin)
-{
-	return 0;
-}
-
 int rfs_file_cache_create(void)
 {
 	rfs_file_cache = kmem_cache_create("rfs_file_cache",
@@ -333,7 +328,6 @@ int rfs_release(struct inode *inode, struct file *file)
 
 static void rfs_file_set_ops_reg(struct rfs_file *rfile)
 {
-	RFS_SET_FOP(rfile, REDIRFS_REG_FOP_LLSEEK, llseek);
 }
 
 static void rfs_file_set_ops_dir(struct rfs_file *rfile)
