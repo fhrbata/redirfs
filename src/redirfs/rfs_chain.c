@@ -113,6 +113,8 @@ struct rfs_chain *rfs_chain_add(struct rfs_chain *rchain, struct rfs_flt *rflt)
 
 	while (rchain->rflts[i]->priority < rflt->priority) {
 		rchain_new->rflts[j++] = rfs_flt_get(rchain->rflts[i++]);
+		if (i == rchain->rflts_nr)
+			break;
 	}
 
 	rchain_new->rflts[j++] = rfs_flt_get(rflt);
