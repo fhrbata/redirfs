@@ -55,11 +55,38 @@ enum redirfs_rv dummyflt_release(redirfs_context context,
 	return REDIRFS_CONTINUE;
 }
 
+enum redirfs_rv dummyflt_permission(redirfs_context context,
+		struct redirfs_args *args)
+{
+	char path[PAGE_SIZE];
+	char *call;
+	int rv;
+
+	if (!args->args.i_permission.nd)
+		return REDIRFS_CONTINUE;
+
+	rv = redirfs_get_filename(args->args.i_permission.nd->path.mnt,
+			args->args.i_permission.nd->path.dentry, path, PAGE_SIZE);
+
+	if (rv) {
+		printk(KERN_ERR "dummyflt: rfs_get_filename failed(%d)\n", rv);
+		return REDIRFS_CONTINUE;
+	}
+
+	call = args->type.call == REDIRFS_PRECALL ? "precall" : "postcall";
+
+	printk(KERN_ALERT "dummyflt: permission: %s, call: %s\n", path, call);
+
+	return REDIRFS_CONTINUE;
+}
+
 static struct redirfs_op_info dummyflt_op_info[] = {
 	{REDIRFS_REG_FOP_OPEN, dummyflt_open, dummyflt_open},
 	{REDIRFS_REG_FOP_RELEASE, dummyflt_release, dummyflt_release},
 	{REDIRFS_DIR_FOP_OPEN, dummyflt_open, dummyflt_open},
 	{REDIRFS_DIR_FOP_RELEASE, dummyflt_release, dummyflt_release},
+	{REDIRFS_REG_IOP_PERMISSION, dummyflt_permission, dummyflt_permission},
+	{REDIRFS_DIR_IOP_PERMISSION, dummyflt_permission, dummyflt_permission},
 	{REDIRFS_OP_END, NULL, NULL}
 };
 
@@ -82,7 +109,7 @@ static int __init dummyflt_init(void)
 	}
 
 	printk(KERN_INFO "Dummy Filter Version "
-			DUMMYFLT_VERSION "<www.redirfs.org>");
+			DUMMYFLT_VERSION "<www.redirfs.org>\n");
 
 	return 0;
 }
