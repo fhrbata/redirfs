@@ -350,12 +350,14 @@ int rfs_root_walk(int (*cb)(struct rfs_root *, void *), void *data)
 	struct rfs_root *tmp;
 	int rv = 0;
 
-	while(!list_empty(&rfs_root_walk_list)) {
+	while (!list_empty(&rfs_root_walk_list)) {
 		rroot = list_entry(rfs_root_walk_list.next, struct rfs_root,
 				walk_list);
 		rv = cb(rroot, data);
 		if (rv)
 			break;
+
+		list_del_init(&rroot->walk_list);
 	}
 
 	list_for_each_entry_safe(rroot, tmp, &rfs_root_walk_list, walk_list) {
@@ -367,13 +369,13 @@ int rfs_root_walk(int (*cb)(struct rfs_root *, void *), void *data)
 
 void rfs_root_add_walk(struct dentry *dentry)
 {
-	struct rfs_dentry *rdentry;
+	struct rfs_dentry *rdentry = NULL;
 
 	rdentry = rfs_dentry_find(dentry);
 	if (!rdentry)
 		goto error;
 
-	if (rdentry->rinfo)
+	if (!rdentry->rinfo)
 		goto error;
 
 	if (rdentry->rinfo->rroot->dentry != dentry)
@@ -381,9 +383,8 @@ void rfs_root_add_walk(struct dentry *dentry)
 
 	list_add_tail(&rdentry->rinfo->rroot->walk_list, &rfs_root_walk_list);
 
-	return;
 error:
-	BUG();
+	rfs_dentry_put(rdentry);
 	return;
 }
 

@@ -149,6 +149,7 @@ int rfs_dcache_walk(struct dentry *root, int (*cb)(struct dentry *, void *),
 
 		if (rv > 0 || !dir->dentry->d_inode) {
 			rfs_dcache_entry_free(dir);
+			rv = 0;
 			continue;
 		}
 
