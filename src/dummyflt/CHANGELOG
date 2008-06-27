@@ -1,5 +1,5 @@
-	* commit 343, Frantisek Hrbata <frantisek.hrbata@redirfs.org>, 2007-11-02
-	- fixed typo RFS_VERSION => DUMMYFLT_VERSION
+version 0.2
+	* adapted for RedirFS 0.3 interface
 
-Version 0.1
+version 0.1
 	* initial release
