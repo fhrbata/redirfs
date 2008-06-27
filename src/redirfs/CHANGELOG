@@ -1,18 +1,3 @@
-	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
-	- fixed bug 09: crash on rdentry_set_ops when changing path
-	- fixed bug 10: include subtree after include single path causes crash
-	- fixed bug 11: added rename support
-	- added support for sub-mounts and sub-unmounts
-	- added support for rename
-	- changed rfs_get_filename interface, now it requires vfsmount object
-
-	* Paolo Ambrosio <paolo.ambrosio@gmail.com>
-	- fixed typo RFS_REG_AOP_COMMINT_WRITE => RFS_REG_AOP_COMMIT_WRITE
-	- fixed bug 12: added mmap callback
-
-Version 0.2
+version 0.3
 	* rewritten from scratch
-
-Version 0.1
-	* first stable version with limited functionality
 
