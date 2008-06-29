@@ -103,8 +103,14 @@ static int __init dummyflt_init(void)
 
 	err = redirfs_set_operations(dummyflt, dummyflt_op_info);
 	if (err) {
-		redirfs_unregister_filter(dummyflt);
 		printk(KERN_ERR "dummyflt: set operations failed(%d)\n", err);
+		err = redirfs_unregister_filter(dummyflt);
+		if (err) {
+			printk(KERN_ERR "dummyflt: unregister filter "
+					"failed(%d)\n", err);
+			return 0;
+		}
+		redirfs_delete_filter(dummyflt);
 		return err;
 	}
 
