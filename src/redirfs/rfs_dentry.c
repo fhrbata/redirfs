@@ -258,7 +258,7 @@ void rfs_dentry_set_rinfo(struct rfs_dentry *rdentry, struct rfs_info *rinfo)
 
 void rfs_dentry_add_rfile(struct rfs_dentry *rdentry, struct rfs_file *rfile)
 {
-	list_add_tail(&rdentry->rfiles, &rfile->rdentry_list);
+	list_add_tail(&rfile->rdentry_list, &rdentry->rfiles);
 	rfs_file_get(rfile);
 }
 
