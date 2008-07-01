@@ -1,3 +1,39 @@
-version 0.3
-	* rewritten from scratch
+version 0.3-pre2
+        * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- fixed removing of rfs_file objects
+	- added support for file systems which are adding dentry/inode objects
+	  during readdir (e.g. NFS)
+
+version 0.3-pre1
+        * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- rewritten from scratch
+	- new path management
+	- new sysfs interface
+	- new redirfs framework interface
+	- supports kernel version 2.6.25 and higher
+	- not all features introduced in the 0.2 version implemented yet
+		- missing support for filter's private data
+		- missing support for address space operations
+		- limited set of redirected operations
+
+version 0.2.1
+	* never released, experimental support for sub-mounts
+
+        * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+        - fixed bug 09: crash on rdentry_set_ops when changing path
+        - fixed bug 10: include subtree after include single path causes crash
+        - fixed bug 11: added rename support
+        - added support for sub-mounts and sub-unmounts
+        - added support for rename
+        - changed rfs_get_filename interface, now it requires vfsmount object
+
+        * Paolo Ambrosio <paolo.ambrosio@gmail.com>
+        - fixed typo RFS_REG_AOP_COMMINT_WRITE => RFS_REG_AOP_COMMIT_WRITE
+        - fixed bug 12: added mmap callback
+
+version 0.2
+        * rewritten from scratch
+
+version 0.1
+        * first stable version with limited functionality
 
