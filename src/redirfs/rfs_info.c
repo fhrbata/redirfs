@@ -108,11 +108,12 @@ static struct rfs_info *rfs_info_dentry(struct dentry *dentry)
 
 static struct rfs_info *rfs_info_parent(struct dentry *dentry)
 {
-	struct dentry *dparent;
-	struct rfs_info *rinfo;
+	struct dentry *dparent = NULL;
+	struct rfs_info *rinfo = NULL;
 
 	dparent = dget_parent(dentry);
-	rinfo = rfs_info_dentry(dparent);
+	if (dparent != dentry)
+		rinfo = rfs_info_dentry(dparent);
 	dput(dparent);
 
 	return rinfo;
