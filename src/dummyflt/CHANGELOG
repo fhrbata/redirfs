@@ -1,5 +1,10 @@
-version 0.2
-	* adapted for RedirFS 0.3 interface
+version 0.2-pre2
+        * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- proper unregistration after error in the init module function
+
+version 0.2-pre1
+        * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- adapted for RedirFS 0.3 interface
 
 version 0.1
 	* initial release
