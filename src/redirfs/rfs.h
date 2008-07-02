@@ -192,29 +192,6 @@ int rfs_info_rem(struct dentry *dentry, struct rfs_info *rinfo,
 		struct rfs_flt *rflt);
 int rfs_info_set(struct dentry *dentry, struct rfs_info *rinfo);
 
-struct rfs_dcache_data {
-	struct rfs_info *rinfo;
-	struct rfs_flt *rflt;
-	struct dentry *droot;
-};
-
-struct rfs_dcache_data *rfs_dcache_data_alloc(struct dentry *dentry,
-		struct rfs_info *rinfo, struct rfs_flt *rflt);
-void rfs_dcache_data_free(struct rfs_dcache_data *rdata);
-
-struct rfs_dcache_entry {
-	struct list_head list;
-	struct dentry *dentry;
-};
-
-int rfs_dcache_walk(struct dentry *root, int (*cb)(struct dentry *, void *),
-		void *data);
-int rfs_dcache_add(struct dentry *dentry, void *data);
-int rfs_dcache_rem(struct dentry *dentry, void *data);
-int rfs_dcache_set(struct dentry *dentry, void *data);
-int rfs_dcache_rdentry_add(struct dentry *dentry, struct rfs_info *rinfo);
-int rfs_dcache_rdentry_del(struct dentry *dentry, struct inode *inode);
-
 struct rfs_dentry {
 	struct list_head rinode_list;
 	struct list_head rfiles;
@@ -305,6 +282,30 @@ void rfs_file_del(struct file *file);
 void rfs_file_set_ops(struct rfs_file *rfile);
 int rfs_file_cache_create(void);
 void rfs_file_cache_destory(void);
+
+struct rfs_dcache_data {
+	struct rfs_info *rinfo;
+	struct rfs_flt *rflt;
+	struct dentry *droot;
+};
+
+struct rfs_dcache_data *rfs_dcache_data_alloc(struct dentry *dentry,
+		struct rfs_info *rinfo, struct rfs_flt *rflt);
+void rfs_dcache_data_free(struct rfs_dcache_data *rdata);
+
+struct rfs_dcache_entry {
+	struct list_head list;
+	struct dentry *dentry;
+};
+
+int rfs_dcache_walk(struct dentry *root, int (*cb)(struct dentry *, void *),
+		void *data);
+int rfs_dcache_add(struct dentry *dentry, void *data);
+int rfs_dcache_rem(struct dentry *dentry, void *data);
+int rfs_dcache_set(struct dentry *dentry, void *data);
+int rfs_dcache_rdentry_add(struct dentry *dentry, struct rfs_info *rinfo);
+int rfs_dcache_rdentry_del(struct dentry *dentry, struct inode *inode);
+int rfs_dcache_rinode_del(struct rfs_dentry *rdentry, struct inode *inode);
 
 struct rfs_context {
 	struct list_head data;

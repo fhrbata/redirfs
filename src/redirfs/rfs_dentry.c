@@ -337,7 +337,7 @@ void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 	rargs.args.d_iput.inode = inode;
 
 	if (!rfs_precall_flts(rinfo->rchain, &rcont, &rargs)) {
-		BUG_ON(rfs_dcache_rdentry_del(dentry, inode));
+		BUG_ON(rfs_dcache_rinode_del(rdentry, inode));
 
 		if (rdentry->op_old && rdentry->op_old->d_iput)
 			rdentry->op_old->d_iput(rargs.args.d_iput.dentry,

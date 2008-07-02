@@ -227,10 +227,35 @@ exit:
 	return rv;
 }
 
+int rfs_dcache_rinode_del(struct rfs_dentry *rdentry, struct inode *inode)
+{
+	struct rfs_inode *rinode = NULL;
+	int rv = 0;
+
+	rfs_dentry_rem_rinode(rdentry, inode);
+
+	if (!inode)
+		return 0;
+
+	rinode = rfs_inode_find(inode);
+	if (!rinode)
+		return 0;
+
+	rv = rfs_inode_set_rinfo(rinode);
+	if (rv) {
+		rfs_inode_put(rinode);
+		return rv;
+	}
+
+	rfs_inode_set_ops(rinode);
+	rfs_inode_put(rinode);
+
+	return 0;
+}
+
 int rfs_dcache_rdentry_del(struct dentry *dentry, struct inode *inode)
 {
 	struct rfs_dentry *rdentry = NULL;
-	struct rfs_inode *rinode = NULL;
 	int rv = 0;
 
 	rdentry = rfs_dentry_find(dentry);
@@ -239,23 +264,10 @@ int rfs_dcache_rdentry_del(struct dentry *dentry, struct inode *inode)
 
 	rfs_dentry_del(rdentry->dentry);
 	rfs_dentry_rem_rfiles(rdentry);
-	rfs_dentry_rem_rinode(rdentry, inode);
 
-	if (!inode)
-		goto exit;
+	rv = rfs_dcache_rinode_del(rdentry, inode);
 
-	rinode = rfs_inode_find(inode);
-	if (!rinode)
-		goto exit;
-
-	rv = rfs_inode_set_rinfo(rinode);
-	if (rv)
-		goto exit;
-
-	rfs_inode_set_ops(rinode);
-exit:
 	rfs_dentry_put(rdentry);
-	rfs_inode_put(rinode);
 	return rv;
 }
 
