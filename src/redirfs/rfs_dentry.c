@@ -310,6 +310,8 @@ void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 	if (!rdentry) {
 		if (dentry->d_op && dentry->d_op->d_iput)
 			dentry->d_op->d_iput(dentry, inode);
+		else
+			iput(inode);
 		return;
 	}
 
@@ -338,6 +340,8 @@ void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 		if (rdentry->op_old && rdentry->op_old->d_iput)
 			rdentry->op_old->d_iput(rargs.args.d_iput.dentry,
 					rargs.args.d_iput.inode);
+		else
+			iput(inode);
 	}
 
 	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
