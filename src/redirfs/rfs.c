@@ -65,6 +65,8 @@ void rfs_postcall_flts(struct rfs_chain *rchain, struct rfs_context *rcont,
 	rargs->type.call = REDIRFS_POSTCALL;
 
 	for (; rcont->idx >= rcont->idx_start; rcont->idx--) {
+		if (!atomic_read(&rchain->rflts[rcont->idx]->active))
+			continue;
 
 		rop = rchain->rflts[rcont->idx]->cbs[rargs->type.id].post_cb;
 		if (rop) 
