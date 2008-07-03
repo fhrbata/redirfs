@@ -657,6 +657,9 @@ static int rfs_fsrename_rem_rroot(struct rfs_root *rroot,
 	int rv;
 	int i;
 
+	if (!rchain)
+		return 0;
+
 	for (i = 0; i < rchain->rflts_nr; i++) {
 		rv = rfs_root_rem_flt(rroot, rchain->rflts[i]);
 		if (rv)
@@ -678,6 +681,9 @@ static int rfs_fsrename_rem_dentry(struct rfs_root *rroot,
 	struct rfs_info *rinfo = NULL;
 	int rv = 0;
 	int i;
+
+	if (!rchain)
+		return 0;
 
 	rchrem = rfs_chain_get(rroot->rinfo->rchain);
 
@@ -739,6 +745,9 @@ static int rfs_fsrename_add_rroot(struct rfs_root *rroot,
 	int rv;
 	int i;
 
+	if (!rchain)
+		return 0;
+
 	for (i = 0; i < rchain->rflts_nr; i++) {
 		rv = rfs_root_add_flt(rroot, rchain->rflts[i]);
 		if (rv)
@@ -789,6 +798,8 @@ static int rfs_fsrename_add_dentry(struct rfs_root *rroot,
 		if (rv)
 			goto exit;
 	}
+
+	rv = rfs_info_set(dentry, rroot->rinfo);
 exit:
 	rfs_dentry_put(rdentry);
 	rfs_chain_put(rchadd);
