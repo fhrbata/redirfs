@@ -1,3 +1,13 @@
+        * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- fixed removing of path attached to the file system root
+	- cleanup of the redirfs_get_filename function
+	- fixed full path name for the file system root
+	- added check if filter is active in post calls
+	- correct destruction of inode objects in the rfs_d_iput function
+	- rinode objects are removed in the rfs_d_iput function
+	- rdentry objects are removed in the rfs_d_release function
+	- fixed NULL pointer dereferences in the rfs_fsrename functions
+
 version 0.3-pre2
         * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- fixed removing of rfs_file objects
