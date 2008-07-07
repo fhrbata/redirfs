@@ -334,12 +334,85 @@ int rfs_release(struct inode *inode, struct file *file)
 	return rargs.rv.rv_int;
 }
 
+int rfs_readdir(struct file *file, void *dirent, filldir_t filldir)
+{
+	LIST_HEAD(sibs);
+	struct rfs_dcache_entry *sib;
+	struct rfs_file *rfile;
+	struct rfs_info *rinfo;
+	struct rfs_context rcont;
+	struct rfs_dentry *rdentry;
+	struct redirfs_args rargs;
+
+	rfile = rfs_file_find(file);
+	if (!rfile) {
+		if (file->f_op && file->f_op->readdir)
+			return file->f_op->readdir(file, dirent, filldir);
+
+		return -ENOTDIR;
+	}
+
+	rinfo = rfs_dentry_get_rinfo(rfile->rdentry);
+	rfs_context_init(&rcont, 0);
+
+	if (S_ISDIR(file->f_dentry->d_inode->i_mode))
+		rargs.type.id = REDIRFS_DIR_FOP_READDIR;
+	else
+		BUG();
+
+	rargs.args.f_readdir.file = file;
+	rargs.args.f_readdir.dirent = dirent;
+	rargs.args.f_readdir.filldir = filldir;
+
+	if (!rfs_precall_flts(rinfo->rchain, &rcont, &rargs)) {
+		if (rfile->op_old && rfile->op_old->readdir) {
+			rargs.rv.rv_int = rfile->op_old->readdir(
+					rargs.args.f_readdir.file,
+					rargs.args.f_readdir.dirent,
+					rargs.args.f_readdir.filldir);
+		}
+		else
+			rargs.rv.rv_int = -ENOTDIR;
+	}
+
+	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
+	rfs_context_deinit(&rcont);
+
+	if (rargs.rv.rv_int)
+		goto exit;
+
+	if (rfs_dcache_get_subs(file->f_dentry, &sibs)) {
+		BUG();
+		goto exit;
+	}
+
+	list_for_each_entry(sib, &sibs, list) {
+		rdentry = rfs_dentry_find(sib->dentry);
+		if (rdentry) {
+			rfs_dentry_put(rdentry);
+			continue;
+		}
+
+		if (rfs_dcache_rdentry_add(sib->dentry, rinfo)) {
+			BUG();
+			goto exit;
+		}
+	}
+
+exit:
+	rfs_dcache_entry_free_list(&sibs);
+	rfs_file_put(rfile);
+	rfs_info_put(rinfo);
+	return rargs.rv.rv_int;
+}
+
 static void rfs_file_set_ops_reg(struct rfs_file *rfile)
 {
 }
 
 static void rfs_file_set_ops_dir(struct rfs_file *rfile)
 {
+	rfile->op_new.readdir = rfs_readdir;
 }
 
 static void rfs_file_set_ops_lnk(struct rfs_file *rfile)
@@ -380,7 +453,6 @@ void rfs_file_set_ops(struct rfs_file *rfile)
 	else if (S_ISFIFO(mode))
 		rfs_file_set_ops_fifo(rfile);
 
-	rfile->op_new.open = rfs_open;
 	rfile->op_new.release = rfs_release;
 }
 

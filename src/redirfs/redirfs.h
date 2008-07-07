@@ -149,7 +149,7 @@ enum redirfs_op_id {
 
 	REDIRFS_DIR_FOP_OPEN,
 	REDIRFS_DIR_FOP_RELEASE,
-	/* REDIRFS_DIR_FOP_READDIR, */
+	REDIRFS_DIR_FOP_READDIR,
 	/* REDIRFS_DIR_FOP_FLUSH, */
 
 	REDIRFS_CHR_FOP_OPEN,
@@ -366,13 +366,11 @@ union redirfs_op_args {
 	} f_mmap;
 	*/
 
-	/*
 	struct {
 		struct file *file;
-		void *buf;
+		void *dirent;
 		filldir_t filldir;
 	} f_readdir;
-	*/
 
 	/*
 	struct {

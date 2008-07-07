@@ -306,6 +306,8 @@ int rfs_dcache_set(struct dentry *dentry, void *data);
 int rfs_dcache_rdentry_add(struct dentry *dentry, struct rfs_info *rinfo);
 int rfs_dcache_rdentry_del(struct dentry *dentry, struct inode *inode);
 int rfs_dcache_rinode_del(struct rfs_dentry *rdentry, struct inode *inode);
+int rfs_dcache_get_subs(struct dentry *dir, struct list_head *sibs);
+void rfs_dcache_entry_free_list(struct list_head *head);
 
 struct rfs_context {
 	struct list_head data;

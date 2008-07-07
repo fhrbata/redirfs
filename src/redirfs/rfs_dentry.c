@@ -28,7 +28,6 @@ atomic_t rfs_dentry_cnt = ATOMIC_INIT(0);
 DECLARE_WAIT_QUEUE_HEAD(rfs_dentry_wait);
 
 void rfs_d_iput(struct dentry *dentry, struct inode *inode);
-void rfs_d_release(struct dentry *dentry);
 
 static struct rfs_dentry *rfs_dentry_alloc(struct dentry *dentry)
 {
@@ -57,8 +56,6 @@ static struct rfs_dentry *rfs_dentry_alloc(struct dentry *dentry)
 				sizeof(struct dentry_operations));
 
 	rdentry->op_new.d_iput = rfs_d_iput;
-	rdentry->op_new.d_release = rfs_d_release;
-
 	atomic_inc(&rfs_dentry_cnt);
 
 	return rdentry;
@@ -401,8 +398,6 @@ int rfs_d_compare(struct dentry *dentry, struct qstr *name1, struct qstr *name2)
 	struct rfs_info *rinfo;
 	struct rfs_context rcont;
 	struct redirfs_args rargs;
-	struct rfs_dentry *rdchild;
-	struct dentry *child;
 
 	rdentry = rfs_dentry_find(dentry);
 	if (!rdentry) {
@@ -452,12 +447,6 @@ int rfs_d_compare(struct dentry *dentry, struct qstr *name1, struct qstr *name2)
 	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
 	rfs_context_deinit(&rcont);
 
-	child = container_of(name1, struct dentry, d_name);
-	rdchild = rfs_dentry_find(child);
-	if (!rdchild)
-		__d_drop(child);
-
-	rfs_dentry_put(rdchild);
 	rfs_dentry_put(rdentry);
 	rfs_info_put(rinfo);
 
@@ -476,7 +465,7 @@ static void rfs_dentry_set_ops_reg(struct rfs_dentry *rdentry)
 
 static void rfs_dentry_set_ops_dir(struct rfs_dentry *rdentry)
 {
-	rdentry->op_new.d_compare = rfs_d_compare;
+	RFS_SET_DOP(rdentry, REDIRFS_DIR_DOP_D_COMPARE, d_compare);
 }
 
 static void rfs_dentry_set_ops_lnk(struct rfs_dentry *rdentry)
@@ -511,6 +500,8 @@ void rfs_dentry_set_ops(struct rfs_dentry *rdentry)
 	umode_t mode;
 
 	spin_lock(&rdentry->lock);
+
+	rdentry->op_new.d_release = rfs_d_release;
 
 	if (!rdentry->rinode) {
 		rfs_dentry_set_ops_none(rdentry);

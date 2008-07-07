@@ -356,6 +356,16 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry,
 	}
 
 	rinfo = rfs_inode_get_rinfo(rinode);
+	if (!rinfo) {
+		if (rinode->op_old && rinode->op_old->lookup)
+			rargs.rv.rv_dentry = rinode->op_old->lookup(dir,
+					dentry, nd);
+		else
+			rargs.rv.rv_dentry = ERR_PTR(-ENOSYS);
+
+		goto exit;
+	}
+
 	rfs_context_init(&rcont, 0);
 
 	if (S_ISDIR(dir->i_mode))
@@ -393,7 +403,6 @@ exit:
 	rfs_info_put(rinfo);
 	return rargs.rv.rv_dentry;
 }
-
 
 int rfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 {
