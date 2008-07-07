@@ -1,4 +1,5 @@
         * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- redirect readdir instead of d_compare to check newly added vfs objects(NFS)
 	- fixed removing of path attached to the file system root
 	- cleanup of the redirfs_get_filename function
 	- fixed full path name for the file system root
