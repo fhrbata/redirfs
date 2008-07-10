@@ -82,9 +82,6 @@ int rfs_dcache_get_subs(struct dentry *dir, struct list_head *sibs)
 	struct dentry *dentry;
 	int rv = 0;
 
-	if (!dir || !dir->d_inode)
-		return 0;
-
 	spin_lock(&dcache_lock);
 
 	list_for_each_entry(dentry, &dir->d_subdirs, d_u.d_child) {
@@ -109,6 +106,20 @@ void rfs_dcache_entry_free_list(struct list_head *head)
 	list_for_each_entry_safe(entry, tmp, head, list) {
 		rfs_dcache_entry_free(entry);
 	}
+}
+
+static int rfs_dcache_get_subs_mutex(struct dentry *dir, struct list_head *sibs)
+{
+	int rv = 0;
+
+	if (!dir || !dir->d_inode)
+		return 0;
+
+	mutex_lock(&dir->d_inode->i_mutex);
+	rv = rfs_dcache_get_subs(dir, sibs);
+	mutex_unlock(&dir->d_inode->i_mutex);
+
+	return rv;
 }
 
 static int rfs_dcache_get_dirs(struct list_head *dirs, struct list_head *sibs)
@@ -160,7 +171,7 @@ int rfs_dcache_walk(struct dentry *root, int (*cb)(struct dentry *, void *),
 			continue;
 		}
 
-		rv = rfs_dcache_get_subs(dir->dentry, &sibs);
+		rv = rfs_dcache_get_subs_mutex(dir->dentry, &sibs);
 		if (rv)
 			goto exit;
 

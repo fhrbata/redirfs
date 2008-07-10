@@ -382,6 +382,7 @@ int redirfs_set_path(redirfs_filter filter, struct redirfs_path_info *info)
 
 	rflt = (struct rfs_flt *)filter;
 
+	mutex_lock(&info->dentry->d_inode->i_sb->s_vfs_rename_mutex);
 	mutex_lock(&rfs_path_mutex);
 
 	rpath = rfs_path_add(info->mnt, info->dentry);
@@ -394,6 +395,7 @@ int redirfs_set_path(redirfs_filter filter, struct redirfs_path_info *info)
 	rfs_path_rem(rpath);
 
 	mutex_unlock(&rfs_path_mutex);
+	mutex_unlock(&info->dentry->d_inode->i_sb->s_vfs_rename_mutex);
 
 	rfs_path_put(rpath);
 
@@ -843,7 +845,8 @@ int rfs_fsrename(struct inode *old_dir, struct dentry *old_dentry,
 	struct rfs_dentry *rdentry = NULL;
 	int rv;
 
-	mutex_lock(&rfs_path_mutex);
+	if (old_dir != new_dir)
+		mutex_lock(&rfs_path_mutex);
 
 	rfst = rfs_fst_find(old_dentry->d_sb->s_type);
 	if (!rfst) {
@@ -874,7 +877,8 @@ int rfs_fsrename(struct inode *old_dir, struct dentry *old_dentry,
 
 	rv = rfs_fsrename_add(rroot_src, rroot_dst, old_dentry);
 exit:
-	mutex_unlock(&rfs_path_mutex);
+	if (old_dir != new_dir)
+		mutex_unlock(&rfs_path_mutex);
 	rfs_fst_put(rfst);
 	rfs_root_put(rroot_src);
 	rfs_root_put(rroot_dst);

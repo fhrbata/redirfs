@@ -24,6 +24,7 @@
 #include "rfs.h"
 
 static LIST_HEAD(rfs_fst_list);
+static spinlock_t rfs_fst_list_lock = SPIN_LOCK_UNLOCKED;
 
 static struct rfs_fst *rfs_fst_alloc(struct file_system_type *fst)
 {
@@ -89,25 +90,36 @@ static void rfs_fst_unhook_rename(struct rfs_fst *rfst)
 
 struct rfs_fst *rfs_fst_find(struct file_system_type *fst)
 {
-	struct rfs_fst *rfst;
+	struct rfs_fst *rfst = NULL;
+	struct rfs_fst *found = NULL;
+
+	spin_lock(&rfs_fst_list_lock);
 
 	list_for_each_entry(rfst, &rfs_fst_list, list) {
-		if (rfst->fst == fst)
-			return rfs_fst_get(rfst);
+		if (rfst->fst == fst) {
+			found = rfs_fst_get(rfst);
+			break;
+		}
 	}
 
-	return NULL;
+	spin_unlock(&rfs_fst_list_lock);
+
+	return found;
 }
 
 static void rfs_fst_list_add(struct rfs_fst *rfst)
 {
+	spin_lock(&rfs_fst_list_lock);
 	list_add_tail(&rfst->list, &rfs_fst_list);
+	spin_unlock(&rfs_fst_list_lock);
 	rfs_fst_get(rfst);
 }
 
 static void rfs_fst_list_rem(struct rfs_fst *rfst)
 {
+	spin_lock(&rfs_fst_list_lock);
 	list_del_init(&rfst->list);
+	spin_unlock(&rfs_fst_list_lock);
 	rfs_fst_put(rfst);
 }
 
