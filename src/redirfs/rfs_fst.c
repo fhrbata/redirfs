@@ -69,15 +69,24 @@ void rfs_fst_put(struct rfs_fst *rfst)
 
 static void rfs_fst_hook_rename(struct rfs_fst *rfst, struct inode *inode)
 {
+	struct rfs_inode *rinode;
+
 	if (!inode->i_op->rename)
 		return;
 
-	if (rfst->rename)
-		return;
+	rinode = rfs_inode_find(inode);
 
-	rfst->iops = (struct inode_operations*)inode->i_op;
-	rfst->rename = rfst->iops->rename;
+	if (rinode) {
+		rfst->iops = (struct inode_operations*)rinode->op_old;
+		rfst->rename = rinode->op_old->rename;
+	} else {
+		rfst->iops = (struct inode_operations*)inode->i_op;
+		rfst->rename = rfst->iops->rename;
+	}
+
 	rfst->iops->rename = rfs_fsrename;
+
+	rfs_inode_put(rinode);
 }
 
 static void rfs_fst_unhook_rename(struct rfs_fst *rfst)
@@ -109,17 +118,13 @@ struct rfs_fst *rfs_fst_find(struct file_system_type *fst)
 
 static void rfs_fst_list_add(struct rfs_fst *rfst)
 {
-	spin_lock(&rfs_fst_list_lock);
 	list_add_tail(&rfst->list, &rfs_fst_list);
-	spin_unlock(&rfs_fst_list_lock);
 	rfs_fst_get(rfst);
 }
 
 static void rfs_fst_list_rem(struct rfs_fst *rfst)
 {
-	spin_lock(&rfs_fst_list_lock);
 	list_del_init(&rfst->list);
-	spin_unlock(&rfs_fst_list_lock);
 	rfs_fst_put(rfst);
 }
 
@@ -137,8 +142,10 @@ void rfs_fst_rem_rpath(struct rfs_fst *rfst, struct rfs_path *rpath)
 	if (!list_empty(&rfst->rpaths))
 		return;
 
+	spin_lock(&rfs_fst_list_lock);
 	rfs_fst_unhook_rename(rfst);
 	rfs_fst_list_rem(rfst);
+	spin_unlock(&rfs_fst_list_lock);
 }
 
 struct rfs_fst *rfs_fst_add(struct super_block *sb)
@@ -153,8 +160,10 @@ struct rfs_fst *rfs_fst_add(struct super_block *sb)
 	if (IS_ERR(rfst))
 		return rfst;
 
+	spin_lock(&rfs_fst_list_lock);
 	rfs_fst_hook_rename(rfst, sb->s_root->d_inode);
 	rfs_fst_list_add(rfst);
+	spin_unlock(&rfs_fst_list_lock);
 
 	return rfst;
 }

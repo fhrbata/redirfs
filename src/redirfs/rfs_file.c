@@ -30,7 +30,6 @@ DECLARE_WAIT_QUEUE_HEAD(rfs_file_wait);
 int rfs_open(struct inode *inode, struct file *file);
 
 struct file_operations rfs_file_ops = {
-	.owner = THIS_MODULE,
 	.open = rfs_open
 };
 
@@ -57,7 +56,6 @@ static struct rfs_file *rfs_file_alloc(struct file *file)
 		memset(&rfile->op_new, 0,
 				sizeof(struct file_operations));
 
-	rfile->op_new.owner = THIS_MODULE;
 	rfile->op_new.open = rfs_open;
 
 	atomic_inc(&rfs_file_cnt);
@@ -133,9 +131,10 @@ struct rfs_file *rfs_file_add(struct file *file)
 	spin_lock(&rd->lock);
 
 	rd_tmp = rfs_dentry_find(file->f_dentry);
-	if (!rd_tmp) {
+	if (!rd_tmp || !rd_tmp->rinode) {
 		spin_unlock(&rd->lock);
 		rfs_dentry_put(rd);
+		rfs_dentry_put(rd_tmp);
 		rfs_file_put(rfile);
 		return NULL;
 	}

@@ -186,8 +186,12 @@ int rfs_dentry_add_rinode(struct rfs_dentry *rdentry)
 {
 	struct rfs_inode *rinode;
 
-	if (!rdentry->dentry->d_inode)
+	spin_lock(&dcache_lock);
+	if (!rdentry->dentry->d_inode) {
+		spin_unlock(&dcache_lock);
 		return 0;
+	}
+	spin_unlock(&dcache_lock);
 
 	spin_lock(&rdentry->lock);
 	if (rdentry->rinode) {
@@ -538,7 +542,8 @@ void rfs_dentry_set_ops(struct rfs_dentry *rdentry)
 
 	rinode = rfs_inode_get(rdentry->rinode);
 	spin_unlock(&rdentry->lock);
-	rfs_inode_set_ops(rinode);
+	if (rinode)
+		rfs_inode_set_ops(rinode);
 	rfs_inode_put(rinode);
 }
 

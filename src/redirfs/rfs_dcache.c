@@ -209,6 +209,9 @@ static int rfs_dcache_skip(struct dentry *dentry, struct rfs_dcache_data *rdata)
 	if (!rdentry->rinfo)
 		goto exit;
 
+	if (!rdentry->rinfo->rroot)
+		goto exit;
+
 	if (rdentry->rinfo->rroot->dentry != dentry)
 		goto exit;
 
@@ -221,6 +224,7 @@ exit:
 int rfs_dcache_rdentry_add(struct dentry *dentry, struct rfs_info *rinfo)
 {
 	struct rfs_dentry *rdentry = NULL;
+	struct rfs_inode *rinode = NULL;
 	int rv = 0;
 
 	rdentry = rfs_dentry_add(dentry);
@@ -233,13 +237,17 @@ int rfs_dcache_rdentry_add(struct dentry *dentry, struct rfs_info *rinfo)
 	if (rv)
 		goto exit;
 
-	rv = rfs_inode_set_rinfo(rdentry->rinode);
+	spin_lock(&rdentry->lock);
+	rinode = rfs_inode_get(rdentry->rinode);
+	spin_unlock(&rdentry->lock);
+	rv = rfs_inode_set_rinfo(rinode);
 	if (rv)
 		goto exit;
 
 	rfs_dentry_set_ops(rdentry);
 exit:
 	rfs_dentry_put(rdentry);
+	rfs_inode_put(rinode);
 	return rv;
 }
 
@@ -248,10 +256,10 @@ int rfs_dcache_rinode_del(struct rfs_dentry *rdentry, struct inode *inode)
 	struct rfs_inode *rinode = NULL;
 	int rv = 0;
 
-	rfs_dentry_rem_rinode(rdentry, inode);
-
 	if (!inode)
 		return 0;
+
+	rfs_dentry_rem_rinode(rdentry, inode);
 
 	rinode = rfs_inode_find(inode);
 	if (!rinode)
@@ -269,21 +277,28 @@ int rfs_dcache_rinode_del(struct rfs_dentry *rdentry, struct inode *inode)
 	return 0;
 }
 
-int rfs_dcache_rdentry_del(struct dentry *dentry, struct inode *inode)
+static int rfs_dcache_rdentry_del(struct dentry *dentry, struct rfs_info *rinfo)
 {
 	struct rfs_dentry *rdentry = NULL;
+	struct rfs_inode *rinode = NULL;
 	int rv = 0;
 
 	rdentry = rfs_dentry_find(dentry);
 	if (!rdentry)
 		return 0;
 
-	rfs_dentry_del(rdentry->dentry);
-	rfs_dentry_rem_rfiles(rdentry);
+	rfs_dentry_set_rinfo(rdentry, rinfo);
+	spin_lock(&rdentry->lock);
+	rinode = rfs_inode_get(rdentry->rinode);
+	spin_unlock(&rdentry->lock);
+	rv = rfs_inode_set_rinfo(rinode);
+	if (rv)
+		goto exit;
 
-	rv = rfs_dcache_rinode_del(rdentry, inode);
-
+	rfs_dentry_set_ops(rdentry);
+exit:
 	rfs_dentry_put(rdentry);
+	rfs_inode_put(rinode);
 	return rv;
 }
 
@@ -309,7 +324,7 @@ int rfs_dcache_rem(struct dentry *dentry, void *data)
 	}
 
 	if (!rdata->rinfo->rchain)
-		return rfs_dcache_rdentry_del(dentry, dentry->d_inode);
+		return rfs_dcache_rdentry_del(dentry, rfs_info_deleted);
 
 	return rfs_dcache_rdentry_add(dentry, rdata->rinfo);
 }
@@ -322,7 +337,7 @@ int rfs_dcache_set(struct dentry *dentry, void *data)
 		return 1;
 
 	if (!rdata->rinfo->rchain)
-		return rfs_dcache_rdentry_del(dentry, dentry->d_inode);
+		return rfs_dcache_rdentry_del(dentry, rfs_info_deleted);
 
 	return rfs_dcache_rdentry_add(dentry, rdata->rinfo);
 }

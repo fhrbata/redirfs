@@ -39,17 +39,32 @@
 	)
 
 #define RFS_SET_FOP(rf, id, op) \
-	RFS_SET_OP(rf->rdentry->rinfo->rops->arr, id, rf->op_new, \
-			rf->op_old, op)
+	(rf->rdentry->rinfo->rops ? \
+		RFS_SET_OP(rf->rdentry->rinfo->rops->arr, id, rf->op_new, \
+			rf->op_old, op) : \
+	 	RFS_REM_OP(rf->op_new, rf->op_old, op) \
+	)
 
 #define RFS_SET_DOP(rd, id, op) \
-	RFS_SET_OP(rd->rinfo->rops->arr, id, rd->op_new, rd->op_old, op)
+	(rd->rinfo->rops ? \
+		RFS_SET_OP(rd->rinfo->rops->arr, id, rd->op_new,\
+			rd->op_old, op) : \
+	 	RFS_REM_OP(rd->op_new, rd->op_old, op) \
+	)
 
 #define RFS_SET_IOP(ri, id, op) \
-	RFS_SET_OP(ri->rinfo->rops->arr, id, ri->op_new, ri->op_old, op)
+	(ri->rinfo->rops ? \
+	 	RFS_SET_OP(ri->rinfo->rops->arr, id, ri->op_new, \
+			ri->op_old, op) : \
+	 	RFS_REM_OP(ri->op_new, ri->op_old, op) \
+	)
 
 #define RFS_SET_AOP(ri, id, op) \
-	RFS_SET_OP(ri->rinfo->rops->arr, id, ri->aop_new, ri->aop_old, op)
+	(ri->rinfo->rops ? \
+	 	RFS_SET_OP(ri->rinfo->rops->arr, id, ri->aop_new, \
+			ri->aop_old, op) : \
+	 	RFS_REM_OP(ri->aop_new, ri->aop_old, op) \
+	)
 
 struct rfs_file;
 
@@ -178,6 +193,8 @@ struct rfs_info {
 	atomic_t count;
 };
 
+extern struct rfs_info *rfs_info_deleted;
+
 struct rfs_info *rfs_info_alloc(struct rfs_root *rroot,
 		struct rfs_chain *rchain);
 struct rfs_info *rfs_info_get(struct rfs_info *rinfo);
@@ -304,7 +321,6 @@ int rfs_dcache_add(struct dentry *dentry, void *data);
 int rfs_dcache_rem(struct dentry *dentry, void *data);
 int rfs_dcache_set(struct dentry *dentry, void *data);
 int rfs_dcache_rdentry_add(struct dentry *dentry, struct rfs_info *rinfo);
-int rfs_dcache_rdentry_del(struct dentry *dentry, struct inode *inode);
 int rfs_dcache_rinode_del(struct rfs_dentry *rdentry, struct inode *inode);
 int rfs_dcache_get_subs(struct dentry *dir, struct list_head *sibs);
 void rfs_dcache_entry_free_list(struct list_head *head);

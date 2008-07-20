@@ -23,6 +23,8 @@
 
 #include "rfs.h"
 
+struct rfs_info *rfs_info_deleted;
+
 int rfs_precall_flts(struct rfs_chain *rchain, struct rfs_context *rcont,
 		struct redirfs_args *rargs)
 {
@@ -80,9 +82,13 @@ static int __init rfs_init(void)
 {
 	int rv;
 
+	rfs_info_deleted = rfs_info_alloc(NULL, NULL);
+	if (IS_ERR(rfs_info_deleted))
+		return PTR_ERR(rfs_info_deleted);
+
 	rv = rfs_dentry_cache_create();
 	if (rv)
-		return rv;
+		goto err_dentry_cache;
 
 	rv = rfs_inode_cache_create();
 	if (rv)
@@ -99,7 +105,6 @@ static int __init rfs_init(void)
 	printk(KERN_INFO "Redirecting File System Framework Version "
 			REDIRFS_VERSION " <www.redirfs.org>\n");
 
-
 	return 0;
 
 err_sysfs:
@@ -108,23 +113,12 @@ err_file_cache:
 	rfs_inode_cache_destroy();
 err_inode_cache:
 	rfs_dentry_cache_destory();
+err_dentry_cache:
+	rfs_info_put(rfs_info_deleted);
 	return rv;
 }
 
-static void __exit rfs_exit(void)
-{
-	wait_event_interruptible(rfs_file_wait, !atomic_read(&rfs_file_cnt));
-	rfs_file_cache_destory();
-	wait_event_interruptible(rfs_inode_wait, !atomic_read(&rfs_inode_cnt));
-	rfs_inode_cache_destroy();
-	wait_event_interruptible(rfs_dentry_wait, !atomic_read(&rfs_dentry_cnt));
-	rfs_dentry_cache_destory();
-
-	rfs_sysfs_destroy();
-}
-
 module_init(rfs_init);
-module_exit(rfs_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Frantisek Hrbata <frantisek.hrbata@redirfs.org>");

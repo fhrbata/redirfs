@@ -206,6 +206,10 @@ void rfs_inode_add_rdentry(struct rfs_inode *rinode, struct rfs_dentry *rdentry)
 void rfs_inode_rem_rdentry(struct rfs_inode *rinode, struct rfs_dentry *rdentry)
 {
 	spin_lock(&rinode->lock);
+	if (list_empty(&rdentry->rinode_list)) {
+		spin_unlock(&rinode->lock);
+		return;
+	}
 	rinode->rdentries_nr--;
 	list_del_init(&rdentry->rinode_list);
 	spin_unlock(&rinode->lock);
@@ -726,11 +730,20 @@ static void rfs_inode_set_ops_dir(struct rfs_inode *rinode)
 {
 	RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_PERMISSION, permission);
 
-	rinode->op_new.mkdir = rfs_mkdir;
-	rinode->op_new.create = rfs_create;
-	rinode->op_new.link = rfs_link;
-	rinode->op_new.mknod = rfs_mknod;
-	rinode->op_new.symlink = rfs_symlink;
+	if (!rinode->rinfo->rops) {
+		RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_MKDIR, mkdir);
+		RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_CREATE, create);
+		RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_LINK, link);
+		RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_MKNOD, mknod);
+		RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_SYMLINK, symlink);
+
+	} else {
+		rinode->op_new.mkdir = rfs_mkdir;
+		rinode->op_new.create = rfs_create;
+		rinode->op_new.link = rfs_link;
+		rinode->op_new.mknod = rfs_mknod;
+		rinode->op_new.symlink = rfs_symlink;
+	}
 }
 
 static void rfs_inode_set_ops_lnk(struct rfs_inode *rinode)
@@ -767,6 +780,11 @@ void rfs_inode_set_ops(struct rfs_inode *rinode)
 	umode_t mode = rinode->inode->i_mode;
 
 	spin_lock(&rinode->lock);
+
+	if (!rinode->rinfo) {
+		spin_unlock(&rinode->lock);
+		return;
+	}
 
 	if (S_ISREG(mode)) {
 		rfs_inode_set_ops_reg(rinode);

@@ -850,13 +850,21 @@ int rfs_fsrename(struct inode *old_dir, struct dentry *old_dentry,
 
 	rfst = rfs_fst_find(old_dentry->d_sb->s_type);
 	if (!rfst) {
-		rv = old_dir->i_op->rename(old_dir, old_dentry, new_dir,
+		rinode = rfs_inode_find(old_dir);
+		if (rinode) 
+			rv = rinode->op_old->rename(old_dir, old_dentry,
+					new_dir, new_dentry);
+		else
+			rv = old_dir->i_op->rename(old_dir, old_dentry, new_dir,
 				new_dentry);
 		goto exit;
 	}
 
 	rv = rfst->rename(old_dir, old_dentry, new_dir, new_dentry);
 	if (rv)
+		goto exit;
+
+	if (old_dir == new_dir)
 		goto exit;
 
 	rinode = rfs_inode_find(new_dir);
@@ -868,7 +876,7 @@ int rfs_fsrename(struct inode *old_dir, struct dentry *old_dentry,
 	if (rdentry && rdentry->rinfo->rchain)
 		rroot_src = rfs_root_get(rdentry->rinfo->rroot);
 
-	if (rroot_src == rroot_dst)
+	if (rroot_src == rroot_dst) 
 		goto exit;
 
 	rv = rfs_fsrename_rem(rroot_src, rroot_dst, old_dentry);
