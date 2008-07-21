@@ -7,6 +7,8 @@ Filter groups and priorities
 
 	500000000 - 599999999  : reserved 
 
+		500000000 : dummyflt
+
 	600000000 - 699999999  : control 
 
 		unionflt
@@ -18,6 +20,7 @@ Filter groups and priorities
 	800000000 - 899999999  : security
 					 						
 		850000000 : avflt
+		860000000 : dazukoflt
 
 	900000000 - 999999999  : data protection
 
