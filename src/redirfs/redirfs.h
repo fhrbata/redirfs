@@ -33,7 +33,7 @@
 #include <linux/types.h>
 #include <linux/aio.h>
 
-#define REDIRFS_VERSION "0.3-pre2"
+#define REDIRFS_VERSION "0.3-pre3"
 
 #define REDIRFS_PATH_ADD		1
 #define REDIRFS_PATH_REM		2

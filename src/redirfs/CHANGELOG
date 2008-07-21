@@ -1,4 +1,7 @@
+version 0.3-pre3
         * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- removed usage of RCU due to CONFIG_PREEMPT_RCU
+	- redirfs is now a permanent module which cannot be unloaded
 	- fixed dead lock in rfs_dcache_walk and rfs_fsrename
 	- redirect readdir instead of d_compare to check newly added vfs objects(NFS)
 	- fixed removing of path attached to the file system root
