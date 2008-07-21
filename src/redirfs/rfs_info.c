@@ -123,7 +123,7 @@ static int rfs_info_rdentry_add(struct rfs_info *rinfo)
 {
 	struct rfs_dentry *rdentry;
 
-	rdentry = rfs_dentry_add(rinfo->rroot->dentry);
+	rdentry = rfs_dentry_add(rinfo->rroot->dentry, rinfo);
 	if (IS_ERR(rdentry))
 		return PTR_ERR(rdentry);
 

@@ -38,6 +38,13 @@
 	 	RFS_REM_OP(ops_new, ops_old, op) \
 	)
 
+#define RFS_SET_FOP_MGT(rf, op) \
+	(rf->rdentry->rinfo->rops ? \
+	 	RFS_ADD_OP(rf->op_new, op) : \
+	 	RFS_REM_OP(rf->op_new, rf->op_old, op) \
+	)
+
+
 #define RFS_SET_FOP(rf, id, op) \
 	(rf->rdentry->rinfo->rops ? \
 		RFS_SET_OP(rf->rdentry->rinfo->rops->arr, id, rf->op_new, \
@@ -50,6 +57,12 @@
 		RFS_SET_OP(rd->rinfo->rops->arr, id, rd->op_new,\
 			rd->op_old, op) : \
 	 	RFS_REM_OP(rd->op_new, rd->op_old, op) \
+	)
+
+#define RFS_SET_IOP_MGT(ri, op) \
+	(ri->rinfo->rops ? \
+	 	RFS_ADD_OP(ri->op_new, op) : \
+	 	RFS_REM_OP(ri->op_new, ri->op_old, op) \
 	)
 
 #define RFS_SET_IOP(ri, id, op) \
@@ -213,7 +226,6 @@ struct rfs_dentry {
 	struct list_head rinode_list;
 	struct list_head rfiles;
 	struct list_head priv;
-	struct rcu_head rcu;
 	struct dentry *dentry;
 	struct dentry_operations *op_old;
 	struct dentry_operations op_new;
@@ -223,16 +235,19 @@ struct rfs_dentry {
 	atomic_t count;
 };
 
-extern wait_queue_head_t rfs_dentry_wait;
-extern atomic_t rfs_dentry_cnt;
+#define rfs_dentry_find(dentry) \
+	(dentry && dentry->d_op && dentry->d_op->d_iput == rfs_d_iput ? \
+	 rfs_dentry_get(container_of(dentry->d_op, struct rfs_dentry, op_new)) : \
+	 NULL)
 
+void rfs_d_iput(struct dentry *dentry, struct inode *inode);
 struct rfs_dentry *rfs_dentry_get(struct rfs_dentry *rdentry);
 void rfs_dentry_put(struct rfs_dentry *rdentry);
-struct rfs_dentry *rfs_dentry_find(struct dentry *dentry);
-struct rfs_dentry *rfs_dentry_add(struct dentry *dentry);
-void rfs_dentry_del(struct dentry *dentry);
-int rfs_dentry_add_rinode(struct rfs_dentry *rdentry);
-void rfs_dentry_rem_rinode(struct rfs_dentry *rdentry, struct inode *inode);
+struct rfs_dentry *rfs_dentry_add(struct dentry *dentry,
+		struct rfs_info *rinfo);
+void rfs_dentry_del(struct rfs_dentry *rdentry);
+int rfs_dentry_add_rinode(struct rfs_dentry *rdentry, struct rfs_info *rinfo);
+void rfs_dentry_rem_rinode(struct rfs_dentry *rdentry);
 struct rfs_info *rfs_dentry_get_rinfo(struct rfs_dentry *rdentry);
 void rfs_dentry_set_rinfo(struct rfs_dentry *rdentry, struct rfs_info *rinfo);
 void rfs_dentry_add_rfile(struct rfs_dentry *rdentry, struct rfs_file *rfile);
@@ -244,7 +259,6 @@ void rfs_dentry_cache_destory(void);
 
 struct rfs_inode {
 	struct list_head rdentries;
-	struct rcu_head rcu;
 	struct inode *inode;
 	const struct inode_operations *op_old;
 	const struct address_space_operations *aop_old;
@@ -254,18 +268,21 @@ struct rfs_inode {
 	struct rfs_info *rinfo;
 	spinlock_t lock;
 	atomic_t count;
-	int nlink;
+	atomic_t nlink;
 	int rdentries_nr;
 };
 
-extern wait_queue_head_t rfs_inode_wait;
-extern atomic_t rfs_inode_cnt;
+#define rfs_inode_find(inode) \
+	(inode && inode->i_op && inode->i_op->lookup == rfs_lookup ? \
+	 rfs_inode_get(container_of(inode->i_op, struct rfs_inode, op_new)) : \
+	 NULL)
 
+struct dentry *rfs_lookup(struct inode *dir,struct dentry *dentry,
+		struct nameidata *nd);
 struct rfs_inode *rfs_inode_get(struct rfs_inode *rinode);
 void rfs_inode_put(struct rfs_inode *rinode);
-struct rfs_inode *rfs_inode_find(struct inode *inode);
-struct rfs_inode *rfs_inode_add(struct inode *inode);
-void rfs_inode_del(struct inode *inode);
+struct rfs_inode *rfs_inode_add(struct inode *inode, struct rfs_info *rinfo);
+void rfs_inode_del(struct rfs_inode *rinode);
 void rfs_inode_add_rdentry(struct rfs_inode *rinode,
 		struct rfs_dentry *rdentry);
 void rfs_inode_rem_rdentry(struct rfs_inode *rinode,
@@ -278,7 +295,6 @@ void rfs_inode_cache_destroy(void);
 
 struct rfs_file {
 	struct list_head rdentry_list;
-	struct rcu_head rcu;
 	struct file *file;
 	struct rfs_dentry *rdentry;
 	const struct file_operations *op_old;
@@ -287,15 +303,15 @@ struct rfs_file {
 	atomic_t count;
 };
 
-extern wait_queue_head_t rfs_file_wait;
-extern atomic_t rfs_file_cnt;
+#define rfs_file_find(file) \
+	(file && file->f_op && file->f_op->open == rfs_open ? \
+	 rfs_file_get(container_of(file->f_op, struct rfs_file, op_new)) : \
+	 NULL)
+	 
 extern struct file_operations rfs_file_ops;
 
 struct rfs_file *rfs_file_get(struct rfs_file *rfile);
 void rfs_file_put(struct rfs_file *rfile);
-struct rfs_file *rfs_file_find(struct file *file);
-struct rfs_file *rfs_file_add(struct file *file);
-void rfs_file_del(struct file *file);
 void rfs_file_set_ops(struct rfs_file *rfile);
 int rfs_file_cache_create(void);
 void rfs_file_cache_destory(void);

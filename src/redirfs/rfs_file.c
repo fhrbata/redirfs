@@ -24,10 +24,8 @@
 #include "rfs.h"
 
 static struct kmem_cache *rfs_file_cache = NULL;
-atomic_t rfs_file_cnt = ATOMIC_INIT(0);
-DECLARE_WAIT_QUEUE_HEAD(rfs_file_wait);
 
-int rfs_open(struct inode *inode, struct file *file);
+static int rfs_open(struct inode *inode, struct file *file);
 
 struct file_operations rfs_file_ops = {
 	.open = rfs_open
@@ -42,7 +40,6 @@ static struct rfs_file *rfs_file_alloc(struct file *file)
 		return ERR_PTR(-ENOMEM);
 
 	INIT_LIST_HEAD(&rfile->rdentry_list);
-	INIT_RCU_HEAD(&rfile->rcu);
 	rfile->file = file;
 	rfile->rdentry = NULL;
 	spin_lock_init(&rfile->lock);
@@ -57,8 +54,6 @@ static struct rfs_file *rfs_file_alloc(struct file *file)
 				sizeof(struct file_operations));
 
 	rfile->op_new.open = rfs_open;
-
-	atomic_inc(&rfs_file_cnt);
 
 	return rfile;
 }
@@ -87,98 +82,32 @@ void rfs_file_put(struct rfs_file *rfile)
 	fops_put(rfile->op_old);
 
 	kmem_cache_free(rfs_file_cache, rfile);
-
-	if (atomic_dec_and_test(&rfs_file_cnt))
-		wake_up_interruptible(&rfs_file_wait);
 }
 
-struct rfs_file *rfs_file_find(struct file *file)
+static struct rfs_file *rfs_file_add(struct file *file)
 {
-	struct rfs_file *rfile = NULL;
-	const struct file_operations *f_op = NULL;
-
-	rcu_read_lock();
-	f_op = rcu_dereference(file->f_op);
-	if (!f_op)
-		goto exit;
-
-	if (f_op->open != rfs_open)
-		goto exit;
-
-	rfile = container_of(f_op, struct rfs_file, op_new);
-	rfile = rfs_file_get(rfile);
-exit:
-	rcu_read_unlock();
-	return rfile;
-}
-
-struct rfs_file *rfs_file_add(struct file *file)
-{
-	struct rfs_dentry *rd_tmp = NULL;
-	struct rfs_dentry *rd = NULL;
-	struct rfs_file *rfile = NULL;
+	struct rfs_file *rfile;
 
 	rfile = rfs_file_alloc(file);
 	if (IS_ERR(rfile))
 		return rfile;
 
-	rd = rfs_dentry_find(file->f_dentry);
-	if (!rd) {
-		rfs_file_put(rfile);
-		return NULL;
-	}
-
-	spin_lock(&rd->lock);
-
-	rd_tmp = rfs_dentry_find(file->f_dentry);
-	if (!rd_tmp || !rd_tmp->rinode) {
-		spin_unlock(&rd->lock);
-		rfs_dentry_put(rd);
-		rfs_dentry_put(rd_tmp);
-		rfs_file_put(rfile);
-		return NULL;
-	}
-
-	rfile->rdentry = rfs_dentry_get(rd_tmp);
-	rfs_dentry_add_rfile(rd_tmp, rfile);
+	rfile->rdentry = rfs_dentry_find(file->f_dentry);
+	rfs_dentry_add_rfile(rfile->rdentry, rfile);
 	fops_put(file->f_op);
-	fops_get(&rfile->op_new);
-	rcu_assign_pointer(file->f_op, &rfile->op_new);
+	file->f_op = &rfile->op_new;
 	rfs_file_get(rfile);
+	spin_lock(&rfile->rdentry->lock);
 	rfs_file_set_ops(rfile);
-
-	spin_unlock(&rd->lock);
-
-	rfs_dentry_put(rd);
-	rfs_dentry_put(rd_tmp);
+	spin_unlock(&rfile->rdentry->lock);
 
 	return rfile;
 }
 
-static void rfs_file_del_rcu(struct rcu_head *head)
+static void rfs_file_del(struct rfs_file *rfile)
 {
-	struct rfs_file *rfile = NULL;
-
-	rfile = container_of(head, struct rfs_file, rcu);
-	rfs_file_put(rfile);
-}
-
-void rfs_file_del(struct file *file)
-{
-	struct rfs_file *rfile;
-
-	rfile = rfs_file_find(file);
-	if (!rfile)
-		return;
-
 	rfs_dentry_rem_rfile(rfile);
-
-	fops_put(file->f_op);
-	fops_get(rfile->op_old);
-	rcu_assign_pointer(file->f_op, rfile->op_old);
-
-	call_rcu(&rfile->rcu, rfs_file_del_rcu);
-
+	rfile->file->f_op = fops_get(rfile->op_old);
 	rfs_file_put(rfile);
 }
 
@@ -199,7 +128,7 @@ void rfs_file_cache_destory(void)
 	kmem_cache_destroy(rfs_file_cache);
 }
 
-int rfs_open(struct inode *inode, struct file *file)
+static int rfs_open(struct inode *inode, struct file *file)
 {
 	struct rfs_file *rfile;
 	struct rfs_dentry *rdentry;
@@ -209,15 +138,6 @@ int rfs_open(struct inode *inode, struct file *file)
 	struct redirfs_args rargs;
 
 	rinode = rfs_inode_find(inode);
-	if (!rinode) {
-		fops_put(file->f_op);
-		file->f_op = fops_get(inode->i_fop);
-		if (file->f_op && file->f_op->open)
-			return file->f_op->open(inode, file);
-
-		return 0;
-	}
-
 	fops_put(file->f_op);
 	file->f_op = fops_get(rinode->fop_old);
 
@@ -246,8 +166,6 @@ int rfs_open(struct inode *inode, struct file *file)
 		rargs.type.id = REDIRFS_BLK_FOP_OPEN;
 	else if (S_ISFIFO(inode->i_mode))
 		rargs.type.id = REDIRFS_FIFO_FOP_OPEN;
-	else 
-		BUG();
 
 	rargs.args.f_open.inode = inode;
 	rargs.args.f_open.file = file;
@@ -276,7 +194,7 @@ int rfs_open(struct inode *inode, struct file *file)
 	return rargs.rv.rv_int;
 }
 
-int rfs_release(struct inode *inode, struct file *file)
+static int rfs_release(struct inode *inode, struct file *file)
 {
 	struct rfs_file *rfile;
 	struct rfs_info *rinfo;
@@ -284,13 +202,6 @@ int rfs_release(struct inode *inode, struct file *file)
 	struct redirfs_args rargs;
 
 	rfile = rfs_file_find(file);
-	if (!rfile) {
-		if (file->f_op && file->f_op->release)
-			return file->f_op->release(inode, file);
-
-		return -ENOSYS;
-	}
-
 	rinfo = rfs_dentry_get_rinfo(rfile->rdentry);
 	rfs_context_init(&rcont, 0);
 
@@ -306,8 +217,6 @@ int rfs_release(struct inode *inode, struct file *file)
 		rargs.type.id = REDIRFS_BLK_FOP_RELEASE;
 	else if (S_ISFIFO(inode->i_mode))
 		rargs.type.id = REDIRFS_FIFO_FOP_RELEASE;
-	else 
-		BUG();
 
 	rargs.args.f_release.inode = inode;
 	rargs.args.f_release.file = file;
@@ -324,16 +233,13 @@ int rfs_release(struct inode *inode, struct file *file)
 	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
 	rfs_context_deinit(&rcont);
 
-	spin_lock(&rfile->rdentry->lock);
-	rfs_file_del(file);
-	spin_unlock(&rfile->rdentry->lock);
-
+	rfs_file_del(rfile);
 	rfs_file_put(rfile);
 	rfs_info_put(rinfo);
 	return rargs.rv.rv_int;
 }
 
-int rfs_readdir(struct file *file, void *dirent, filldir_t filldir)
+static int rfs_readdir(struct file *file, void *dirent, filldir_t filldir)
 {
 	LIST_HEAD(sibs);
 	struct rfs_dcache_entry *sib;
@@ -344,20 +250,11 @@ int rfs_readdir(struct file *file, void *dirent, filldir_t filldir)
 	struct redirfs_args rargs;
 
 	rfile = rfs_file_find(file);
-	if (!rfile) {
-		if (file->f_op && file->f_op->readdir)
-			return file->f_op->readdir(file, dirent, filldir);
-
-		return -ENOTDIR;
-	}
-
 	rinfo = rfs_dentry_get_rinfo(rfile->rdentry);
 	rfs_context_init(&rcont, 0);
 
 	if (S_ISDIR(file->f_dentry->d_inode->i_mode))
 		rargs.type.id = REDIRFS_DIR_FOP_READDIR;
-	else
-		BUG();
 
 	rargs.args.f_readdir.file = file;
 	rargs.args.f_readdir.dirent = dirent;
@@ -411,7 +308,7 @@ static void rfs_file_set_ops_reg(struct rfs_file *rfile)
 
 static void rfs_file_set_ops_dir(struct rfs_file *rfile)
 {
-	rfile->op_new.readdir = rfs_readdir;
+	RFS_SET_FOP_MGT(rfile, readdir);
 }
 
 static void rfs_file_set_ops_lnk(struct rfs_file *rfile)
@@ -432,7 +329,12 @@ static void rfs_file_set_ops_fifo(struct rfs_file *rfile)
 
 void rfs_file_set_ops(struct rfs_file *rfile)
 {
-	umode_t mode = rfile->rdentry->rinode->inode->i_mode;
+	umode_t mode;
+
+	if (!rfile->rdentry->rinode)
+		return;
+
+	mode = rfile->rdentry->rinode->inode->i_mode;
 
 	if (S_ISREG(mode))
 		rfs_file_set_ops_reg(rfile);

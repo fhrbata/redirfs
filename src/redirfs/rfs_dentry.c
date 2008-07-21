@@ -24,10 +24,6 @@
 #include "rfs.h"
 
 static struct kmem_cache *rfs_dentry_cache = NULL;
-atomic_t rfs_dentry_cnt = ATOMIC_INIT(0);
-DECLARE_WAIT_QUEUE_HEAD(rfs_dentry_wait);
-
-void rfs_d_iput(struct dentry *dentry, struct inode *inode);
 
 static struct rfs_dentry *rfs_dentry_alloc(struct dentry *dentry)
 {
@@ -40,7 +36,6 @@ static struct rfs_dentry *rfs_dentry_alloc(struct dentry *dentry)
 	INIT_LIST_HEAD(&rdentry->rinode_list);
 	INIT_LIST_HEAD(&rdentry->rfiles);
 	INIT_LIST_HEAD(&rdentry->priv);
-	INIT_RCU_HEAD(&rdentry->rcu);
 	rdentry->dentry = dentry;
 	rdentry->op_old = dentry->d_op;
 	rdentry->rinode = NULL;
@@ -56,7 +51,6 @@ static struct rfs_dentry *rfs_dentry_alloc(struct dentry *dentry)
 				sizeof(struct dentry_operations));
 
 	rdentry->op_new.d_iput = rfs_d_iput;
-	atomic_inc(&rfs_dentry_cnt);
 
 	return rdentry;
 }
@@ -85,32 +79,9 @@ void rfs_dentry_put(struct rfs_dentry *rdentry)
 	rfs_info_put(rdentry->rinfo);
 
 	kmem_cache_free(rfs_dentry_cache, rdentry);
-
-	if (atomic_dec_and_test(&rfs_dentry_cnt))
-		wake_up_interruptible(&rfs_dentry_wait);
 }
 
-struct rfs_dentry *rfs_dentry_find(struct dentry *dentry)
-{
-	struct rfs_dentry *rdentry = NULL;
-	struct dentry_operations *d_op = NULL;
-
-	rcu_read_lock();
-	d_op = rcu_dereference(dentry->d_op);
-	if (!d_op)
-		goto exit;
-
-	if (d_op->d_iput != rfs_d_iput)
-		goto exit;
-
-	rdentry = container_of(d_op, struct rfs_dentry, op_new);
-	rdentry = rfs_dentry_get(rdentry);
-exit:
-	rcu_read_unlock();
-	return rdentry;
-}
-
-struct rfs_dentry *rfs_dentry_add(struct dentry *dentry)
+struct rfs_dentry *rfs_dentry_add(struct dentry *dentry, struct rfs_info *rinfo)
 {
 	struct rfs_dentry *rd_new;
 	struct rfs_dentry *rd;
@@ -141,7 +112,8 @@ struct rfs_dentry *rfs_dentry_add(struct dentry *dentry)
 	}
 
 	if (!rd) {
-		rcu_assign_pointer(dentry->d_op, &rd_new->op_new);
+		rd_new->rinfo = rfs_info_get(rinfo);
+		dentry->d_op = &rd_new->op_new;
 		rfs_dentry_get(rd_new);
 		rd = rfs_dentry_get(rd_new);
 	}
@@ -153,45 +125,18 @@ struct rfs_dentry *rfs_dentry_add(struct dentry *dentry)
 	return rd;
 }
 
-static void rfs_dentry_del_rcu(struct rcu_head *head)
+void rfs_dentry_del(struct rfs_dentry *rdentry)
 {
-	struct rfs_dentry *rdentry;
-
-	rdentry = container_of(head, struct rfs_dentry, rcu);
+	rdentry->dentry->d_op = rdentry->op_old;
 	rfs_dentry_put(rdentry);
 }
 
-void rfs_dentry_del(struct dentry *dentry)
-{
-	struct rfs_dentry *rdentry;
-	
-	spin_lock(&dentry->d_lock);
-
-	rdentry = rfs_dentry_find(dentry);
-	if (!rdentry) {
-		spin_unlock(&dentry->d_lock);
-		return;
-	}
-
-	rcu_assign_pointer(dentry->d_op, rdentry->op_old);
-
-	spin_unlock(&dentry->d_lock);
-
-	call_rcu(&rdentry->rcu, rfs_dentry_del_rcu);
-
-	rfs_dentry_put(rdentry);
-}
-
-int rfs_dentry_add_rinode(struct rfs_dentry *rdentry)
+int rfs_dentry_add_rinode(struct rfs_dentry *rdentry, struct rfs_info *rinfo)
 {
 	struct rfs_inode *rinode;
 
-	spin_lock(&dcache_lock);
-	if (!rdentry->dentry->d_inode) {
-		spin_unlock(&dcache_lock);
+	if (!rdentry->dentry->d_inode)
 		return 0;
-	}
-	spin_unlock(&dcache_lock);
 
 	spin_lock(&rdentry->lock);
 	if (rdentry->rinode) {
@@ -200,14 +145,14 @@ int rfs_dentry_add_rinode(struct rfs_dentry *rdentry)
 	}
 	spin_unlock(&rdentry->lock);
 
-	rinode = rfs_inode_add(rdentry->dentry->d_inode);
+	rinode = rfs_inode_add(rdentry->dentry->d_inode, rinfo);
 	if (IS_ERR(rinode))
 		return PTR_ERR(rinode);
 
 	spin_lock(&rdentry->lock);
 	if (rdentry->rinode) {
 		spin_unlock(&rdentry->lock);
-		rfs_inode_del(rdentry->dentry->d_inode);
+		rfs_inode_del(rinode);
 		rfs_inode_put(rinode);
 		return 0;
 	}
@@ -220,22 +165,15 @@ int rfs_dentry_add_rinode(struct rfs_dentry *rdentry)
 	return 0;
 }
 
-void rfs_dentry_rem_rinode(struct rfs_dentry *rdentry, struct inode *inode)
+void rfs_dentry_rem_rinode(struct rfs_dentry *rdentry)
 {
-	struct rfs_inode *rinode;
-
-	spin_lock(&rdentry->lock);
-	rinode = rdentry->rinode;
-	if (!rinode) {
-		spin_unlock(&rdentry->lock);
+	if (!rdentry->rinode)
 		return;
-	}
-	rdentry->rinode = NULL;
-	spin_unlock(&rdentry->lock);
 
-	rfs_inode_del(inode);
-	rfs_inode_rem_rdentry(rinode, rdentry);
-	rfs_inode_put(rinode);
+	rfs_inode_rem_rdentry(rdentry->rinode, rdentry);
+	rfs_inode_del(rdentry->rinode);
+	rfs_inode_put(rdentry->rinode);
+	rdentry->rinode = NULL;
 }
 
 struct rfs_info *rfs_dentry_get_rinfo(struct rfs_dentry *rdentry)
@@ -259,28 +197,18 @@ void rfs_dentry_set_rinfo(struct rfs_dentry *rdentry, struct rfs_info *rinfo)
 
 void rfs_dentry_add_rfile(struct rfs_dentry *rdentry, struct rfs_file *rfile)
 {
+	spin_lock(&rdentry->lock);
 	list_add_tail(&rfile->rdentry_list, &rdentry->rfiles);
+	spin_unlock(&rdentry->lock);
 	rfs_file_get(rfile);
 }
 
 void rfs_dentry_rem_rfile(struct rfs_file *rfile)
 {
+	spin_lock(&rfile->rdentry->lock);
 	list_del_init(&rfile->rdentry_list);
+	spin_unlock(&rfile->rdentry->lock);
 	rfs_file_put(rfile);
-}
-
-void rfs_dentry_rem_rfiles(struct rfs_dentry *rdentry)
-{
-	struct rfs_file *rfile;
-	struct rfs_file *tmp;
-
-	spin_lock(&rdentry->lock);
-
-	list_for_each_entry_safe(rfile, tmp, &rdentry->rfiles, rdentry_list) {
-		rfs_file_del(rfile->file);
-	}
-
-	spin_unlock(&rdentry->lock);
 }
 
 int rfs_dentry_cache_create(void)
@@ -308,14 +236,6 @@ void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 	struct redirfs_args rargs;
 
 	rdentry = rfs_dentry_find(dentry);
-	if (!rdentry) {
-		if (dentry->d_op && dentry->d_op->d_iput)
-			dentry->d_op->d_iput(dentry, inode);
-		else
-			iput(inode);
-		return;
-	}
-
 	rinfo = rfs_dentry_get_rinfo(rdentry);
 	rfs_context_init(&rcont, 0);
 
@@ -354,7 +274,7 @@ void rfs_d_iput(struct dentry *dentry, struct inode *inode)
 	rfs_info_put(rinfo);
 }
 
-void rfs_d_release(struct dentry *dentry)
+static void rfs_d_release(struct dentry *dentry)
 {
 	struct rfs_dentry *rdentry;
 	struct rfs_info *rinfo;
@@ -362,12 +282,6 @@ void rfs_d_release(struct dentry *dentry)
 	struct redirfs_args rargs;
 
 	rdentry = rfs_dentry_find(dentry);
-	if (!rdentry) {
-		if (dentry->d_op && dentry->d_op->d_release)
-			dentry->d_op->d_release(dentry);
-		return;
-	}
-
 	rinfo = rfs_dentry_get_rinfo(rdentry);
 	rfs_context_init(&rcont, 0);
 	rargs.type.id = REDIRFS_NONE_DOP_D_RELEASE;
@@ -381,7 +295,7 @@ void rfs_d_release(struct dentry *dentry)
 	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
 	rfs_context_deinit(&rcont);
 
-	rfs_dentry_del(dentry);
+	rfs_dentry_del(rdentry);
 	rfs_dentry_put(rdentry);
 	rfs_info_put(rinfo);
 }
@@ -396,7 +310,8 @@ static inline int rfs_d_compare_default(struct qstr *name1, struct qstr *name2)
 	return 0;
 }
 
-int rfs_d_compare(struct dentry *dentry, struct qstr *name1, struct qstr *name2)
+static int rfs_d_compare(struct dentry *dentry, struct qstr *name1,
+		struct qstr *name2)
 {
 	struct rfs_dentry *rdentry;
 	struct rfs_info *rinfo;
@@ -404,13 +319,6 @@ int rfs_d_compare(struct dentry *dentry, struct qstr *name1, struct qstr *name2)
 	struct redirfs_args rargs;
 
 	rdentry = rfs_dentry_find(dentry);
-	if (!rdentry) {
-		if (dentry->d_op && dentry->d_op->d_compare)
-			return dentry->d_op->d_compare(dentry, name1, name2);
-
-		return rfs_d_compare_default(name1, name2);
-	}
-
 	rinfo = rfs_dentry_get_rinfo(rdentry);
 	rfs_context_init(&rcont, 0);
 
@@ -500,7 +408,6 @@ static void rfs_dentry_set_ops_sock(struct rfs_dentry *rdentry)
 void rfs_dentry_set_ops(struct rfs_dentry *rdentry)
 {
 	struct rfs_file *rfile;
-	struct rfs_inode *rinode;
 	umode_t mode;
 
 	spin_lock(&rdentry->lock);
@@ -540,10 +447,7 @@ void rfs_dentry_set_ops(struct rfs_dentry *rdentry)
 	else if (S_ISSOCK(mode))
 		rfs_dentry_set_ops_sock(rdentry);
 
-	rinode = rfs_inode_get(rdentry->rinode);
 	spin_unlock(&rdentry->lock);
-	if (rinode)
-		rfs_inode_set_ops(rinode);
-	rfs_inode_put(rinode);
+	rfs_inode_set_ops(rdentry->rinode);
 }
 
