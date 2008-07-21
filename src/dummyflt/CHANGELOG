@@ -1,3 +1,10 @@
+version 0.2-pre3
+        * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- added lookup function
+	- added GPLv3 license terms
+	- added redirfs_set_path example
+	- priority set to 500000000
+
 version 0.2-pre2
         * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- proper unregistration after error in the init module function
