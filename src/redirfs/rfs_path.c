@@ -54,7 +54,7 @@ struct rfs_path *rfs_path_get(struct rfs_path *rpath)
 	if (!rpath || IS_ERR(rpath))
 		return NULL;
 
-	BUG_ON(!&atomic_read(&rpath->count));
+	BUG_ON(!atomic_read(&rpath->count));
 	atomic_inc(&rpath->count);
 
 	return rpath;
