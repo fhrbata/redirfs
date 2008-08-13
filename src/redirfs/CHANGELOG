@@ -1,3 +1,11 @@
+version 0.3-pre4
+        * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- reworked global rename handling
+	- makefile cleanup
+
+	* John Ogness <redirfs@ogness.net> 
+	- fixed wrong reference usage in rfs_path_get
+
 version 0.3-pre3
         * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- removed usage of RCU due to CONFIG_PREEMPT_RCU
