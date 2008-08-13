@@ -23,7 +23,7 @@
 
 #include "rfs.h"
 
-struct rfs_info *rfs_info_deleted;
+struct rfs_info *rfs_info_none;
 
 int rfs_precall_flts(struct rfs_chain *rchain, struct rfs_context *rcont,
 		struct redirfs_args *rargs)
@@ -82,9 +82,9 @@ static int __init rfs_init(void)
 {
 	int rv;
 
-	rfs_info_deleted = rfs_info_alloc(NULL, NULL);
-	if (IS_ERR(rfs_info_deleted))
-		return PTR_ERR(rfs_info_deleted);
+	rfs_info_none = rfs_info_alloc(NULL, NULL);
+	if (IS_ERR(rfs_info_none))
+		return PTR_ERR(rfs_info_none);
 
 	rv = rfs_dentry_cache_create();
 	if (rv)
@@ -114,7 +114,7 @@ err_file_cache:
 err_inode_cache:
 	rfs_dentry_cache_destory();
 err_dentry_cache:
-	rfs_info_put(rfs_info_deleted);
+	rfs_info_put(rfs_info_none);
 	return rv;
 }
 

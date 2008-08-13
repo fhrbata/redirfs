@@ -261,12 +261,11 @@ static int rfs_readdir(struct file *file, void *dirent, filldir_t filldir)
 	rargs.args.f_readdir.filldir = filldir;
 
 	if (!rfs_precall_flts(rinfo->rchain, &rcont, &rargs)) {
-		if (rfile->op_old && rfile->op_old->readdir) {
+		if (rfile->op_old && rfile->op_old->readdir) 
 			rargs.rv.rv_int = rfile->op_old->readdir(
 					rargs.args.f_readdir.file,
 					rargs.args.f_readdir.dirent,
 					rargs.args.f_readdir.filldir);
-		}
 		else
 			rargs.rv.rv_int = -ENOTDIR;
 	}
@@ -289,6 +288,14 @@ static int rfs_readdir(struct file *file, void *dirent, filldir_t filldir)
 			continue;
 		}
 
+		if (!rinfo->rops) {
+			if (!sib->dentry->d_inode)
+				continue;
+
+			if (!S_ISDIR(sib->dentry->d_inode->i_mode))
+				continue;
+		}
+
 		if (rfs_dcache_rdentry_add(sib->dentry, rinfo)) {
 			BUG();
 			goto exit;
@@ -308,7 +315,7 @@ static void rfs_file_set_ops_reg(struct rfs_file *rfile)
 
 static void rfs_file_set_ops_dir(struct rfs_file *rfile)
 {
-	RFS_SET_FOP_MGT(rfile, readdir);
+	rfile->op_new.readdir = rfs_readdir;
 }
 
 static void rfs_file_set_ops_lnk(struct rfs_file *rfile)

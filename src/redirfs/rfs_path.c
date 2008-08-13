@@ -36,9 +36,7 @@ static struct rfs_path *rfs_path_alloc(struct vfsmount *mnt,
 		return ERR_PTR(-ENOMEM);
 
 	INIT_LIST_HEAD(&rpath->list);
-	INIT_LIST_HEAD(&rpath->rfst_list);
 	INIT_LIST_HEAD(&rpath->rroot_list);
-	rpath->rfst = NULL;
 	rpath->rroot = NULL;
 	rpath->rinch = NULL;
 	rpath->rexch = NULL;
@@ -108,27 +106,6 @@ struct rfs_path *rfs_path_find_id(int id)
 	}
 
 	return found;
-}
-
-static int rfs_path_add_rfst(struct rfs_path *rpath)
-{
-	struct rfs_fst *rfst;
-
-	rfst = rfs_fst_add(rpath->dentry->d_sb);
-	if (IS_ERR(rfst))
-		return PTR_ERR(rfst);
-
-	rfs_fst_add_rpath(rfst, rpath);
-	rpath->rfst = rfst;
-
-	return 0;
-}
-
-static void rfs_path_rem_rfst(struct rfs_path *rpath)
-{
-	rfs_fst_rem_rpath(rpath->rfst, rpath);
-	rfs_fst_put(rpath->rfst);
-	rpath->rfst = NULL;
 }
 
 static int rfs_path_add_rroot(struct rfs_path *rpath)
@@ -203,17 +180,8 @@ static struct rfs_path *rfs_path_add(struct vfsmount *mnt,
 
 	rpath->id = id;
 
-	if (S_ISDIR(dentry->d_inode->i_mode)) {
-		rv = rfs_path_add_rfst(rpath);
-		if (rv) {
-			rfs_path_put(rpath);
-			return ERR_PTR(rv);
-		}
-	}
-
 	rv = rfs_path_add_rroot(rpath);
 	if (rv) {
-		rfs_path_rem_rfst(rpath);
 		rfs_path_put(rpath);
 		return ERR_PTR(rv);
 	}
@@ -228,10 +196,21 @@ static void rfs_path_rem(struct rfs_path *rpath)
 	if (rpath->rinch || rpath->rexch)
 		return;
 
-	if (S_ISDIR(rpath->dentry->d_inode->i_mode))
-		rfs_path_rem_rfst(rpath);
 	rfs_path_rem_rroot(rpath);
 	rfs_path_list_rem(rpath);
+}
+
+static int rfs_path_add_dirs(struct dentry *dentry)
+{
+	struct rfs_inode *rinode;
+
+	rinode = rfs_inode_find(dentry->d_inode);
+	if (rinode) {
+		rfs_inode_put(rinode);
+		return 0;
+	}
+
+	return rfs_dcache_walk(dentry, rfs_dcache_add_dir, NULL);
 }
 
 static int rfs_path_add_include(struct rfs_path *rpath, struct rfs_flt *rflt)
@@ -244,6 +223,10 @@ static int rfs_path_add_include(struct rfs_path *rpath, struct rfs_flt *rflt)
 
 	if (rfs_chain_find(rpath->rexch, rflt) != -1)
 		return -EEXIST;
+
+	rv = rfs_path_add_dirs(rpath->dentry->d_sb->s_root);
+	if (rv)
+		return rv;
 
 	rinch = rfs_chain_add(rpath->rinch, rflt);
 	if (IS_ERR(rinch))
@@ -838,42 +821,24 @@ static int rfs_fsrename_add(struct rfs_root *rroot_src,
 int rfs_fsrename(struct inode *old_dir, struct dentry *old_dentry,
 		struct inode *new_dir, struct dentry *new_dentry)
 {
-	struct rfs_fst *rfst = NULL;
 	struct rfs_root *rroot_src = NULL;
 	struct rfs_root *rroot_dst = NULL;
 	struct rfs_inode *rinode = NULL;
 	struct rfs_dentry *rdentry = NULL;
-	int rv;
-
-	if (old_dir != new_dir)
-		mutex_lock(&rfs_path_mutex);
-
-	rfst = rfs_fst_find(old_dentry->d_sb->s_type);
-	if (!rfst) {
-		rinode = rfs_inode_find(old_dir);
-		if (rinode) 
-			rv = rinode->op_old->rename(old_dir, old_dentry,
-					new_dir, new_dentry);
-		else
-			rv = old_dir->i_op->rename(old_dir, old_dentry, new_dir,
-				new_dentry);
-		goto exit;
-	}
-
-	rv = rfst->rename(old_dir, old_dentry, new_dir, new_dentry);
-	if (rv)
-		goto exit;
+	int rv = 0;
 
 	if (old_dir == new_dir)
-		goto exit;
+		return 0;
+
+	mutex_lock(&rfs_path_mutex);
 
 	rinode = rfs_inode_find(new_dir);
 	rdentry = rfs_dentry_find(old_dentry);
 
-	if (rinode && rinode->rinfo->rchain)
+	if (rinode->rinfo->rchain)
 		rroot_dst = rfs_root_get(rinode->rinfo->rroot);
 
-	if (rdentry && rdentry->rinfo->rchain)
+	if (rdentry->rinfo->rchain)
 		rroot_src = rfs_root_get(rdentry->rinfo->rroot);
 
 	if (rroot_src == rroot_dst) 
@@ -885,9 +850,7 @@ int rfs_fsrename(struct inode *old_dir, struct dentry *old_dentry,
 
 	rv = rfs_fsrename_add(rroot_src, rroot_dst, old_dentry);
 exit:
-	if (old_dir != new_dir)
-		mutex_unlock(&rfs_path_mutex);
-	rfs_fst_put(rfst);
+	mutex_unlock(&rfs_path_mutex);
 	rfs_root_put(rroot_src);
 	rfs_root_put(rroot_dst);
 	rfs_inode_put(rinode);

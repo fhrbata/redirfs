@@ -22,7 +22,7 @@
 		$ cd redirfs-x.y
 
 	* Run make command
-		$ make
+		$ make -C /lib/modules/`uname -r`/build M=`pwd` modules
 
 4. Inserting module
 

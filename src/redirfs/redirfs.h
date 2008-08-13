@@ -118,7 +118,7 @@ enum redirfs_op_id {
 	REDIRFS_DIR_IOP_MKDIR,
 	/* REDIRFS_DIR_IOP_RMDIR, */
 	REDIRFS_DIR_IOP_MKNOD,
-	/* REDIRFS_DIR_IOP_RENAME, */
+	REDIRFS_DIR_IOP_RENAME,
 	REDIRFS_DIR_IOP_PERMISSION,
 	/* REDIRFS_DIR_IOP_SETATTR, */
 
@@ -320,14 +320,12 @@ union redirfs_op_args {
 		dev_t rdev;
 	} i_mknod;
 
-	/*
 	struct {
 		struct inode *old_dir;
 		struct dentry *old_dentry;
 		struct inode *new_dir;
 		struct dentry *new_dentry;
 	} i_rename;
-	*/
 
 	struct {
 		struct inode *inode;

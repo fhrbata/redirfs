@@ -610,6 +610,55 @@ static int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 	return rargs.rv.rv_int;
 }
 
+static int rfs_rename(struct inode *old_dir, struct dentry *old_dentry,
+		struct inode *new_dir, struct dentry *new_dentry)
+{
+	struct rfs_inode *rinode;
+	struct rfs_info *rinfo;
+	struct rfs_context rcont;
+	struct redirfs_args rargs;
+
+	rinode = rfs_inode_find(old_dir);
+	rinfo = rfs_inode_get_rinfo(rinode);
+	rfs_context_init(&rcont, 0);
+
+	if (S_ISDIR(old_dir->i_mode))
+		rargs.type.id = REDIRFS_DIR_IOP_RENAME;
+	else
+		BUG();
+
+	rargs.args.i_rename.old_dir = old_dir;
+	rargs.args.i_rename.old_dentry = old_dentry;
+	rargs.args.i_rename.new_dir = new_dir;
+	rargs.args.i_rename.new_dentry = new_dentry;
+
+	if (!rfs_precall_flts(rinfo->rchain, &rcont, &rargs)) {
+		if (rinode->op_old && rinode->op_old->rename)
+			rargs.rv.rv_int = rinode->op_old->rename(
+					rargs.args.i_rename.old_dir,
+					rargs.args.i_rename.old_dentry,
+					rargs.args.i_rename.new_dir,
+					rargs.args.i_rename.new_dentry);
+		else
+			rargs.rv.rv_int = -ENOSYS;
+	}
+
+	if (!rargs.rv.rv_int)
+		rargs.rv.rv_int = rfs_fsrename(
+				rargs.args.i_rename.old_dir,
+				rargs.args.i_rename.old_dentry,
+				rargs.args.i_rename.new_dir,
+				rargs.args.i_rename.new_dentry);
+
+	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
+	rfs_context_deinit(&rcont);
+
+	rfs_inode_put(rinode);
+	rfs_info_put(rinfo);
+	return rargs.rv.rv_int;
+}
+
+
 static void rfs_inode_set_ops_reg(struct rfs_inode *rinode)
 {
 	RFS_SET_IOP(rinode, REDIRFS_REG_IOP_PERMISSION, permission);
@@ -619,11 +668,13 @@ static void rfs_inode_set_ops_dir(struct rfs_inode *rinode)
 {
 	RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_PERMISSION, permission);
 
-	RFS_SET_IOP_MGT(rinode, mkdir);
 	RFS_SET_IOP_MGT(rinode, create);
 	RFS_SET_IOP_MGT(rinode, link);
 	RFS_SET_IOP_MGT(rinode, mknod);
 	RFS_SET_IOP_MGT(rinode, symlink);
+
+	rinode->op_new.mkdir = rfs_mkdir;
+	rinode->op_new.rename = rfs_rename;
 }
 
 static void rfs_inode_set_ops_lnk(struct rfs_inode *rinode)

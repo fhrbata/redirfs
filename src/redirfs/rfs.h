@@ -38,13 +38,6 @@
 	 	RFS_REM_OP(ops_new, ops_old, op) \
 	)
 
-#define RFS_SET_FOP_MGT(rf, op) \
-	(rf->rdentry->rinfo->rops ? \
-	 	RFS_ADD_OP(rf->op_new, op) : \
-	 	RFS_REM_OP(rf->op_new, rf->op_old, op) \
-	)
-
-
 #define RFS_SET_FOP(rf, id, op) \
 	(rf->rdentry->rinfo->rops ? \
 		RFS_SET_OP(rf->rdentry->rinfo->rops->arr, id, rf->op_new, \
@@ -108,7 +101,6 @@ struct rfs_path {
 	struct list_head list;
 	struct list_head rfst_list;
 	struct list_head rroot_list;
-	struct rfs_fst *rfst;
 	struct rfs_root *rroot;
 	struct rfs_chain *rinch;
 	struct rfs_chain *rexch;
@@ -126,23 +118,6 @@ struct rfs_path *rfs_path_find_id(int id);
 int rfs_path_get_info(struct rfs_flt *rflt, char *buf, int size, int type);
 int rfs_fsrename(struct inode *old_dir, struct dentry *old_dentry,
 		struct inode *new_dir, struct dentry *new_dentry);
-
-struct rfs_fst {
-	struct list_head list;
-	struct list_head rpaths;
-	struct file_system_type *fst;
-	struct inode_operations *iops;
-	int (*rename)(struct inode *, struct dentry *,
-		      struct inode *, struct dentry *);
-	atomic_t count;
-};
-
-struct rfs_fst *rfs_fst_get(struct rfs_fst *rfst);
-void rfs_fst_put(struct rfs_fst *rfst);
-void rfs_fst_add_rpath(struct rfs_fst *rfst, struct rfs_path *rpath);
-void rfs_fst_rem_rpath(struct rfs_fst *rfst, struct rfs_path *rpath);
-struct rfs_fst *rfs_fst_add(struct super_block *sb);
-struct rfs_fst *rfs_fst_find(struct file_system_type *fst);
 
 struct rfs_root {
 	struct list_head list;
@@ -206,7 +181,7 @@ struct rfs_info {
 	atomic_t count;
 };
 
-extern struct rfs_info *rfs_info_deleted;
+extern struct rfs_info *rfs_info_none;
 
 struct rfs_info *rfs_info_alloc(struct rfs_root *rroot,
 		struct rfs_chain *rchain);
@@ -333,6 +308,7 @@ struct rfs_dcache_entry {
 
 int rfs_dcache_walk(struct dentry *root, int (*cb)(struct dentry *, void *),
 		void *data);
+int rfs_dcache_add_dir(struct dentry *dentry, void *data);
 int rfs_dcache_add(struct dentry *dentry, void *data);
 int rfs_dcache_rem(struct dentry *dentry, void *data);
 int rfs_dcache_set(struct dentry *dentry, void *data);

@@ -147,7 +147,7 @@ static void rfs_info_rdentry_rem(struct dentry *dentry)
 
 	spin_lock(&rdentry->lock);
 	rfs_info_put(rdentry->rinfo);
-	rdentry->rinfo = rfs_info_get(rfs_info_deleted);
+	rdentry->rinfo = rfs_info_get(rfs_info_none);
 	spin_unlock(&rdentry->lock);
 
 	rfs_dentry_put(rdentry);
