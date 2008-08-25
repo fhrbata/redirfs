@@ -11,11 +11,11 @@
 	LKM(Linux Kernel Module) and provides well defined interface for other
 	LKMs which are called Filters. Filters can set pre and post call-back 
 	functions for selected filesystem operations(e.g. permission, open). 
-	Filters can also select for which directories will be their call-back 
-	functions called and even which directories will be excluded. Each 
-	Filter is specified by a name and unique number which represents 
-	Filter's priority. RedirFS manages all registered Filters and calls 
-	their call-back functions in specific order defined by their
+	Filters can also select for which file system paths will be their
+	call-back functions called and even which file system paths will be
+	excluded. Each Filter is specified by a name and unique number which
+	represents Filter's priority. RedirFS manages all registered Filters and
+	calls their call-back functions in specific order defined by their
 	priorities.
 
 	For an overview of the RedirFS project, visit 
