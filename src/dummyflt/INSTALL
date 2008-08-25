@@ -24,6 +24,8 @@
 		$ cd dummyflt-x.y
 
 	* Copy the RedirFS's Module.symvers file to the DummyFlt source tree.
+	  For more info please see Documentation/kbuild/modules.txt
+	  section "7.3 Symbols from another external module".
 		$ cp <path to the RedirFS's source tree>/Module.symvers .
 
 	* Run make command
