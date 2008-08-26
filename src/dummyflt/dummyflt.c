@@ -76,6 +76,8 @@ enum redirfs_rv dummyflt_release(redirfs_context context,
 	return REDIRFS_CONTINUE;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+
 enum redirfs_rv dummyflt_permission(redirfs_context context,
 		struct redirfs_args *args)
 {
@@ -100,6 +102,8 @@ enum redirfs_rv dummyflt_permission(redirfs_context context,
 
 	return REDIRFS_CONTINUE;
 }
+
+#endif
 
 enum redirfs_rv dummyflt_lookup(redirfs_context context,
 		struct redirfs_args *args)
@@ -132,8 +136,10 @@ static struct redirfs_op_info dummyflt_op_info[] = {
 	{REDIRFS_REG_FOP_RELEASE, dummyflt_release, dummyflt_release},
 	{REDIRFS_DIR_FOP_OPEN, dummyflt_open, dummyflt_open},
 	{REDIRFS_DIR_FOP_RELEASE, dummyflt_release, dummyflt_release},
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
 	{REDIRFS_REG_IOP_PERMISSION, dummyflt_permission, dummyflt_permission},
 	{REDIRFS_DIR_IOP_PERMISSION, dummyflt_permission, dummyflt_permission},
+#endif
 	{REDIRFS_DIR_IOP_LOOKUP, dummyflt_lookup, dummyflt_lookup},
 	{REDIRFS_OP_END, NULL, NULL}
 };
