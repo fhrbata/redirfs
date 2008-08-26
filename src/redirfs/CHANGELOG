@@ -1,3 +1,7 @@
+version 0.3
+        * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- reflected changes in the permission function interface
+
 version 0.3-pre4
         * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- reworked global rename handling
