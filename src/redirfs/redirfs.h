@@ -327,11 +327,18 @@ union redirfs_op_args {
 		struct dentry *new_dentry;
 	} i_rename;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
 	struct {
 		struct inode *inode;
 		int mask;
 		struct nameidata *nd;
 	} i_permission;
+#else
+	struct {
+		struct inode *inode;
+		int mask;
+	} i_permission;
+#endif
 
 	/*
 	struct {
