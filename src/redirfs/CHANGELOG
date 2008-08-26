@@ -1,6 +1,8 @@
 version 0.3
         * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- reflected changes in the permission function interface
+	- fixed rdentry NULL dereference in rfs_fsrename
+	- rfs_lookup adds only dirs while there are no registered filters
 
 version 0.3-pre4
         * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
