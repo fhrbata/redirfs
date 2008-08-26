@@ -21,7 +21,7 @@
 
 #include "../redirfs/redirfs.h"
 
-#define DUMMYFLT_VERSION "0.2-pre3"
+#define DUMMYFLT_VERSION "0.2"
 
 static redirfs_filter dummyflt;
 
