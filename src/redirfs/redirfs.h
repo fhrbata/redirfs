@@ -32,6 +32,7 @@
 #include <linux/kobject.h>
 #include <linux/types.h>
 #include <linux/aio.h>
+#include <linux/version.h>
 
 #define REDIRFS_VERSION "0.3-pre4"
 
