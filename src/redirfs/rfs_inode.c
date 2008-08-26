@@ -328,6 +328,14 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry,
 	if (rargs.rv.rv_dentry)
 		dadd = rargs.rv.rv_dentry;
 
+	if (!rinfo->rops) {
+		if (!dadd->d_inode)
+			goto exit;
+
+		if (!S_ISDIR(dadd->d_inode->i_mode))
+			goto exit;
+	}
+
 	if (rfs_dcache_rdentry_add(dadd, rinfo))
 		BUG();
 exit:

@@ -838,7 +838,7 @@ int rfs_fsrename(struct inode *old_dir, struct dentry *old_dentry,
 	if (rinode->rinfo->rchain)
 		rroot_dst = rfs_root_get(rinode->rinfo->rroot);
 
-	if (rdentry->rinfo->rchain)
+	if (rdentry && rdentry->rinfo->rchain)
 		rroot_src = rfs_root_get(rdentry->rinfo->rroot);
 
 	if (rroot_src == rroot_dst) 
