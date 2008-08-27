@@ -29,7 +29,8 @@
 		$ cp <path to the RedirFS's source tree>/Module.symvers .
 
 	* Run make command
-		$ make -C /lib/modules/`uname -r`/build M=`pwd` modules
+		$ make -C /lib/modules/`uname -r`/build M=`pwd` \
+			EXTRA_CFLAGS=-I<full path to the redirfs dir> modules
 
 4. Inserting module
 
