@@ -19,7 +19,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "../redirfs/redirfs.h"
+#include <redirfs.h>
 
 #define DUMMYFLT_VERSION "0.2"
 
