@@ -103,6 +103,3 @@ example for dummyflt
 15) remove dummyflt
 # rmmod dummyflt
 
-16) remove redirfs
-# rmmod redirfs
-
