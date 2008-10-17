@@ -28,8 +28,8 @@ struct rfs_ops *rfs_ops_alloc(void)
 	struct rfs_ops *rops;
 	char *arr;
 
-	rops = kmalloc(sizeof(struct rfs_ops), GFP_KERNEL);
-	arr = kmalloc(sizeof(char) * REDIRFS_OP_END, GFP_KERNEL);
+	rops = kzalloc(sizeof(struct rfs_ops), GFP_KERNEL);
+	arr = kzalloc(sizeof(char) * REDIRFS_OP_END, GFP_KERNEL);
 
 	if (!rops || !arr) {
 		kfree(rops);
@@ -37,7 +37,6 @@ struct rfs_ops *rfs_ops_alloc(void)
 		return ERR_PTR(-ENOMEM);
 	}
 
-	memset(arr, 0, sizeof(char) * REDIRFS_OP_END);
 	rops->arr = arr;
 	atomic_set(&rops->count, 1);
 

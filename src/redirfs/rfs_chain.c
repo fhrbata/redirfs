@@ -28,8 +28,8 @@ static struct rfs_chain *rfs_chain_alloc(int size, int type)
 	struct rfs_chain *rchain;
 	struct rfs_flt **rflts;
 
-	rchain = kmalloc(sizeof(struct rfs_chain), type);
-	rflts = kmalloc(sizeof(struct rfs_flt*) * size, type);
+	rchain = kzalloc(sizeof(struct rfs_chain), type);
+	rflts = kzalloc(sizeof(struct rfs_flt*) * size, type);
 	if (!rchain || !rflts) {
 		kfree(rchain);
 		kfree(rflts);

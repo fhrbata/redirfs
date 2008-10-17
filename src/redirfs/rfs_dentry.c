@@ -38,16 +38,11 @@ static struct rfs_dentry *rfs_dentry_alloc(struct dentry *dentry)
 	INIT_LIST_HEAD(&rdentry->priv);
 	rdentry->dentry = dentry;
 	rdentry->op_old = dentry->d_op;
-	rdentry->rinode = NULL;
-	rdentry->rinfo = NULL;
 	spin_lock_init(&rdentry->lock);
 	atomic_set(&rdentry->count, 1);
 
 	if (dentry->d_op)
 		memcpy(&rdentry->op_new, dentry->d_op,
-				sizeof(struct dentry_operations));
-	else
-		memset(&rdentry->op_new, 0,
 				sizeof(struct dentry_operations));
 
 	rdentry->op_new.d_iput = rfs_d_iput;

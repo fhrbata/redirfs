@@ -35,22 +35,18 @@ static struct rfs_file *rfs_file_alloc(struct file *file)
 {
 	struct rfs_file *rfile;
 
-	rfile = kmem_cache_alloc(rfs_file_cache, GFP_KERNEL);
+	rfile = kmem_cache_zalloc(rfs_file_cache, GFP_KERNEL);
 	if (!rfile)
 		return ERR_PTR(-ENOMEM);
 
 	INIT_LIST_HEAD(&rfile->rdentry_list);
 	rfile->file = file;
-	rfile->rdentry = NULL;
 	spin_lock_init(&rfile->lock);
 	atomic_set(&rfile->count, 1);
 	rfile->op_old = fops_get(file->f_op);
 
 	if (rfile->op_old)
 		memcpy(&rfile->op_new, rfile->op_old,
-				sizeof(struct file_operations));
-	else
-		memset(&rfile->op_new, 0,
 				sizeof(struct file_operations));
 
 	rfile->op_new.open = rfs_open;

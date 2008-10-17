@@ -30,16 +30,13 @@ static struct rfs_root *rfs_root_alloc(struct dentry *dentry)
 {
 	struct rfs_root *rroot;
 
-	rroot = kmalloc(sizeof(struct rfs_root), GFP_KERNEL);
+	rroot = kzalloc(sizeof(struct rfs_root), GFP_KERNEL);
 	if (!rroot)
 		return ERR_PTR(-ENOMEM);
 
 	INIT_LIST_HEAD(&rroot->list);
 	INIT_LIST_HEAD(&rroot->walk_list);
 	INIT_LIST_HEAD(&rroot->rpaths);
-	rroot->rinch = NULL;
-	rroot->rexch = NULL;
-	rroot->rinfo = NULL;
 	rroot->dentry = dentry;
 	atomic_set(&rroot->count, 1);
 

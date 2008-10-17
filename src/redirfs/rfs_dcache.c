@@ -28,7 +28,7 @@ struct rfs_dcache_data *rfs_dcache_data_alloc(struct dentry *dentry,
 {
 	struct rfs_dcache_data *rdata;
 
-	rdata = kmalloc(sizeof(struct rfs_dcache_data), GFP_KERNEL);
+	rdata = kzalloc(sizeof(struct rfs_dcache_data), GFP_KERNEL);
 	if (!rdata)
 		return ERR_PTR(-ENOMEM);
 
@@ -52,7 +52,7 @@ static struct rfs_dcache_entry *rfs_dcache_entry_alloc(struct dentry *dentry,
 {
 	struct rfs_dcache_entry *entry;
 
-	entry = kmalloc(sizeof(struct rfs_dcache_entry), type);
+	entry = kzalloc(sizeof(struct rfs_dcache_entry), type);
 	if (!entry)
 		return ERR_PTR(-ENOMEM);
 

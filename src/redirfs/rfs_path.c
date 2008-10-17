@@ -31,15 +31,12 @@ static struct rfs_path *rfs_path_alloc(struct vfsmount *mnt,
 {
 	struct rfs_path *rpath;
 
-	rpath = kmalloc(sizeof(struct rfs_path), GFP_KERNEL);
+	rpath = kzalloc(sizeof(struct rfs_path), GFP_KERNEL);
 	if (!rpath)
 		return ERR_PTR(-ENOMEM);
 
 	INIT_LIST_HEAD(&rpath->list);
 	INIT_LIST_HEAD(&rpath->rroot_list);
-	rpath->rroot = NULL;
-	rpath->rinch = NULL;
-	rpath->rexch = NULL;
 	rpath->mnt = mntget(mnt);
 	rpath->dentry = dget(dentry);
 	atomic_set(&rpath->count, 1);
@@ -441,7 +438,7 @@ int redirfs_get_paths(redirfs_filter filter, struct redirfs_paths *paths)
 	}
 
 	paths->nr = rflt->paths_nr;
-	paths->path = kmalloc(sizeof(redirfs_path) * paths->nr, GFP_KERNEL);
+	paths->path = kzalloc(sizeof(redirfs_path) * paths->nr, GFP_KERNEL);
 	if (!paths->path) {
 		mutex_unlock(&rfs_path_mutex);
 		return -ENOMEM;

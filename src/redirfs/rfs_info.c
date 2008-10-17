@@ -48,7 +48,7 @@ struct rfs_info *rfs_info_alloc(struct rfs_root *rroot,
 	struct rfs_info *rinfo;
 	int rv;
 
-	rinfo = kmalloc(sizeof(struct rfs_info), GFP_KERNEL);
+	rinfo = kzalloc(sizeof(struct rfs_info), GFP_KERNEL);
 	if (!rinfo)
 		return ERR_PTR(-ENOMEM);
 

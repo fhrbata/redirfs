@@ -38,7 +38,6 @@ static struct rfs_inode *rfs_inode_alloc(struct inode *inode)
 	rinode->op_old = inode->i_op;
 	rinode->fop_old = inode->i_fop;
 	rinode->aop_old = inode->i_mapping->a_ops;
-	rinode->rinfo = NULL;
 	spin_lock_init(&rinode->lock);
 	atomic_set(&rinode->count, 1);
 	atomic_set(&rinode->nlink, 1);
@@ -47,15 +46,9 @@ static struct rfs_inode *rfs_inode_alloc(struct inode *inode)
 	if (inode->i_op)
 		memcpy(&rinode->op_new, inode->i_op,
 				sizeof(struct inode_operations));
-	else
-		memset(&rinode->op_new, 0,
-				sizeof(struct inode_operations));
 
 	if (inode->i_mapping->a_ops)
 		memcpy(&rinode->aop_new, inode->i_mapping->a_ops,
-				sizeof(struct address_space_operations));
-	else
-		memset(&rinode->aop_new, 0,
 				sizeof(struct address_space_operations));
 
 	rinode->op_new.lookup = rfs_lookup;

@@ -36,6 +36,7 @@ struct rfs_flt *rfs_flt_alloc(struct redirfs_filter_info *flt_info)
 	name = kzalloc(len + 1, GFP_KERNEL);
 	if (!name)
 		return ERR_PTR(-ENOMEM);
+
 	strncpy(name, flt_info->name, len);
 
 	rflt = kzalloc(sizeof(struct rfs_flt), GFP_KERNEL);
@@ -48,13 +49,10 @@ struct rfs_flt *rfs_flt_alloc(struct redirfs_filter_info *flt_info)
 	rflt->name = name;
 	rflt->priority = flt_info->priority;
 	rflt->owner = flt_info->owner;
-	rflt->paths_nr = 0;
 	rflt->ctl_cb = flt_info->ctl_cb;
 	rflt->ctl_id = flt_info->ctl_id;
 	spin_lock_init(&rflt->lock);
 	try_module_get(rflt->owner);
-
-	memset(&rflt->cbs, 0, sizeof(struct rfs_op_info) * REDIRFS_OP_END);
 
 	if (flt_info->active)
 		atomic_set(&rflt->active, 1);
