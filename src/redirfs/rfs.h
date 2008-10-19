@@ -123,7 +123,7 @@ extern struct mutex rfs_path_mutex;
 struct rfs_path *rfs_path_get(struct rfs_path *rpath);
 void rfs_path_put(struct rfs_path *rpath);
 struct rfs_path *rfs_path_find_id(int id);
-int rfs_path_get_info(struct rfs_flt *rflt, char *buf, int size, int type);
+int rfs_path_get_info(struct rfs_flt *rflt, char *buf, int size);
 int rfs_fsrename(struct inode *old_dir, struct dentry *old_dentry,
 		struct inode *new_dir, struct dentry *new_dentry);
 

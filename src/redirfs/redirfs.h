@@ -34,7 +34,7 @@
 #include <linux/aio.h>
 #include <linux/version.h>
 
-#define REDIRFS_VERSION "0.3"
+#define REDIRFS_VERSION "0.4"
 
 #define REDIRFS_PATH_ADD		1
 #define REDIRFS_PATH_REM		2
@@ -604,14 +604,15 @@ int redirfs_remove_attribute(redirfs_filter filter,
 		struct redirfs_filter_attribute *attr);
 struct kobject *redirfs_filter_kobject(redirfs_filter filter);
 int redirfs_set_path(redirfs_filter filter, struct redirfs_path_info *info);
-int redirfs_get_path(redirfs_filter filter, struct redirfs_path_info *info,
-		redirfs_path *path);
+int redirfs_get_path(redirfs_filter filter, struct vfsmount *mnt,
+		struct dentry *dentry, redirfs_path *path);
 void redirfs_put_path(redirfs_path *path);
 int redirfs_get_paths(redirfs_filter filter, struct redirfs_paths *paths);
 void redirfs_put_paths(struct redirfs_paths *paths);
 int redirfs_get_path_info(redirfs_filter filter, redirfs_path path,
 		struct redirfs_path_info *info);
-int redirfs_remove_paths(redirfs_filter filter);
+int redirfs_rem_path(redirfs_filter filter, redirfs_path path);
+int redirfs_rem_paths(redirfs_filter filter);
 int redirfs_register_filter(redirfs_filter *filter,
 		struct redirfs_filter_info *info);
 int redirfs_unregister_filter(redirfs_filter filter);

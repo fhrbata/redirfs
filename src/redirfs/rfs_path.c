@@ -382,37 +382,35 @@ int redirfs_set_path(redirfs_filter filter, struct redirfs_path_info *info)
 	return rv;
 }
 
-int redirfs_get_path(redirfs_filter filter, struct redirfs_path_info *info,
-		redirfs_path *path)
+int redirfs_get_path(redirfs_filter filter, struct vfsmount *mnt,
+		struct dentry *dentry, redirfs_path *path)
 {
 	struct rfs_flt *rflt = (struct rfs_flt *)filter;
 	struct rfs_path *rpath;
 
-	if (!rflt || !info || !path)
-		return -EINVAL;
-
-	if (!info->dentry || !info->mnt)
+	if (!rflt || !mnt || !dentry || !path)
 		return -EINVAL;
 
 	mutex_lock(&rfs_path_mutex);
-	rpath = rfs_path_find(info->mnt, info->dentry);
+	rpath = rfs_path_find(mnt, dentry);
 	mutex_unlock(&rfs_path_mutex);
 
 	if (!rpath)
 		return -ENOENT;
 
-	if (rfs_chain_find(rpath->rinch, rflt) != -1) {
-		info->flags = REDIRFS_PATH_INCLUDE;
+	if (rfs_chain_find(rpath->rinch, rflt) != -1)
+		*path = (redirfs_path)rpath;
 
-	} else if (rfs_chain_find(rpath->rexch, rflt) != -1) {
-		info->flags = REDIRFS_PATH_EXCLUDE;
+	else if (rfs_chain_find(rpath->rexch, rflt) != -1)
+		*path = (redirfs_path)rpath;
 
-	} else {
+	else 
+		*path = NULL;
+
+	if (!path) {
 		rfs_path_put(rpath);
 		return -ENOENT;
 	}
-
-	*path = (redirfs_path)rpath;
 
 	return 0;
 }
@@ -503,10 +501,28 @@ int redirfs_get_path_info(redirfs_filter filter, redirfs_path path,
 	return 0;
 }
 
-int redirfs_remove_paths(redirfs_filter filter)
+int redirfs_rem_path(redirfs_filter filter, redirfs_path path)
+{
+	struct redirfs_path_info info;
+	int rv;
+
+	if (!filter || !path)
+		return -EINVAL;
+
+	rv = redirfs_get_path_info(filter, path, &info);
+	if (rv)
+		return rv;
+
+	info.flags |= REDIRFS_PATH_REM;
+
+	rv = redirfs_set_path(filter, &info);
+
+	return rv;
+}
+
+int redirfs_rem_paths(redirfs_filter filter)
 {
 	struct redirfs_paths paths;
-	struct redirfs_path_info info;
 	int rv;
 	int i;
 
@@ -518,38 +534,35 @@ int redirfs_remove_paths(redirfs_filter filter)
 		return rv;
 
 	for (i = 0; i < paths.nr; i++) {
-		rv = redirfs_get_path_info(filter, paths.path[i], &info);
+		rv = redirfs_rem_path(filter, paths.path[i]);
 		if (rv)
-			goto exit;
-
-		info.flags |= REDIRFS_PATH_REM;
-
-		rv = redirfs_set_path(filter, &info);
-		if (rv)
-			goto exit;
+			break;
 	}
-exit:
+
 	redirfs_put_paths(&paths);
+
 	return rv;
 }
 
-int rfs_path_get_info(struct rfs_flt *rflt, char *buf, int size, int type)
+int rfs_path_get_info(struct rfs_flt *rflt, char *buf, int size)
 {
 	struct rfs_path *rpath;
 	char path[PAGE_SIZE];
+	char type;
 	int len = 0;
 	int rv;
 
 	mutex_lock(&rfs_path_mutex);
 
 	list_for_each_entry(rpath, &rfs_path_list, list) {
-		if (type == REDIRFS_PATH_INCLUDE) {
-			if (rfs_chain_find(rpath->rinch, rflt) == -1)
-				continue;
-		} else {
-			if (rfs_chain_find(rpath->rexch, rflt) == -1)
-				continue;
-		}
+		if (rfs_chain_find(rpath->rinch, rflt) != -1)
+			type = 'i';
+
+		else if (rfs_chain_find(rpath->rexch, rflt) != -1)
+			type = 'e';
+
+		else
+			continue;
 
 		rv = redirfs_get_filename(rpath->mnt, rpath->dentry, path,
 				PAGE_SIZE);
@@ -559,8 +572,8 @@ int rfs_path_get_info(struct rfs_flt *rflt, char *buf, int size, int type)
 			return rv;
 		}
 
-		len += snprintf(buf + len, size - len,"%d:%s",
-				rpath->id, path) + 1;
+		len += snprintf(buf + len, size - len,"%c:%d:%s",
+				type, rpath->id, path) + 1;
 
 		if (len >= size) {
 			len = size;
@@ -861,6 +874,7 @@ EXPORT_SYMBOL(redirfs_put_path);
 EXPORT_SYMBOL(redirfs_get_paths);
 EXPORT_SYMBOL(redirfs_put_paths);
 EXPORT_SYMBOL(redirfs_get_path_info);
-EXPORT_SYMBOL(redirfs_remove_paths);
+EXPORT_SYMBOL(redirfs_rem_path);
+EXPORT_SYMBOL(redirfs_rem_paths);
 EXPORT_SYMBOL(redirfs_get_filename);
 

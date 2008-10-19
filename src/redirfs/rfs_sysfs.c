@@ -132,6 +132,144 @@ static ssize_t rfs_flt_active_store(redirfs_filter filter,
 	return count;
 }
 
+static ssize_t rfs_flt_paths_show(redirfs_filter filter,
+		struct redirfs_filter_attribute *attr, char *buf)
+{
+	struct rfs_flt *rflt = (struct rfs_flt *)filter;
+	
+	return rfs_path_get_info(rflt, buf, PAGE_SIZE);
+}
+
+static int rfs_flt_paths_add(redirfs_filter filter, const char *buf,
+		size_t count)
+{
+	struct rfs_flt *rflt = (struct rfs_flt *)filter;
+	struct redirfs_ctl rctl;
+	struct nameidata nd;
+	char path[PAGE_SIZE];
+	char type;
+	int rv;
+
+	if (sscanf(buf, "a:%c:%s", &type, path) != 2)
+		return -EINVAL;
+
+	rctl.id = REDIRFS_CTL_SET_PATH;
+	rctl.data.path_info.flags = REDIRFS_PATH_ADD;
+
+	if (type == 'i')
+		rctl.data.path_info.flags |= REDIRFS_PATH_INCLUDE;
+
+	else if (type == 'e')
+		rctl.data.path_info.flags |= REDIRFS_PATH_EXCLUDE;
+
+	else
+		return -EINVAL;
+
+	rv = path_lookup(path, LOOKUP_FOLLOW, &nd);
+	if (rv)
+		return rv;
+
+	rctl.data.path_info.dentry = nd.path.dentry;
+	rctl.data.path_info.mnt = nd.path.mnt;
+
+	if (rflt->ctl_cb && (rflt->ctl_id & REDIRFS_CTL_SET_PATH))
+		rv = rflt->ctl_cb(&rctl);
+	else
+		rv = redirfs_set_path(filter, &rctl.data.path_info);
+
+	path_put(&nd.path);
+
+	return rv;
+}
+
+static int rfs_flt_paths_rem(redirfs_filter filter, const char *buf,
+		size_t count)
+{
+	struct rfs_flt *rflt = (struct rfs_flt *)filter;
+	struct redirfs_ctl rctl;
+	struct rfs_path *rpath;
+	int id;
+	int rv;
+
+	if (sscanf(buf, "r:%d", &id) != 1)
+		return -EINVAL;
+
+	rctl.id = REDIRFS_CTL_SET_PATH;
+
+	mutex_lock(&rfs_path_mutex);
+	rpath = rfs_path_find_id(id);
+	if (!rpath) {
+		mutex_unlock(&rfs_path_mutex);
+		return -ENOENT;
+	}
+	mutex_unlock(&rfs_path_mutex);
+	
+	rv = redirfs_get_path_info(filter, (redirfs_path)rpath,
+			&rctl.data.path_info);
+	if (rv) {
+		rfs_path_put(rpath);
+		return rv;
+	}
+
+	rctl.data.path_info.flags |= REDIRFS_PATH_REM;
+
+	if (rflt->ctl_cb && (rflt->ctl_id & REDIRFS_CTL_SET_PATH))
+		rv = rflt->ctl_cb(&rctl);
+	else
+		rv = redirfs_set_path(filter, &rctl.data.path_info);
+
+	rfs_path_put(rpath);
+
+	return rv;
+}
+
+static int rfs_flt_paths_del(redirfs_filter filter, const char *buf,
+		size_t count)
+{
+	struct rfs_flt *rflt = (struct rfs_flt *)filter;
+	struct redirfs_ctl rctl;
+	int rv;
+
+	if (count != 1)
+		return -EINVAL;
+
+	rctl.id = REDIRFS_CTL_REMOVE_PATHS;
+	
+	if (rflt->ctl_cb && (rflt->ctl_id & REDIRFS_CTL_REMOVE_PATHS))
+		rv = rflt->ctl_cb(&rctl);
+	else
+		rv = redirfs_rem_paths(filter);
+
+	return rv;
+}
+
+static ssize_t rfs_flt_paths_store(redirfs_filter filter,
+		struct redirfs_filter_attribute *attr, const char *buf,
+		size_t count)
+{
+	int rv;
+
+	if (count < 1)
+		return -EINVAL;
+
+	if (*buf == 'a')
+		rv = rfs_flt_paths_add(filter, buf, count);
+
+	else if (*buf == 'r')
+		rv = rfs_flt_paths_rem(filter, buf, count);
+
+	else if (*buf == 'd')
+		rv = rfs_flt_paths_del(filter, buf, count);
+
+	else
+		rv = -EINVAL;
+
+	if (rv)
+		return rv;
+
+	return count;
+}
+
 static ssize_t rfs_flt_unregister_store(redirfs_filter filter,
 		struct redirfs_filter_attribute *attr, const char *buf,
 		size_t count)
@@ -160,163 +298,6 @@ static ssize_t rfs_flt_unregister_store(redirfs_filter filter,
 	return count;
 }
 
-static ssize_t rfs_flt_remall_store(redirfs_filter filter,
-		struct redirfs_filter_attribute *attr, const char *buf,
-		size_t count)
-{
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
-	struct redirfs_ctl rctl;
-	int rem;
-	int rv;
-
-	if (sscanf(buf, "%d", &rem) != 1)
-		return -EINVAL;
-
-	if (!rem)
-		return -EINVAL;
-
-	rctl.id = REDIRFS_CTL_REMOVE_PATHS;
-
-	if (rflt->ctl_cb && (rflt->ctl_id & REDIRFS_CTL_REMOVE_PATHS))
-		rv = rflt->ctl_cb(&rctl);
-	else
-		rv = redirfs_remove_paths(filter);
-
-	if (rv)
-		return rv;
-
-	return count;
-}
-
-static int rfs_flt_add_store(redirfs_filter filter, const char *buf, int type)
-{
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
-	struct redirfs_ctl rctl;
-	struct nameidata nd;
-	int rv;
-
-	rv = path_lookup(buf, LOOKUP_FOLLOW, &nd);
-	if (rv)
-		return rv;
-
-	rctl.id = REDIRFS_CTL_SET_PATH;
-	rctl.data.path_info.dentry = nd.path.dentry;
-	rctl.data.path_info.mnt = nd.path.mnt;
-	rctl.data.path_info.flags = REDIRFS_PATH_ADD | type;
-
-	if (rflt->ctl_cb && (rflt->ctl_id & REDIRFS_CTL_SET_PATH))
-		rv = rflt->ctl_cb(&rctl);
-	else
-		rv = redirfs_set_path(filter, &rctl.data.path_info);
-
-	path_put(&nd.path);
-
-	return rv;
-}
-
-static int rfs_flt_remove_store(redirfs_filter filter, const char *buf,
-		int type)
-{
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
-	struct rfs_path *rpath;
-	struct redirfs_ctl rctl;
-	int id;
-	int rv;
-
-	if (sscanf(buf, "%d", &id) != 1)
-		return -EINVAL;
-
-	mutex_lock(&rfs_path_mutex);
-	rpath = rfs_path_find_id(id);
-	if (!rpath) {
-		mutex_unlock(&rfs_path_mutex);
-		return -ENOENT;
-	}
-	mutex_unlock(&rfs_path_mutex);
-
-	rctl.id = REDIRFS_CTL_SET_PATH;
-	rctl.data.path_info.dentry = rpath->dentry;
-	rctl.data.path_info.mnt = rpath->mnt;
-	rctl.data.path_info.flags = REDIRFS_PATH_REM | type;
-
-	if (rflt->ctl_cb && (rflt->ctl_id & REDIRFS_CTL_SET_PATH))
-		rv = rflt->ctl_cb(&rctl);
-	else
-		rv = redirfs_set_path(filter, &rctl.data.path_info);
-
-	rfs_path_put(rpath);
-
-	return rv;
-}
-
-static ssize_t rfs_flt_incl_add_store(redirfs_filter filter,
-		struct redirfs_filter_attribute *attr, const char *buf,
-		size_t count)
-{
-	int rv;
-
-	rv = rfs_flt_add_store(filter, buf, REDIRFS_PATH_INCLUDE);
-	if (rv)
-		return rv;
-
-	return count;
-}
-
-static ssize_t rfs_flt_incl_remove_store(redirfs_filter filter,
-		struct redirfs_filter_attribute *attr, const char *buf,
-		size_t count)
-{
-	int rv;
-
-	rv = rfs_flt_remove_store(filter, buf, REDIRFS_PATH_INCLUDE);
-	if (rv)
-		return rv;
-
-	return count;
-}
-
-static ssize_t rfs_flt_incl_path_show(redirfs_filter filter,
-		struct redirfs_filter_attribute *attr, char *buf)
-{
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
-
-	return rfs_path_get_info(rflt, buf, PAGE_SIZE, REDIRFS_PATH_INCLUDE);
-}
-
-static ssize_t rfs_flt_excl_add_store(redirfs_filter filter,
-		struct redirfs_filter_attribute *attr, const char *buf,
-		size_t count)
-{
-	int rv;
-
-	rv = rfs_flt_add_store(filter, buf, REDIRFS_PATH_EXCLUDE);
-	if (rv)
-		return rv;
-
-	return count;
-}
-
-static ssize_t rfs_flt_excl_remove_store(redirfs_filter filter,
-		struct redirfs_filter_attribute *attr, const char *buf,
-		size_t count)
-{
-	int rv;
-
-	rv = rfs_flt_remove_store(filter, buf, REDIRFS_PATH_EXCLUDE);
-	if (rv)
-		return rv;
-
-	return count;
-}
-
-static ssize_t rfs_flt_excl_path_show(redirfs_filter filter,
-		struct redirfs_filter_attribute *attr, char *buf)
-{
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
-
-	return rfs_path_get_info(rflt, buf, PAGE_SIZE, REDIRFS_PATH_EXCLUDE);
-}
-
 static struct redirfs_filter_attribute rfs_flt_priority_attr =
 	REDIRFS_FILTER_ATTRIBUTE(priority, 0444, rfs_flt_priority_show, NULL);
 
@@ -324,61 +305,20 @@ static struct redirfs_filter_attribute rfs_flt_active_attr =
 	REDIRFS_FILTER_ATTRIBUTE(active, 0644, rfs_flt_active_show,
 			rfs_flt_active_store);
 
+static struct redirfs_filter_attribute rfs_flt_paths_attr = 
+	REDIRFS_FILTER_ATTRIBUTE(paths, 0644, rfs_flt_paths_show,
+			rfs_flt_paths_store);
+
 static struct redirfs_filter_attribute rfs_flt_unregister_attr = 
 	REDIRFS_FILTER_ATTRIBUTE(unregister, 0200, NULL,
 			rfs_flt_unregister_store);
 
-static struct redirfs_filter_attribute rfs_flt_remall_attr =
-	REDIRFS_FILTER_ATTRIBUTE(remall, 0200, NULL, rfs_flt_remall_store);
-
-static struct redirfs_filter_attribute rfs_flt_incl_add_attr =
-	REDIRFS_FILTER_ATTRIBUTE(add, 0200, NULL, rfs_flt_incl_add_store);
-
-static struct redirfs_filter_attribute rfs_flt_incl_remove_attr =
-	REDIRFS_FILTER_ATTRIBUTE(remove, 0200, NULL, rfs_flt_incl_remove_store);
-
-static struct redirfs_filter_attribute rfs_flt_incl_path_attr =
-	REDIRFS_FILTER_ATTRIBUTE(paths, 0444, rfs_flt_incl_path_show, NULL);
-
-static struct redirfs_filter_attribute rfs_flt_excl_add_attr =
-	REDIRFS_FILTER_ATTRIBUTE(add, 0200, NULL, rfs_flt_excl_add_store);
-
-static struct redirfs_filter_attribute rfs_flt_excl_remove_attr =
-	REDIRFS_FILTER_ATTRIBUTE(remove, 0200, NULL, rfs_flt_excl_remove_store);
-
-static struct redirfs_filter_attribute rfs_flt_excl_path_attr =
-	REDIRFS_FILTER_ATTRIBUTE(paths, 0444, rfs_flt_excl_path_show, NULL);
-
 static struct attribute *rfs_flt_attrs[] = {
 	&rfs_flt_priority_attr.attr,
 	&rfs_flt_active_attr.attr,
+	&rfs_flt_paths_attr.attr,
 	&rfs_flt_unregister_attr.attr,
-	&rfs_flt_remall_attr.attr,
 	NULL
-};
-
-static struct attribute *rfs_flt_incl_attrs[] = {
-	&rfs_flt_incl_add_attr.attr,
-	&rfs_flt_incl_remove_attr.attr,
-	&rfs_flt_incl_path_attr.attr,
-	NULL
-};
-
-static struct attribute *rfs_flt_excl_attrs[] = {
-	&rfs_flt_excl_add_attr.attr,
-	&rfs_flt_excl_remove_attr.attr,
-	&rfs_flt_excl_path_attr.attr,
-	NULL
-};
-
-static struct attribute_group rfs_flt_incl_grp = {
-	.name = "include",
-	.attrs = rfs_flt_incl_attrs
-};
-
-static struct attribute_group rfs_flt_excl_grp = {
-	.name = "exclude",
-	.attrs = rfs_flt_excl_attrs
 };
 
 static struct kobject *rfs_kobj;
@@ -459,16 +399,6 @@ int rfs_flt_sysfs_init(struct rfs_flt *rflt)
 	if (rv)
 		return rv;
 
-	rv = sysfs_create_group(&rflt->kobj, &rfs_flt_incl_grp);
-	if (rv)
-		return rv;
-
-	rv = sysfs_create_group(&rflt->kobj,  &rfs_flt_excl_grp);
-	if (rv) {
-		sysfs_remove_group(&rflt->kobj, &rfs_flt_incl_grp);
-		return rv;
-	}
-
 	kobject_uevent(&rflt->kobj, KOBJ_ADD);
 
 	return 0;
@@ -476,8 +406,6 @@ int rfs_flt_sysfs_init(struct rfs_flt *rflt)
 
 void rfs_flt_sysfs_exit(struct rfs_flt *rflt)
 {
-	sysfs_remove_group(&rflt->kobj, &rfs_flt_excl_grp);
-	sysfs_remove_group(&rflt->kobj, &rfs_flt_incl_grp);
 	kobject_del(&rflt->kobj);
 }
 
