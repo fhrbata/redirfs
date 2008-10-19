@@ -29,7 +29,7 @@ static struct rfs_inode *rfs_inode_alloc(struct inode *inode)
 {
 	struct rfs_inode *rinode;
 
-	rinode = kmem_cache_alloc(rfs_inode_cache, GFP_KERNEL);
+	rinode = kmem_cache_zalloc(rfs_inode_cache, GFP_KERNEL);
 	if (IS_ERR(rinode))
 		return ERR_PTR(-ENOMEM);
 
@@ -320,14 +320,6 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry,
 
 	if (rargs.rv.rv_dentry)
 		dadd = rargs.rv.rv_dentry;
-
-	if (!rinfo->rops) {
-		if (!dadd->d_inode)
-			goto exit;
-
-		if (!S_ISDIR(dadd->d_inode->i_mode))
-			goto exit;
-	}
 
 	if (rfs_dcache_rdentry_add(dadd, rinfo))
 		BUG();

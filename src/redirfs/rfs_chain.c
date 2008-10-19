@@ -149,7 +149,7 @@ struct rfs_chain *rfs_chain_rem(struct rfs_chain *rchain, struct rfs_flt *rflt)
 	return rchain_new;
 }
 
-void rfs_chain_ops(struct rfs_chain *rchain, struct rfs_ops *ops)
+void rfs_chain_ops(struct rfs_chain *rchain, struct rfs_ops *rops)
 {
 	int i, j;
 
@@ -159,11 +159,13 @@ void rfs_chain_ops(struct rfs_chain *rchain, struct rfs_ops *ops)
 	for (i = 0; i < rchain->rflts_nr; i++) {
 		for (j = 0; j < REDIRFS_OP_END; j++) {
 			if (rchain->rflts[i]->cbs[j].pre_cb)
-				ops->arr[j]++;
+				rops->arr[j]++;
 			if (rchain->rflts[i]->cbs[j].post_cb)
-				ops->arr[j]++;
+				rops->arr[j]++;
 		}
 	}
+
+	rfs_ops_set_types(rops);
 }
 
 int rfs_chain_cmp(struct rfs_chain *rch1, struct rfs_chain *rch2)
