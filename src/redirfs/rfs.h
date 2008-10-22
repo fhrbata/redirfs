@@ -210,7 +210,7 @@ int rfs_info_set(struct dentry *dentry, struct rfs_info *rinfo);
 struct rfs_dentry {
 	struct list_head rinode_list;
 	struct list_head rfiles;
-	struct list_head priv;
+	struct list_head data;
 	struct dentry *dentry;
 	struct dentry_operations *op_old;
 	struct dentry_operations op_new;
@@ -241,9 +241,11 @@ void rfs_dentry_rem_rfiles(struct rfs_dentry *rdentry);
 void rfs_dentry_set_ops(struct rfs_dentry *dentry);
 int rfs_dentry_cache_create(void);
 void rfs_dentry_cache_destory(void);
+void rfs_dentry_rem_data(struct dentry *dentry, struct rfs_flt *rflt);
 
 struct rfs_inode {
 	struct list_head rdentries;
+	struct list_head data;
 	struct inode *inode;
 	const struct inode_operations *op_old;
 	const struct address_space_operations *aop_old;
@@ -280,6 +282,7 @@ void rfs_inode_cache_destroy(void);
 
 struct rfs_file {
 	struct list_head rdentry_list;
+	struct list_head data;
 	struct file *file;
 	struct rfs_dentry *rdentry;
 	const struct file_operations *op_old;
@@ -295,6 +298,7 @@ struct rfs_file {
 	 
 extern struct file_operations rfs_file_ops;
 
+int rfs_open(struct inode *inode, struct file *file);
 struct rfs_file *rfs_file_get(struct rfs_file *rfile);
 void rfs_file_put(struct rfs_file *rfile);
 void rfs_file_set_ops(struct rfs_file *rfile);

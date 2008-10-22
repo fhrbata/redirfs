@@ -598,6 +598,13 @@ struct redirfs_filter_attribute {
 			size_t count);
 };
 
+struct redirfs_data {
+	struct list_head list;
+	atomic_t cnt;
+	redirfs_filter filter;
+	void (*cb)(struct redirfs_data *);
+};
+
 int redirfs_create_attribute(redirfs_filter filter,
 		struct redirfs_filter_attribute *attr);
 int redirfs_remove_attribute(redirfs_filter filter,
@@ -622,6 +629,27 @@ int redirfs_activate_filter(redirfs_filter filter);
 int redirfs_deactivate_filter(redirfs_filter filter);
 int redirfs_get_filename(struct vfsmount *mnt, struct dentry *dentry, char *buf,
 		int size);
-
+int redirfs_init_data(struct redirfs_data *data, redirfs_filter filter,
+		void (*cb)(struct redirfs_data *));
+struct redirfs_data *redirfs_get_data(struct redirfs_data *data);
+void redirfs_put_data(struct redirfs_data *data);
+int redirfs_attach_data_file(redirfs_filter filter, struct file *file,
+		struct redirfs_data *data, struct redirfs_data **exist);
+struct redirfs_data *redirfs_detach_data_file(redirfs_filter filter,
+		struct file *file);
+struct redirfs_data *redirfs_get_data_file(redirfs_filter filter,
+		struct file *file);
+int redirfs_attach_data_dentry(redirfs_filter filter, struct dentry *dentry,
+		struct redirfs_data *data, struct redirfs_data **exist);
+struct redirfs_data *redirfs_detach_data_dentry(redirfs_filter filter,
+		struct dentry *dentry);
+struct redirfs_data *redirfs_get_data_dentry(redirfs_filter filter,
+		struct dentry *dentry);
+int redirfs_attach_data_inode(redirfs_filter filter, struct inode *inode,
+		struct redirfs_data *data, struct redirfs_data **exist);
+struct redirfs_data *redirfs_detach_data_inode(redirfs_filter filter,
+		struct inode *inode);
+struct redirfs_data *redirfs_get_data_inode(redirfs_filter filter,
+		struct inode *inode);
 #endif
 

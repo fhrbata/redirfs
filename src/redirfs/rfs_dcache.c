@@ -363,14 +363,21 @@ int rfs_dcache_add(struct dentry *dentry, void *data)
 int rfs_dcache_rem(struct dentry *dentry, void *data)
 {
 	struct rfs_dcache_data *rdata = (struct rfs_dcache_data *)data;
+	int rv;
 
 	if (rfs_dcache_skip(dentry, rdata)) {
 		rfs_root_add_walk(dentry);
 		return 1;
 	}
 
-	if (!rdata->rinfo->rchain)
-		return rfs_dcache_rdentry_del(dentry, rfs_info_none);
+	if (!rdata->rinfo->rchain) {
+		rv = rfs_dcache_rdentry_del(dentry, rfs_info_none);
+		if (rv)
+			return rv;
+
+		rfs_dentry_rem_data(dentry, rdata->rflt);
+		return 0;
+	}
 
 	return rfs_dcache_rdentry_add(dentry, rdata->rinfo);
 }

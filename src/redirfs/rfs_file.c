@@ -25,8 +25,6 @@
 
 static struct kmem_cache *rfs_file_cache = NULL;
 
-static int rfs_open(struct inode *inode, struct file *file);
-
 struct file_operations rfs_file_ops = {
 	.open = rfs_open
 };
@@ -40,6 +38,7 @@ static struct rfs_file *rfs_file_alloc(struct file *file)
 		return ERR_PTR(-ENOMEM);
 
 	INIT_LIST_HEAD(&rfile->rdentry_list);
+	INIT_LIST_HEAD(&rfile->data);
 	rfile->file = file;
 	spin_lock_init(&rfile->lock);
 	atomic_set(&rfile->count, 1);
@@ -67,6 +66,9 @@ struct rfs_file *rfs_file_get(struct rfs_file *rfile)
 
 void rfs_file_put(struct rfs_file *rfile)
 {
+	struct redirfs_data *data;
+	struct redirfs_data *tmp;
+
 	if (!rfile || IS_ERR(rfile))
 		return;
 
@@ -76,6 +78,11 @@ void rfs_file_put(struct rfs_file *rfile)
 
 	rfs_dentry_put(rfile->rdentry);
 	fops_put(rfile->op_old);
+
+	list_for_each_entry_safe(data, tmp, &rfile->data, list) {
+		list_del(&data->list);
+		redirfs_put_data(data);
+	}
 
 	kmem_cache_free(rfs_file_cache, rfile);
 }
@@ -124,7 +131,7 @@ void rfs_file_cache_destory(void)
 	kmem_cache_destroy(rfs_file_cache);
 }
 
-static int rfs_open(struct inode *inode, struct file *file)
+int rfs_open(struct inode *inode, struct file *file)
 {
 	struct rfs_file *rfile;
 	struct rfs_dentry *rdentry;
