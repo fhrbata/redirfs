@@ -337,17 +337,8 @@ struct rfs_context {
 	int idx_start;
 };
 
-static inline void rfs_context_init(struct rfs_context *rcont, int start)
-{
-	INIT_LIST_HEAD(&rcont->data);
-	rcont->idx_start = start;
-	rcont->idx = 0;
-}
-
-static inline void rfs_context_deinit(struct rfs_context *rcont)
-{
-	BUG_ON(!list_empty(&rcont->data));
-}
+void rfs_context_init(struct rfs_context *rcont, int start);
+void rfs_context_deinit(struct rfs_context *rcont);
 
 int rfs_precall_flts(struct rfs_chain *rchain, struct rfs_context *rcont,
 		struct redirfs_args *rargs);

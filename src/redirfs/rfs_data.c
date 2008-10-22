@@ -26,7 +26,7 @@
 int redirfs_init_data(struct redirfs_data *data, redirfs_filter filter,
 		void (*cb)(struct redirfs_data *))
 {
-	if (!data || filter || cb)
+	if (!data || !filter || !cb)
 		return -EINVAL;
 
 	INIT_LIST_HEAD(&data->list);
@@ -363,6 +363,79 @@ struct redirfs_data *redirfs_get_data_inode(redirfs_filter filter,
 	return data;
 }
 
+void rfs_context_init(struct rfs_context *rcont, int start)
+{
+	INIT_LIST_HEAD(&rcont->data);
+	rcont->idx_start = start;
+	rcont->idx = 0;
+}
+
+void rfs_context_deinit(struct rfs_context *rcont)
+{
+	struct redirfs_data *data;
+	struct redirfs_data *tmp;
+
+	list_for_each_entry_safe(data, tmp, &rcont->data, list) {
+		list_del(&data->list);
+		redirfs_put_data(data);
+	}
+}
+
+int redirfs_attach_data_context(redirfs_filter filter, redirfs_context context,
+		struct redirfs_data *data, struct redirfs_data **exist)
+{
+	struct rfs_flt *rflt = (struct rfs_flt *)filter;
+	struct rfs_context *rcont = (struct rfs_context *)context;
+
+	if (!filter || !context || !data || !exist)
+		return -EINVAL;
+
+	*exist = rfs_find_data(&rcont->data, rflt);
+	if (*exist)
+		return -EEXIST;
+
+	list_add_tail(&data->list, &rcont->data); 
+	redirfs_get_data(data);
+
+	return 0;
+}
+
+struct redirfs_data *redirfs_detach_data_context(redirfs_filter filter,
+		redirfs_context context)
+{
+	struct rfs_flt *rflt = (struct rfs_flt *)filter;
+	struct rfs_context *rcont = (struct rfs_context *)context;
+	struct redirfs_data *data;
+
+	if (!filter || !context)
+		return ERR_PTR(-EINVAL);
+
+	data = rfs_find_data(&rcont->data, rflt);
+	if (!data)
+		return ERR_PTR(-ENODATA);
+
+	list_del(&data->list);
+	return data;
+}
+
+struct redirfs_data *redirfs_get_data_context(redirfs_filter filter,
+		redirfs_context context)
+{
+	struct rfs_flt *rflt = (struct rfs_flt *)filter;
+	struct rfs_context *rcont = (struct rfs_context *)context;
+	struct redirfs_data *data;
+
+	if (!filter || !context)
+		return ERR_PTR(-EINVAL);
+
+	data = rfs_find_data(&rcont->data, rflt);
+	if (!data)
+		return ERR_PTR(-ENODATA);
+
+	redirfs_get_data(data);
+	return data;
+}
+
 EXPORT_SYMBOL(redirfs_init_data);
 EXPORT_SYMBOL(redirfs_get_data);
 EXPORT_SYMBOL(redirfs_put_data);
@@ -375,4 +448,7 @@ EXPORT_SYMBOL(redirfs_get_data_dentry);
 EXPORT_SYMBOL(redirfs_attach_data_inode);
 EXPORT_SYMBOL(redirfs_detach_data_inode);
 EXPORT_SYMBOL(redirfs_get_data_inode);
+EXPORT_SYMBOL(redirfs_attach_data_context);
+EXPORT_SYMBOL(redirfs_detach_data_context);
+EXPORT_SYMBOL(redirfs_get_data_context);
 

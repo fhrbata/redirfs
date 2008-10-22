@@ -651,5 +651,11 @@ struct redirfs_data *redirfs_detach_data_inode(redirfs_filter filter,
 		struct inode *inode);
 struct redirfs_data *redirfs_get_data_inode(redirfs_filter filter,
 		struct inode *inode);
+int redirfs_attach_data_context(redirfs_filter filter, redirfs_context context,
+		struct redirfs_data *data, struct redirfs_data **exist);
+struct redirfs_data *redirfs_detach_data_context(redirfs_filter filter,
+		redirfs_context context);
+struct redirfs_data *redirfs_get_data_context(redirfs_filter filter,
+		redirfs_context context);
 #endif
 
