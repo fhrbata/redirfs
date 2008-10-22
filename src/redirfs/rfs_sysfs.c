@@ -146,12 +146,18 @@ static int rfs_flt_paths_add(redirfs_filter filter, const char *buf,
 	struct rfs_flt *rflt = (struct rfs_flt *)filter;
 	struct redirfs_ctl rctl;
 	struct nameidata nd;
-	char path[PAGE_SIZE];
+	char *path;
 	char type;
 	int rv;
 
-	if (sscanf(buf, "a:%c:%s", &type, path) != 2)
+	path = kzalloc(sizeof(char) * PAGE_SIZE, GFP_KERNEL);
+	if (!path)
+		return -ENOMEM;
+
+	if (sscanf(buf, "a:%c:%s", &type, path) != 2) {
+		kfree(path);
 		return -EINVAL;
+	}
 
 	rctl.id = REDIRFS_CTL_SET_PATH;
 	rctl.data.path_info.flags = REDIRFS_PATH_ADD;
@@ -162,12 +168,16 @@ static int rfs_flt_paths_add(redirfs_filter filter, const char *buf,
 	else if (type == 'e')
 		rctl.data.path_info.flags |= REDIRFS_PATH_EXCLUDE;
 
-	else
+	else {
+		kfree(path);
 		return -EINVAL;
+	}
 
 	rv = path_lookup(path, LOOKUP_FOLLOW, &nd);
-	if (rv)
+	if (rv) {
+		kfree(path);
 		return rv;
+	}
 
 	rctl.data.path_info.dentry = nd.path.dentry;
 	rctl.data.path_info.mnt = nd.path.mnt;
@@ -178,6 +188,7 @@ static int rfs_flt_paths_add(redirfs_filter filter, const char *buf,
 		rv = redirfs_set_path(filter, &rctl.data.path_info);
 
 	path_put(&nd.path);
+	kfree(path);
 
 	return rv;
 }

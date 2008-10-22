@@ -547,10 +547,14 @@ int redirfs_rem_paths(redirfs_filter filter)
 int rfs_path_get_info(struct rfs_flt *rflt, char *buf, int size)
 {
 	struct rfs_path *rpath;
-	char path[PAGE_SIZE];
+	char *path;
 	char type;
 	int len = 0;
 	int rv;
+
+	path = kzalloc(sizeof(char) * PAGE_SIZE, GFP_KERNEL);
+	if (!path)
+		return -ENOMEM;
 
 	mutex_lock(&rfs_path_mutex);
 
@@ -569,6 +573,7 @@ int rfs_path_get_info(struct rfs_flt *rflt, char *buf, int size)
 
 		if (rv) {
 			mutex_unlock(&rfs_path_mutex);
+			kfree(path);
 			return rv;
 		}
 
@@ -582,6 +587,7 @@ int rfs_path_get_info(struct rfs_flt *rflt, char *buf, int size)
 	}
 
 	mutex_unlock(&rfs_path_mutex);
+	kfree(path);
 
 	return len;
 }
