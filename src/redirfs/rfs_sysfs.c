@@ -234,14 +234,18 @@ static int rfs_flt_paths_rem(redirfs_filter filter, const char *buf,
 	return rv;
 }
 
-static int rfs_flt_paths_del(redirfs_filter filter, const char *buf,
+static int rfs_flt_paths_clean(redirfs_filter filter, const char *buf,
 		size_t count)
 {
 	struct rfs_flt *rflt = (struct rfs_flt *)filter;
 	struct redirfs_ctl rctl;
+	char clean;
 	int rv;
 
-	if (count != 1)
+	if (sscanf(buf, "%c", &clean) != 1)
+		return -EINVAL;
+
+	if (clean != 'c')
 		return -EINVAL;
 
 	rctl.id = REDIRFS_CTL_REMOVE_PATHS;
@@ -260,7 +264,7 @@ static ssize_t rfs_flt_paths_store(redirfs_filter filter,
 {
 	int rv;
 
-	if (count < 1)
+	if (count < 2)
 		return -EINVAL;
 
 	if (*buf == 'a')
@@ -269,8 +273,8 @@ static ssize_t rfs_flt_paths_store(redirfs_filter filter,
 	else if (*buf == 'r')
 		rv = rfs_flt_paths_rem(filter, buf, count);
 
-	else if (*buf == 'd')
-		rv = rfs_flt_paths_del(filter, buf, count);
+	else if (*buf == 'c')
+		rv = rfs_flt_paths_clean(filter, buf, count);
 
 	else
 		rv = -EINVAL;
@@ -293,7 +297,7 @@ static ssize_t rfs_flt_unregister_store(redirfs_filter filter,
 	if (sscanf(buf, "%d", &unreg) != 1)
 		return -EINVAL;
 
-	if (!unreg)
+	if (unreg != 1)
 		return -EINVAL;
 
 	rctl.id = REDIRFS_CTL_UNREGISTER;
