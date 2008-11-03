@@ -44,6 +44,9 @@ static int avflt_use_cache(struct file *file, int type)
 {
 	int wc;
 
+	if (!atomic_read(&avflt_cache_enabled))
+		return 0;
+
 	spin_lock(&file->f_dentry->d_inode->i_lock);
 	wc = atomic_read(&file->f_dentry->d_inode->i_writecount);
 	spin_unlock(&file->f_dentry->d_inode->i_lock);

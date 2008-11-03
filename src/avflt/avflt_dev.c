@@ -48,6 +48,7 @@ static int avflt_dev_release(struct inode *inode, struct file *file)
 
 	avflt_proc_stop_accept();
 	avflt_rem_requests();
+	avflt_invalidate_cache();
 	return 0;
 }
 

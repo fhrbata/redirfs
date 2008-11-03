@@ -75,6 +75,7 @@ void avflt_proc_start_accept(void);
 void avflt_proc_stop_accept(void);
 void avflt_rem_requests(void);
 struct avflt_event *avflt_get_reply(const char __user *buf, size_t size);
+void avflt_invalidate_cache(void);
 int avflt_check_init(void);
 void avflt_check_exit(void);
 
@@ -124,6 +125,7 @@ int avflt_sys_init(void);
 void avflt_sys_exit(void);
 
 extern atomic_t avflt_reply_timeout;
+extern atomic_t avflt_cache_enabled;
 extern redirfs_filter avflt;
 
 #endif

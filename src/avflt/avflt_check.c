@@ -411,6 +411,10 @@ struct avflt_event *avflt_get_reply(const char __user *buf, size_t size)
 	return event;
 }
 
+void avflt_invalidate_cache(void)
+{
+}
+
 int avflt_check_init(void)
 {
 	avflt_event_cache = kmem_cache_create("avflt_event_cache",
