@@ -1,92 +1,99 @@
+/*
+ * RedirFS: Redirecting File System
+ * Written by Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+ *
+ * Copyright (C) 2008 Frantisek Hrbata
+ * All rights reserved.
+ *
+ * This file is part of RedirFS.
+ *
+ * RedirFS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * RedirFS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with RedirFS. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include "avflt.h"
 
-int avflt_request_nr = 0;
-int avflt_reply_nr = 0;
-
-int avflt_request_max = 0;
-int avflt_reply_max = 0;
-
-atomic_t avflt_request_free = ATOMIC_INIT(0);
-atomic_t avflt_reply_free = ATOMIC_INIT(0);
-
-int avflt_request_accept = 0;
-int avflt_reply_accept = 0;
-
-DECLARE_WAIT_QUEUE_HEAD(avflt_request_waitq);
-static DECLARE_WAIT_QUEUE_HEAD(avflt_reply_waitq);
-
 static DECLARE_COMPLETION(avflt_request_available);
-
-static struct kmem_cache *avflt_check_cache = NULL;
-
+static spinlock_t avflt_request_lock = SPIN_LOCK_UNLOCKED;
 static LIST_HEAD(avflt_request_list);
-spinlock_t avflt_request_lock = SPIN_LOCK_UNLOCKED;
+static int avflt_request_accept = 0;
+static struct kmem_cache *avflt_event_cache = NULL;
 
-static int avflt_reply_hashtable_size = 4096;
-static struct list_head *avflt_reply_hashtable;
-spinlock_t avflt_reply_lock = SPIN_LOCK_UNLOCKED;
-static unsigned int avflt_reply_ids = 0;
-
-static pid_t *avflt_pids = NULL;
-static int avflt_pids_size = 10;
-static int avflt_pids_nr = 0;
-static spinlock_t avflt_pids_lock = SPIN_LOCK_UNLOCKED;
-
-struct avflt_check *avflt_check_alloc(void)
+static struct avflt_event *avflt_event_alloc(struct file *file, int type)
 {
-	struct avflt_check *check;
+	struct avflt_event *event;
 
-	check = kmem_cache_alloc(avflt_check_cache, GFP_KERNEL);
-	if (!check)
+	event = kmem_cache_zalloc(avflt_event_cache, GFP_KERNEL);
+	if (!event)
 		return ERR_PTR(-ENOMEM);
 
-	INIT_LIST_HEAD(&check->list);
-	init_waitqueue_head(&check->wait);
-	atomic_set(&check->cnt, 1);
-	atomic_set(&check->done, 0);
-	atomic_set(&check->deny, 0);
-	check->id = -1;
-	check->event = -1;
-	check->file = NULL;
+	INIT_LIST_HEAD(&event->req_list);
+	INIT_LIST_HEAD(&event->proc_list);
+	event->mnt = mntget(file->f_path.mnt);
+	event->dentry = dget(file->f_path.dentry);
+	init_waitqueue_head(&event->wait);
+	atomic_set(&event->done, 0);
+	atomic_set(&event->count, 1);
+	event->type = type;
+	event->id = -1;
+	event->result = 0;
+	event->file = NULL;
+	event->fd = -1;
 
-	return check;
+	return event;
 }
 
-struct avflt_check *avflt_check_get(struct avflt_check *check)
+struct avflt_event *avflt_event_get(struct avflt_event *event)
 {
-	if (!check || IS_ERR(check))
+	if (!event || IS_ERR(event))
 		return NULL;
 
-	BUG_ON(!atomic_read(&check->cnt));
-	atomic_inc(&check->cnt);
+	BUG_ON(!atomic_read(&event->count));
+	atomic_inc(&event->count);
 
-	return check;
+	return event;
 }
 
-void avflt_check_put(struct avflt_check *check)
+void avflt_event_put(struct avflt_event *event)
 {
-	if (!check || IS_ERR(check))
+	if (!event || IS_ERR(event))
 		return;
 
-	BUG_ON(!atomic_read(&check->cnt));
+	BUG_ON(!atomic_read(&event->count));
 
-	if (!atomic_dec_and_test(&check->cnt))
+	if (!atomic_dec_and_test(&event->count))
 		return;
 
-	kmem_cache_free(avflt_check_cache, check);
+	dput(event->dentry);
+	mntput(event->mnt);
+	kmem_cache_free(avflt_event_cache, event);
 }
 
-int avflt_request_queue(struct avflt_check *check)
+static int avflt_add_request(struct avflt_event *event, int tail)
 {
 	spin_lock(&avflt_request_lock);
 
-	if (!avflt_request_accept) {
+	if (avflt_request_accept <= 0) {
 		spin_unlock(&avflt_request_lock);
 		return 1;
 	}
 
-	list_add_tail(&check->list, &avflt_request_list);
-	avflt_check_get(check);
+	if (tail)
+		list_add_tail(&event->req_list, &avflt_request_list);
+	else
+		list_add(&event->req_list, &avflt_request_list);
+
+	avflt_event_get(event);
 
 	complete(&avflt_request_available);
 
@@ -95,369 +102,329 @@ int avflt_request_queue(struct avflt_check *check)
 	return 0;
 }
 
-struct avflt_check *avflt_request_dequeue(void)
+void avflt_readd_request(struct avflt_event *event)
 {
-	struct avflt_check *check;
+	if (avflt_add_request(event, 0))
+		avflt_event_done(event);
+}
 
+static void avflt_rem_request(struct avflt_event *event)
+{
 	spin_lock(&avflt_request_lock);
-	if (list_empty(&avflt_request_list)) {
+	if (list_empty(&event->req_list)) {
 		spin_unlock(&avflt_request_lock);
-		return NULL;
+		return;
 	}
-
-	check = list_entry(avflt_request_list.next, struct avflt_check, list);
-	list_del(&check->list);
-
+	list_del_init(&event->req_list);
 	spin_unlock(&avflt_request_lock);
-
-	return check;
+	avflt_event_put(event);
 }
 
-void avflt_request_put(void)
+struct avflt_event *avflt_get_request(void)
 {
-	spin_lock(&avflt_request_lock);
-	avflt_request_nr--;
-	atomic_set(&avflt_request_free, 1);
-	wake_up(&avflt_request_waitq);
-	spin_unlock(&avflt_request_lock);
-}
-
-
-int avflt_request_available_wait(void)
-{
-	return wait_for_completion_interruptible(&avflt_request_available);
-}
-
-int avflt_request_wait(void)
-{
-	int rv = 0;
-
-again:
-	spin_lock(&avflt_request_lock);
-
-	if (!avflt_request_accept) {
-		rv = 1;
-		goto done;
-	}
-
-	if (!avflt_request_max) {
-		avflt_request_nr++;
-		goto done;
-	}
-
-	if (avflt_request_nr < avflt_request_max) {
-		avflt_request_nr++;
-		if (avflt_request_nr == avflt_request_max)
-			atomic_set(&avflt_request_free, 0);
-		goto done;
-	}
-
-	spin_unlock(&avflt_request_lock);
-
-	rv = wait_event_interruptible_exclusive(avflt_request_waitq,
-			atomic_read(&avflt_request_free));
-
-	if (rv)
-		return rv;
-
-	goto again;
-
-done:
-	spin_unlock(&avflt_request_lock);
-	return rv;
-}
-
-int avflt_reply_queue(struct avflt_check *check)
-{
-	struct list_head *list;
-	struct avflt_check *loop;
+	struct avflt_event *event = NULL;
 	int rv;
 
 again:
-	spin_lock(&avflt_reply_lock);
-	if (!avflt_reply_accept) {
-		spin_unlock(&avflt_reply_lock);
-		return 1;
+	rv = wait_for_completion_interruptible(&avflt_request_available);
+	if (rv) {
+		event = ERR_PTR(rv);
+		return event;
 	}
 
-	if (avflt_reply_max) {
-		if (avflt_reply_nr >= avflt_reply_max) {
-			spin_unlock(&avflt_reply_lock);
-			rv = wait_event_interruptible_exclusive(avflt_reply_waitq,
-				atomic_read(&avflt_reply_free));
-			if (rv)
-				return rv;
+	spin_lock(&avflt_request_lock);
 
-			goto again;
-		}
+	if (list_empty(&avflt_request_list)) {
+		spin_unlock(&avflt_request_lock);
+		goto again;
 	}
 
-	check->id = avflt_reply_ids;
-	list = avflt_reply_hashtable +
-		(check->id % avflt_reply_hashtable_size);
+	event = list_entry(avflt_request_list.next, struct avflt_event,
+			req_list);
+	list_del_init(&event->req_list);
 
-	list_for_each_entry(loop, list, list) {
-		if (loop->id == check->id) {
-			spin_unlock(&avflt_reply_lock);
-			rv = wait_event_interruptible_exclusive(avflt_reply_waitq,
-				atomic_read(&avflt_reply_free));
-			if (rv)
-				return rv;
+	spin_unlock(&avflt_request_lock);
 
-			goto again;
-		}
+	return event;
+}
+
+static int avflt_wait_for_reply(struct avflt_event *event)
+{
+	long jiffies;
+	int timeout;
+
+	timeout = atomic_read(&avflt_reply_timeout);
+	if (timeout)
+		jiffies = msecs_to_jiffies(timeout);
+	else
+		jiffies = MAX_SCHEDULE_TIMEOUT;
+
+	jiffies = wait_event_freezable_timeout(event->wait,
+			atomic_read(&event->done), jiffies);
+
+	if (jiffies < 0)
+		return (int)jiffies;
+
+	if (!jiffies) {
+		printk(KERN_WARNING "avflt: wait for reply timeout\n");
+		return -ETIMEDOUT;
 	}
-
-	list_add_tail(&check->list, list);
-	avflt_reply_nr++;
-	avflt_reply_ids++;
-
-	spin_unlock(&avflt_reply_lock);
 
 	return 0;
 }
 
-static struct avflt_check *avflt_find_reply(int id)
+static int avflt_update_cache(struct avflt_event *event)
 {
-	struct list_head *list;
-	struct avflt_check *loop;
-	struct avflt_check *found = NULL;
+	struct avflt_data *data;
 
-	list = avflt_reply_hashtable + (id % avflt_reply_hashtable_size);
+	if (!event->result)
+		return 0;
 
-	list_for_each_entry(loop, list, list) {
-		if (loop->id == id) {
-			found = loop;
-			break;
-		}
+	data = avflt_attach_data(event->dentry->d_inode);
+	if (IS_ERR(data))
+		return PTR_ERR(data);
+
+	atomic_set(&data->state, event->result);
+
+	avflt_put_data(data);
+	return 0;
+}
+
+int avflt_process_request(struct file *file, int type)
+{
+	struct avflt_event *event;
+	int rv = 0;
+
+	event = avflt_event_alloc(file, type);
+	if (IS_ERR(event))
+		return PTR_ERR(event);
+
+	if (avflt_add_request(event, 1))
+		goto exit;
+
+	rv = avflt_wait_for_reply(event);
+	if (rv)
+		goto exit;
+
+	rv = avflt_update_cache(event);
+	if (rv)
+		goto exit;
+
+	rv = event->result;
+exit:
+	avflt_rem_request(event);
+	avflt_event_put(event);
+	return rv;
+}
+
+void avflt_event_done(struct avflt_event *event)
+{
+	atomic_set(&event->done, 1);
+	wake_up(&event->wait);
+}
+
+int avflt_get_file(struct avflt_event *event)
+{
+	struct file *file;
+	int fd;
+
+	fd = get_unused_fd();
+	if (fd < 0)
+		return fd;
+
+	file = dentry_open(event->dentry, event->mnt, O_RDONLY);
+	if (IS_ERR(file)) {
+		put_unused_fd(fd);
+		return PTR_ERR(file);
 	}
 
-	return found;
+	event->file = file;
+	event->fd = fd;
+
+	return 0;
 }
 
-struct avflt_check *avflt_reply_find(int id)
+void avflt_put_file(struct avflt_event *event)
 {
-	struct avflt_check *check;
+	if (event->fd > 0) 
+		put_unused_fd(event->fd);
 
-	spin_lock(&avflt_reply_lock);
+	if (event->file) 
+		fput(event->file);
 
-	check = avflt_check_get(avflt_find_reply(id));
-
-	spin_unlock(&avflt_reply_lock);
-
-	return check;
+	event->fd = -1;
+	event->file = NULL;
 }
 
-struct avflt_check *avflt_reply_dequeue(int id)
+void avflt_install_fd(struct avflt_event *event)
 {
-	struct avflt_check *check;
-
-	spin_lock(&avflt_reply_lock);
-
-	check = avflt_find_reply(id);
-
-	if (check) {
-		list_del(&check->list);
-		avflt_reply_nr--;
-		atomic_set(&avflt_reply_free, 1);
-		wake_up(&avflt_reply_waitq);
-	}
-
-	spin_unlock(&avflt_reply_lock);
-
-	return check;
+	fd_install(event->fd, event->file);
 }
 
-int avflt_reply_wait(struct avflt_check *check)
+ssize_t avflt_copy_cmd(char __user *buf, size_t size, struct avflt_event *event)
 {
-	return wait_event_interruptible(check->wait, atomic_read(&check->done));
+	char cmd[256];
+	int len;
+
+	len = snprintf(cmd, 256, "id:%d,event:%d,fd:%d",
+			event->id, event->type, event->fd);
+	if (len < 0)
+		return len;
+
+	len++;
+
+	if (len > size)
+		return -EINVAL;
+
+	if (copy_to_user(buf, cmd, len)) 
+		return -EFAULT;
+
+	return len;
 }
 
-void avflt_check_start(void)
+int avflt_add_reply(struct avflt_event *event)
 {
+	struct avflt_proc *proc;
 
-	spin_lock(&avflt_reply_lock);
-	avflt_reply_accept = 1;
-	spin_unlock(&avflt_reply_lock);
+	proc = avflt_proc_find(current->tgid);
+	if (!proc)
+		return -ENOENT;
 
+	avflt_proc_add_event(proc, event);
+	avflt_proc_put(proc);
+
+	return 0;
+}
+
+void avflt_start_accept(void)
+{
 	spin_lock(&avflt_request_lock);
-	avflt_request_accept= 1;
+	if (avflt_proc_empty())
+		avflt_request_accept = 0;
+	else
+		avflt_request_accept = 1;
 	spin_unlock(&avflt_request_lock);
 }
 
-void avflt_check_stop(void)
+void avflt_stop_accept(void)
 {
-	struct avflt_check *tmp;
-	struct avflt_check *loop;
-	int i;
+	spin_lock(&avflt_request_lock);
+	avflt_request_accept = -1;
+	spin_unlock(&avflt_request_lock);
+}
+
+int avflt_is_stopped(void)
+{
+	int stopped;
 
 	spin_lock(&avflt_request_lock);
+	stopped = avflt_request_accept <= 0;
+	spin_unlock(&avflt_request_lock);
+
+	return stopped;
+}
+
+void avflt_proc_start_accept(void)
+{
+	spin_lock(&avflt_request_lock);
+
+	if (avflt_proc_empty())
+		goto exit;
+
+	if (avflt_request_accept < 0)
+		goto exit;
+
+	avflt_request_accept = 1;
+exit:
+	spin_unlock(&avflt_request_lock);
+}
+
+void avflt_proc_stop_accept(void)
+{
+	spin_lock(&avflt_request_lock);
+	if (!avflt_proc_empty())
+		goto exit;
+
+	if (avflt_request_accept <= 0)
+		goto exit;
 
 	avflt_request_accept = 0;
+exit:
+	spin_unlock(&avflt_request_lock);
+}
 
-	list_for_each_entry_safe(loop, tmp, &avflt_request_list, list) {
-		list_del(&loop->list);
-		atomic_set(&loop->deny, 0);
-		avflt_check_done(loop);
-		avflt_check_put(loop);
-		avflt_request_nr--;
-	};
+void avflt_rem_requests(void)
+{
+	LIST_HEAD(list);
+	struct avflt_event *event;
+	struct avflt_event *tmp;
+
+	spin_lock(&avflt_request_lock);
+
+	if (avflt_request_accept > 0) {
+		spin_unlock(&avflt_request_lock);
+		return;
+
+	}
+
+	list_for_each_entry_safe(event, tmp, &avflt_request_list, req_list) {
+		list_move_tail(&event->req_list, &list);
+		avflt_event_done(event);
+	}
 
 	spin_unlock(&avflt_request_lock);
 
-	spin_lock(&avflt_reply_lock);
-
-	avflt_reply_accept = 0;
-
-	for (i = 0; i < avflt_reply_hashtable_size; i++) {
-		list_for_each_entry_safe(loop, tmp,
-				&avflt_reply_hashtable[i], list) {
-			list_del(&loop->list);
-			atomic_set(&loop->deny, 0);
-			avflt_check_done(loop);
-			avflt_check_put(loop);
-			avflt_reply_nr--;
-		}
+	list_for_each_entry_safe(event, tmp, &list, req_list) {
+		list_del_init(&event->req_list);
+		avflt_event_put(event);
 	}
-
-	spin_unlock(&avflt_reply_lock);
 }
 
-void avflt_check_done(struct avflt_check *check)
+struct avflt_event *avflt_get_reply(const char __user *buf, size_t size)
 {
-	avflt_put_file(check->file);
-	atomic_set(&check->done, 1);
-	wake_up(&check->wait);
-}
+	struct avflt_proc *proc;
+	struct avflt_event *event;
+	char cmd[256];
+	int id;
+	int result;
 
-int avflt_pid_add(pid_t pid)
-{
-	pid_t *pids_new;
-	int found = -1;
-	int i;
+	if (size > 256)
+		return ERR_PTR(-EINVAL);
 
-	spin_lock(&avflt_pids_lock);
+	if (copy_from_user(cmd, buf, size))
+		return ERR_PTR(-EFAULT);
 
-	for (i = 0; i < avflt_pids_nr; i++) {
-		if (avflt_pids[i] == pid) {
-			found = i;
-			break;
-		}
+	if (sscanf(buf, "id:%d,res:%d", &id, &result) != 2)
+		return ERR_PTR(-EINVAL);
+
+	proc = avflt_proc_find(current->tgid);
+	if (!proc)
+		return ERR_PTR(-ENOENT);
+
+	event = avflt_proc_get_event(proc, id);
+	if (!event) {
+		avflt_proc_put(proc);
+		return ERR_PTR(-ENOENT);
 	}
 
-	if (found != -1) {
-		spin_unlock(&avflt_pids_lock);
-		return 0;
-	}
-
-	if (avflt_pids_nr == avflt_pids_size) {
-		pids_new = kmalloc(sizeof(pid_t) * avflt_pids_size * 2,
-				GFP_ATOMIC);
-
-		if (!pids_new) {
-			spin_unlock(&avflt_pids_lock);
-			return -ENOMEM;
-		}
-
-		memcpy(pids_new, avflt_pids, avflt_pids_size);
-		kfree(avflt_pids);
-		avflt_pids = pids_new;
-		avflt_pids_size *= 2;
-	}
-
-	avflt_pids[avflt_pids_nr++] = pid;
-
-	if (avflt_pids_nr == 1)
-		avflt_check_start();
-
-	spin_unlock(&avflt_pids_lock);
-
-	return 0;
-}
-
-void avflt_pid_rem(pid_t pid)
-{
-	int i;
-	int found = -1;
-
-	spin_lock(&avflt_pids_lock);
-
-	for (i = 0; i < avflt_pids_nr; i++) {
-		if (avflt_pids[i] == pid) {
-			found = i;
-			break;
-		}
-	}
-
-	if (found == -1) {
-		spin_unlock(&avflt_pids_lock);
-		return;
-	}
-
-	memmove(avflt_pids + i, avflt_pids + i + 1, avflt_pids_nr - (i + 1));
-	avflt_pids_nr--;
-
-	if (!avflt_pids_nr)
-		avflt_check_stop();
-
-	spin_unlock(&avflt_pids_lock);
-}
-
-pid_t avflt_pid_find(pid_t pid)
-{
-	int i;
-
-	spin_lock(&avflt_pids_lock);
-
-	for (i = 0; i < avflt_pids_nr; i++) {
-		if (avflt_pids[i] == pid) {
-			spin_unlock(&avflt_pids_lock);
-			return pid;
-		}
-	}
-
-	spin_unlock(&avflt_pids_lock);
-
-	return 0;
+	event->result = result;
+	return event;
 }
 
 int avflt_check_init(void)
 {
-	int i;
+	avflt_event_cache = kmem_cache_create("avflt_event_cache",
+			sizeof(struct avflt_event),
+			0, SLAB_RECLAIM_ACCOUNT, NULL);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
-	avflt_check_cache = kmem_cache_create("avflt_check_cache", sizeof(struct avflt_check), 0, SLAB_RECLAIM_ACCOUNT, NULL, NULL);
-#else
-	avflt_check_cache = kmem_cache_create("avflt_check_cache", sizeof(struct avflt_check), 0, SLAB_RECLAIM_ACCOUNT, NULL);
-#endif
-
-	if (!avflt_check_cache)
+	if (!avflt_event_cache)
 		return -ENOMEM;
-
-	avflt_reply_hashtable = kmalloc(sizeof(struct list_head) *
-			avflt_reply_hashtable_size, GFP_KERNEL);
-
-	if (!avflt_reply_hashtable) {
-		kmem_cache_destroy(avflt_check_cache);
-		return -ENOMEM;
-	}
-
-	avflt_pids = kmalloc(sizeof(pid_t) * avflt_pids_size, GFP_KERNEL);
-	if (!avflt_pids) {
-		kfree(avflt_reply_hashtable);
-		kmem_cache_destroy(avflt_check_cache);
-		return -ENOMEM;
-	}
-
-	for (i = 0; i < avflt_reply_hashtable_size; i++)
-		INIT_LIST_HEAD(&avflt_reply_hashtable[i]);
 
 	return 0;
 }
 
 void avflt_check_exit(void)
 {
-	kfree(avflt_reply_hashtable);
-	kmem_cache_destroy(avflt_check_cache);
+	kmem_cache_destroy(avflt_event_cache);
 }
 

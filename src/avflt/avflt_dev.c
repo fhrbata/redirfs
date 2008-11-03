@@ -1,230 +1,100 @@
+/*
+ * RedirFS: Redirecting File System
+ * Written by Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+ *
+ * Copyright (C) 2008 Frantisek Hrbata
+ * All rights reserved.
+ *
+ * This file is part of RedirFS.
+ *
+ * RedirFS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * RedirFS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with RedirFS. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include "avflt.h"
 
-extern int avflt_request_nr;
-extern spinlock_t avflt_request_lock;
-extern wait_queue_head_t avflt_request_waitq;
 static struct class *avflt_class;
-static struct class_device *avflt_class_device;
+static struct device *avflt_device;
 static dev_t avflt_dev;
 
 static int avflt_dev_open(struct inode *inode, struct file *file)
 {
-	int rv;
+	struct avflt_proc *proc;
 
-	rv = avflt_pid_add(current->tgid);
-	if (rv)
-		return rv;
+	proc = avflt_proc_add(current->tgid);
+	if (IS_ERR(proc))
+		return PTR_ERR(proc);
 
+	avflt_proc_put(proc);
+	avflt_proc_start_accept();
 	return 0;
 }
 
 static int avflt_dev_release(struct inode *inode, struct file *file)
 {
-	avflt_pid_rem(current->tgid);
+	avflt_proc_rem(current->tgid);
+	if (!avflt_proc_empty())
+		return 0;
 
+	avflt_proc_stop_accept();
+	avflt_rem_requests();
 	return 0;
 }
 
 static ssize_t avflt_dev_read(struct file *file, char __user *buf,
 		size_t size, loff_t *pos)
 {
-	struct avflt_check *check = NULL;
-	struct avflt_ucheck ucheck;
-	int fd;
-	int rv;
+	struct avflt_event *event;
+	ssize_t rv;
 
-	if (!buf)
-		return -EINVAL;
+	event = avflt_get_request();
+	if (IS_ERR(event))
+		return PTR_ERR(event);
 
-	if (size != sizeof(struct avflt_ucheck))
-		return -EINVAL;
+	rv = avflt_get_file(event);
+	if (rv)
+		goto error;
 
-	if (copy_from_user(&ucheck, buf, size))
-		return -EFAULT;
+	rv = avflt_copy_cmd(buf, size, event);
+	if (rv < 0)
+		goto error;
 
-	if (ucheck.mag != AV_CTL_MAGIC)
-		return -EINVAL;
+	rv = avflt_add_reply(event);
+	if (rv)
+		goto error;
 
-	if (ucheck.ver != AV_CTL_VERSION)
-		return -EINVAL;
-
-	while (!check) {
-		rv = avflt_request_available_wait();
-		if (rv)
-			return rv;
-
-		check = avflt_request_dequeue();
-	}
-
-	rv = avflt_reply_queue(check);
-	if (rv == 1) {
-		avflt_check_done(check);
-		avflt_check_put(check);
-		return -ENODATA;
-	}
-
-	if (rv < 0) {
-		if (avflt_request_queue(check)) 
-			avflt_check_done(check);
-
-		avflt_check_put(check);
-		return rv;
-	}
-
-	fd = get_unused_fd();
-	if (fd < 0) {
-		BUG_ON(!avflt_reply_dequeue(check->id));
-		if (avflt_request_queue(check)) 
-			avflt_check_done(check);
-
-		avflt_check_put(check);
-		return fd;
-	}
-
-	fd_install(fd, check->file);
-
-	ucheck.event = check->event;
-	ucheck.id = check->id;
-	ucheck.fd = fd;
-
-	if (copy_to_user(buf, &ucheck, size)) {
-		BUG_ON(!avflt_reply_dequeue(check->id));
-		if (avflt_request_queue(check))
-			avflt_check_done(check);
-
-		put_unused_fd(fd);
-		avflt_check_put(check);
-
-		return -EFAULT;
-	}
-
-	avflt_request_put();
-
-	return size;
-}
-
-static int avflt_cmd_getname(struct avflt_ucheck *ucheck)
-{
-	struct avflt_check *check;
-	char fn_buf[PAGE_SIZE];
-	int fn_len;
-	int rv;
-
-	if (!ucheck->fn)
-		return -EINVAL;
-
-	check = avflt_reply_find(ucheck->id);
-	if (!check) {
-		BUG();
-		printk(KERN_ERR "avflt: reply(%d) not found\n", ucheck->id);
-		return -ENOENT;
-	}
-
-	rv = rfs_get_filename(check->file->f_dentry, check->file->f_vfsmnt,
-			fn_buf, PAGE_SIZE);
-	if (rv) {
-		avflt_check_put(check);
-		return rv;
-	}
-
-	fn_len = strlen(fn_buf) + 1;
-
-	if (ucheck->fn_size < fn_len) {
-		avflt_check_put(check);
-		return -ENAMETOOLONG;
-	}
-
-	if (copy_to_user(ucheck->fn, &fn_buf, fn_len)) {
-		avflt_check_put(check);
-		return -EFAULT;
-	}
-
-	avflt_check_put(check);
-
-	return 0;
-}
-
-static int avflt_cmd_reply(struct avflt_ucheck *ucheck)
-{
-	struct avflt_check *check = NULL;
-	struct files_struct *files = current->files;
-	struct fdtable *fdt;
-	
-	spin_lock(&files->file_lock);
-	fdt = files_fdtable(files);
-	rcu_assign_pointer(fdt->fd[ucheck->fd], NULL);
-	spin_unlock(&files->file_lock);
-
-	put_unused_fd(ucheck->fd);
-
-	check = avflt_reply_dequeue(ucheck->id);
-	if (!check) {
-		BUG();
-		printk(KERN_ERR "avflt: reply(%d) not found\n", ucheck->id);
-		return -ENOENT;
-	}
-
-	atomic_set(&check->deny, ucheck->deny);
-	avflt_check_done(check);
-	avflt_check_put(check);
-
-	return 0;
+	avflt_install_fd(event);
+	avflt_event_put(event);
+	return rv;
+error:
+	avflt_put_file(event);
+	avflt_readd_request(event);
+	avflt_event_put(event);
+	return rv;
 }
 
 static ssize_t avflt_dev_write(struct file *file, const char __user *buf,
 		size_t size, loff_t *pos)
 {
-	struct avflt_ucheck ucheck;
-	int rv;
+	struct avflt_event *event;
 
-	if (!buf)
-		return -EINVAL;
+	event = avflt_get_reply(buf, size);
+	if (IS_ERR(event))
+		return PTR_ERR(event);
 
-	if (size != sizeof(struct avflt_ucheck))
-		return -EINVAL;
-
-	if (copy_from_user(&ucheck, buf, size))
-		return -EFAULT;
-
-	if (ucheck.mag != AV_CTL_MAGIC)
-		return -EINVAL;
-
-	if (ucheck.ver != AV_CTL_VERSION)
-		return -EINVAL;
-
-	switch (ucheck.cmd) {
-		case AV_CMD_GETNAME:
-			rv = avflt_cmd_getname(&ucheck);
-			if (rv)
-				return rv;
-			break;
-
-		case AV_CMD_REPLY:
-			rv = avflt_cmd_reply(&ucheck);
-			if (rv)
-				return rv;
-			break;
-
-		default:
-			return -EINVAL;
-	}
-
+	avflt_event_done(event);
+	avflt_event_put(event);
 	return size;
-}
-
-static unsigned int avflt_dev_poll(struct file *file, struct poll_table_struct *pt)
-{
-	unsigned int mask = 0;
-	poll_wait(file, &avflt_request_waitq, pt);
-
-	spin_lock(&avflt_request_lock);
-	if (avflt_request_nr)
-		mask |= POLLIN | POLLRDNORM;
-	spin_unlock(&avflt_request_lock);
-
-	mask |= POLLOUT | POLLWRNORM;
-
-	return mask;
 }
 
 static struct file_operations avflt_fops = {
@@ -233,7 +103,6 @@ static struct file_operations avflt_fops = {
 	.release = avflt_dev_release,
 	.read = avflt_dev_read,
 	.write = avflt_dev_write,
-	.poll = avflt_dev_poll,
 };
 
 int avflt_dev_init(void)
@@ -252,11 +121,11 @@ int avflt_dev_init(void)
 		return PTR_ERR(avflt_class);
 	}
 
-	avflt_class_device = class_device_create(avflt_class, NULL, avflt_dev, NULL, "avflt");
-	if (IS_ERR(avflt_class_device)) {
+	avflt_device = device_create(avflt_class, NULL, avflt_dev, NULL, "avflt");
+	if (IS_ERR(avflt_device)) {
 		class_destroy(avflt_class);
 		unregister_chrdev(major, "avflt");
-		return PTR_ERR(avflt_class_device);
+		return PTR_ERR(avflt_device);
 	}
 
 	return 0;
@@ -264,7 +133,8 @@ int avflt_dev_init(void)
 
 void avflt_dev_exit(void)
 {
-	class_device_destroy(avflt_class, avflt_dev);
+	device_destroy(avflt_class, avflt_dev);
 	class_destroy(avflt_class);
 	unregister_chrdev(MAJOR(avflt_dev), "avflt");
 }
+

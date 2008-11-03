@@ -1,335 +1,188 @@
+/*
+ * RedirFS: Redirecting File System
+ * Written by Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+ *
+ * Copyright (C) 2008 Frantisek Hrbata
+ * All rights reserved.
+ *
+ * This file is part of RedirFS.
+ *
+ * RedirFS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * RedirFS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with RedirFS. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include "avflt.h"
 
-#define AVFLT_REG_FOP_OPEN		0
-#define AVFLT_REG_FOP_RELEASE		1
-
-#define AVFLT_CLEAN			1
-#define AVFLT_INFECTED			2
-
-struct avflt_data {
-	struct rfs_priv_data rfs_data;
-	atomic_t state;
-};
-
-#define rfs_to_avflt_data(ptr) container_of(ptr, struct avflt_data, rfs_data)
-
-static int avflt_ctl(struct rfs_ctl *ctl);
-
-rfs_filter avflt;
-static struct rfs_filter_info avflt_info = {"avflt", 666, 0, avflt_ctl};
-
-int avflt_open = 1;
-int avflt_close = 1;
-
-spinlock_t avflt_rops_lock = SPIN_LOCK_UNLOCKED;
-static struct kmem_cache *avflt_data_cache = NULL;
-
-static struct rfs_op_info avflt_rops[] = {
-	{RFS_REG_FOP_OPEN, NULL, NULL},
-	{RFS_REG_FOP_RELEASE, NULL, NULL},
-	{RFS_OP_END, NULL, NULL}
-};
-
-static void avflt_data_free(struct rfs_priv_data *rfs_data)
+static int avflt_should_check(struct file *file)
 {
-	struct avflt_data *data = rfs_to_avflt_data(rfs_data);
+	if (avflt_is_stopped())
+		return 0;
 
-	kmem_cache_free(avflt_data_cache, data);
+	if (avflt_proc_allow(current->tgid))
+		return 0;
+	
+	if (!file->f_dentry->d_inode)
+		return 0;
+
+	if (!i_size_read(file->f_dentry->d_inode))
+		return 0;
+
+	return 1;
 }
 
-static struct avflt_data *avflt_data_alloc(void)
+static int avflt_use_cache(struct file *file, int type)
 {
-	struct avflt_data *data;
-	int err;
-
-	data = kmem_cache_alloc(avflt_data_cache, GFP_KERNEL);
-	if (!data)
-		return ERR_PTR(-ENOMEM);
-
-	err = rfs_init_data(&data->rfs_data, avflt, avflt_data_free);
-	if (err) {
-		 kmem_cache_free(avflt_data_cache, data);
-		 return ERR_PTR(err);
-	}
-
-	atomic_set(&data->state, 0);
-
-	return data;
-}
-
-static inline struct avflt_data *avflt_get_data(struct inode *inode)
-{
-	struct rfs_priv_data *rfs_data;
-
-	int err;
-
-	err = rfs_get_data_inode(avflt, inode, &rfs_data);
-	if (err)
-		return ERR_PTR(err);
-
-	return rfs_to_avflt_data(rfs_data);
-}
-
-static inline void avflt_put_data(struct avflt_data *data)
-{
-	rfs_put_data(&data->rfs_data);
-}
-
-static inline struct avflt_data *avflt_attach_data(struct inode *inode)
-{
-	struct avflt_data *data;
-	struct rfs_priv_data *data_exist;
-	int err;
-
-	data = avflt_get_data(inode);
-	if (!IS_ERR(data))
-		return data;
-
-	if (PTR_ERR(data) != -ENODATA)
-		return data;
-
-	data = avflt_data_alloc();
-	if (IS_ERR(data)) 
-		return data;
-
-	err = rfs_attach_data_inode(avflt, inode, &data->rfs_data, &data_exist);
-	if (err) {
-		if (err == -EEXIST) {
-			avflt_put_data(data);
-			data = rfs_to_avflt_data(data_exist);
-
-		} else {
-			avflt_put_data(data);
-			return ERR_PTR(err);
-		}
-	}
-
-	return data;
-}
-
-static enum rfs_retv avflt_event(struct file *file, int event,
-		struct rfs_args *args)
-{
-	struct avflt_check *check = NULL;
-	struct avflt_data *data = NULL;
-	struct dentry *dentry = file->f_dentry;
-	int rv;
-	int state;
 	int wc;
 
-	if (avflt_pid_find(current->tgid))
-		return RFS_CONTINUE;
-	
-	wc = atomic_read(&dentry->d_inode->i_writecount);
-	if (wc <= 0 || (wc == 1 && file->f_mode & FMODE_WRITE &&
-				event == AV_EVENT_OPEN)) {
+	spin_lock(&file->f_dentry->d_inode->i_lock);
+	wc = atomic_read(&file->f_dentry->d_inode->i_writecount);
+	spin_unlock(&file->f_dentry->d_inode->i_lock);
 
-		if (!file->f_dentry->d_inode->i_size)
-			return RFS_CONTINUE;
+	if (wc <= 0)
+		return 1;
 
-		data = avflt_get_data(dentry->d_inode);
-		if (!IS_ERR(data)) {
-			state = atomic_read(&data->state);
+	if (wc > 1)
+		return 0;
 
-			if (state == AVFLT_CLEAN) {
-				avflt_put_data(data);
-				return RFS_CONTINUE;
+	if (!(file->f_mode & FMODE_WRITE))
+		return 0;
 
-			} else if (state == AVFLT_INFECTED) {
-				avflt_put_data(data);
-				args->retv.rv_int = -EPERM;
-				return RFS_STOP;
-			}
-
-			avflt_put_data(data);
-		}
-	}
-
-	rv = avflt_request_wait();
-
-	if (rv < 0) {
-		args->retv.rv_int = rv;
-		return RFS_STOP;
-	}
-
-	if (rv == 1) {
-		args->retv.rv_int = 0;
-		return RFS_CONTINUE;
-	}
-
-	check = avflt_check_alloc();
-	if (IS_ERR(check)) {
-		avflt_request_put();
-		args->retv.rv_int = rv;
-		return RFS_STOP;
-	}
-
-	check->event = event;
-	check->file = avflt_get_file(file);
-
-	if (IS_ERR(check->file)) {
-		avflt_request_put();
-		avflt_check_put(check);
-		args->retv.rv_int = PTR_ERR(check->file);
-		return RFS_STOP;
-	}
-
-	rv = avflt_request_queue(check);
-	if (rv) {
-		args->retv.rv_int = 0;
-		avflt_request_put();
-		avflt_put_file(check->file);
-		avflt_check_put(check);
-		return RFS_STOP;
-	}
-
-	rv = avflt_reply_wait(check);
-	if (rv) {
-		args->retv.rv_int = rv;
-		avflt_check_put(check);
-		return RFS_STOP;
-	}
-	
-	data = avflt_attach_data(dentry->d_inode);
-	if (IS_ERR(data)) {
-		printk(KERN_WARNING "avflt_attach_data failed(%ld)\n",
-				PTR_ERR(data));
-		data = NULL;
-	}
-
-	if (atomic_read(&check->deny)) {
-		args->retv.rv_int = -EPERM;
-		state = AVFLT_INFECTED;
-		rv = RFS_STOP;
-
-	} else {
-		args->retv.rv_int = 0;
-		state = AVFLT_CLEAN;
-		rv = RFS_CONTINUE;
-	}
-
-	if (data) {
-		atomic_set(&data->state, state);
-		avflt_put_data(data);
-	}
-
-	avflt_check_put(check);
-
-	return rv;
-}
-
-static enum rfs_retv avflt_post_open(rfs_context context, struct rfs_args *args)
-{
-	struct file *file = args->args.f_open.file;
-	
-	return avflt_event(file, AV_EVENT_OPEN, args);
-}
-
-static enum rfs_retv avflt_post_release(rfs_context context, struct rfs_args *args)
-{
-	struct file *file = args->args.f_release.file;
-	
-	return avflt_event(file, AV_EVENT_CLOSE, args);
-}
-
-
-static int avflt_ctl(struct rfs_ctl *ctl)
-{
-	int err = 0;
-
-	switch (ctl->id) {
-		case RFS_CTL_ACTIVATE:
-			err = rfs_activate_filter(avflt);
-			break;
-
-		case RFS_CTL_DEACTIVATE:
-			err = rfs_deactivate_filter(avflt);
-			break;
-
-		case RFS_CTL_SETPATH:
-			err = rfs_set_path(avflt, &ctl->data.path_info); 
-			break;
-	}
-
-	return err;
-}
-
-int avflt_rfs_set_ops(void)
-{
-	if (avflt_open) 
-		avflt_rops[AVFLT_REG_FOP_OPEN].post_cb = avflt_post_open;
-	else
-		avflt_rops[AVFLT_REG_FOP_OPEN].post_cb = NULL;
-
-	if (avflt_close) 
-		avflt_rops[AVFLT_REG_FOP_RELEASE].post_cb = avflt_post_release;
-	else
-		avflt_rops[AVFLT_REG_FOP_RELEASE].post_cb = NULL;
-
-	return rfs_set_operations(avflt, avflt_rops);
-}
-
-static int avflt_rfs_data_cache_init(void)
-{
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
-	avflt_data_cache = kmem_cache_create("avflt_data_cache", sizeof(struct avflt_data), 0, SLAB_RECLAIM_ACCOUNT, NULL, NULL);
-#else
-	avflt_data_cache = kmem_cache_create("avflt_data_cache", sizeof(struct avflt_data), 0, SLAB_RECLAIM_ACCOUNT, NULL);
-#endif
-
-	if (!avflt_data_cache)
-		return -ENOMEM;
+	if (type == AVFLT_EVENT_OPEN)
+		return 1;
 
 	return 0;
 }
 
-static void avflt_rfs_data_cache_exit(void)
+static int avflt_check_cache(struct file *file, int type)
 {
-	kmem_cache_destroy(avflt_data_cache);
+	struct avflt_data *data;
+	int state;
+
+	if (!avflt_use_cache(file, type))
+		return 0;
+
+	data = avflt_get_data(file->f_dentry->d_inode);
+	if (!data)
+		return 0;
+
+	if (IS_ERR(data))
+		return PTR_ERR(data);
+
+	state = atomic_read(&data->state);
+
+	avflt_put_data(data);
+
+	return state;
 }
+
+static enum redirfs_rv avflt_eval_res(int rv, struct redirfs_args *args)
+{
+	if (rv < 0) {
+		args->rv.rv_int = rv;
+		return REDIRFS_STOP;
+	} 
+
+	if (rv == AVFLT_FILE_INFECTED) {
+		args->rv.rv_int = -EPERM;
+		return REDIRFS_STOP;
+	}
+
+	return REDIRFS_CONTINUE;
+}
+
+static enum redirfs_rv avflt_check_file(struct file *file, int type,
+		struct redirfs_args *args)
+{
+	int rv;
+
+	if (!avflt_should_check(file))
+		return REDIRFS_CONTINUE;
+
+	rv = avflt_check_cache(file, type);
+	if (rv)
+		return avflt_eval_res(rv, args);
+
+	rv = avflt_process_request(file, type);
+	if (rv)
+		return avflt_eval_res(rv, args);
+
+	return REDIRFS_CONTINUE;
+}
+
+static enum redirfs_rv avflt_pre_open(redirfs_context context,
+		struct redirfs_args *args)
+{
+	struct file *file = args->args.f_open.file;
+
+	return avflt_check_file(file, AVFLT_EVENT_OPEN, args);
+}
+
+static enum redirfs_rv avflt_post_release(redirfs_context context,
+		struct redirfs_args *args)
+{
+	struct file *file = args->args.f_release.file;
+
+	return avflt_check_file(file, AVFLT_EVENT_CLOSE, args);
+}
+
+redirfs_filter avflt;
+
+static struct redirfs_filter_info avflt_info = {
+	.owner = THIS_MODULE,
+	.name = "avflt",
+	.priority = 850000000,
+	.active = 1
+};
+
+static struct redirfs_op_info avflt_op_info[] = {
+	{REDIRFS_REG_FOP_OPEN, avflt_pre_open, NULL},
+	{REDIRFS_REG_FOP_RELEASE, avflt_post_release, NULL},
+	{REDIRFS_OP_END, NULL, NULL}
+};
 
 int avflt_rfs_init(void)
 {
 	int err;
+	int rv;
 
-	err = avflt_rfs_data_cache_init();
-	if (err)
-		return err;
-
-	err = rfs_register_filter(&avflt, &avflt_info);
-	if (err) {
-		avflt_rfs_data_cache_exit();
-		return err;
+	rv = redirfs_register_filter(&avflt, &avflt_info);
+	if (rv) {
+		printk(KERN_ERR "avflt: register filter failed(%d)\n", rv);
+		return rv;
 	}
 
-	spin_lock(&avflt_rops_lock);
-	err = avflt_rfs_set_ops();
-	spin_unlock(&avflt_rops_lock);
-	if (err)
+	rv = redirfs_set_operations(avflt, avflt_op_info);
+	if (rv) {
+		printk(KERN_ERR "avflt: set operations failed(%d)\n", rv);
 		goto error;
+	}
 
-	err = rfs_activate_filter(avflt);
-	if (err)
-		goto error;
-
+	printk(KERN_INFO "Anti-Virus Filter Version "
+			AVFLT_VERSION " <www.redirfs.org>\n");
 	return 0;
-
 error:
-	rfs_unregister_filter(avflt);
-	avflt_rfs_data_cache_exit();
+	err = redirfs_unregister_filter(avflt);
+	if (err) {
+		printk(KERN_ERR "avflt: unregister filter failed(%d)\n", err);
+		return 0;
+	}
 
-	return err;
+	redirfs_delete_filter(avflt);
+	return rv;
 }
 
 void avflt_rfs_exit(void)
 {
-	int err;
-
-	err = rfs_unregister_filter(avflt);
-	if (err)
-		printk(KERN_ERR "avflt: rfs_unregister_filter failed(%d)\n", err);
-
-	avflt_rfs_data_cache_exit();
+	redirfs_delete_filter(avflt);
 }
-
 
