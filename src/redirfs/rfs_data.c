@@ -158,7 +158,7 @@ struct redirfs_data *redirfs_get_data_file(redirfs_filter filter,
 
 	rfile = rfs_file_find(file);
 	if (!rfile)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	spin_lock(&rfile->lock);
 
@@ -166,7 +166,7 @@ struct redirfs_data *redirfs_get_data_file(redirfs_filter filter,
 	if (!data) {
 		spin_unlock(&rfile->lock);
 		rfs_file_put(rfile);
-		return ERR_PTR(-ENODATA);
+		return NULL;
 	}
 
 	redirfs_get_data(data);
@@ -252,7 +252,7 @@ struct redirfs_data *redirfs_get_data_dentry(redirfs_filter filter,
 
 	rdentry = rfs_dentry_find(dentry);
 	if (!rdentry)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	spin_lock(&rdentry->lock);
 
@@ -260,7 +260,7 @@ struct redirfs_data *redirfs_get_data_dentry(redirfs_filter filter,
 	if (!data) {
 		spin_unlock(&rdentry->lock);
 		rfs_dentry_put(rdentry);
-		return ERR_PTR(-ENODATA);
+		return NULL;
 	}
 
 	redirfs_get_data(data);
@@ -346,7 +346,7 @@ struct redirfs_data *redirfs_get_data_inode(redirfs_filter filter,
 
 	rinode = rfs_inode_find(inode);
 	if (!rinode)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	spin_lock(&rinode->lock);
 
@@ -354,7 +354,7 @@ struct redirfs_data *redirfs_get_data_inode(redirfs_filter filter,
 	if (!data) {
 		spin_unlock(&rinode->lock);
 		rfs_inode_put(rinode);
-		return ERR_PTR(-ENODATA);
+		return NULL;
 	}
 
 	redirfs_get_data(data);

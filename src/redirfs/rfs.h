@@ -21,6 +21,9 @@
  * along with RedirFS. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef _RFS_H
+#define _RFS_H
+
 #include <linux/mount.h>
 #include <linux/wait.h>
 #include <linux/sched.h>
@@ -352,4 +355,6 @@ extern struct kobj_type rfs_flt_ktype;
 
 int rfs_sysfs_create(void);
 void rfs_sysfs_destroy(void);
+
+#endif
 
