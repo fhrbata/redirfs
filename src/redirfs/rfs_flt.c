@@ -105,32 +105,31 @@ static int rfs_flt_exist(const char *name, int priority)
 	return 0;
 }
 
-int redirfs_register_filter(redirfs_filter *filter,
-		struct redirfs_filter_info *info)
+redirfs_filter redirfs_register_filter(struct redirfs_filter_info *info)
 {
 	struct rfs_flt *rflt;
 	int rv;
 
-	if (!filter || !info)
-		return -EINVAL;
+	if (!info)
+		return ERR_PTR(-EINVAL);
 
 	mutex_lock(&rfs_flt_list_mutex);
 
 	if (rfs_flt_exist(info->name, info->priority)) {
 		mutex_unlock(&rfs_flt_list_mutex);
-		return -EEXIST;
+		return ERR_PTR(-EEXIST);
 	}
 
 	rflt = rfs_flt_alloc(info);
 	if (IS_ERR(rflt)) {
 		mutex_unlock(&rfs_flt_list_mutex);
-		return PTR_ERR(rflt);
+		return (redirfs_filter)rflt;
 	}
 
 	rv = rfs_flt_sysfs_init(rflt);
 	if (rv) {
 		rfs_flt_put(rflt);
-		return rv;
+		return ERR_PTR(rv);
 	}
 
 	list_add_tail(&rflt->list, &rfs_flt_list);
@@ -138,9 +137,7 @@ int redirfs_register_filter(redirfs_filter *filter,
 
 	mutex_unlock(&rfs_flt_list_mutex);
 
-	*filter = (redirfs_filter)rflt;
-
-	return 0;
+	return (redirfs_filter)rflt;
 }
 
 int redirfs_unregister_filter(redirfs_filter filter)

@@ -622,8 +622,7 @@ redirfs_root redirfs_get_root_dentry(redirfs_filter filter,
 		struct dentry *dentry);
 redirfs_root redirfs_get_root_inode(redirfs_filter filter, struct inode *inode);
 void redirfs_put_root(redirfs_root root);
-int redirfs_register_filter(redirfs_filter *filter,
-		struct redirfs_filter_info *info);
+redirfs_filter redirfs_register_filter(struct redirfs_filter_info *info);
 int redirfs_unregister_filter(redirfs_filter filter);
 void redirfs_delete_filter(redirfs_filter filter);
 int redirfs_set_operations(redirfs_filter filter, struct redirfs_op_info ops[]);
