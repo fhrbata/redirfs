@@ -177,8 +177,9 @@ static int __init dummyflt_init(void)
 	int err;
 	int rv;
 
-	rv = redirfs_register_filter(&dummyflt, &dummyflt_info);
-	if (rv) {
+	dummyflt = redirfs_register_filter(&dummyflt_info);
+	if (IS_ERR(dummyflt)) {
+		rv = PTR_ERR(dummyflt);
 		printk(KERN_ERR "dummyflt: register filter failed(%d)\n", rv);
 		return rv;
 	}
