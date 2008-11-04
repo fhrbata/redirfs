@@ -158,8 +158,9 @@ int avflt_rfs_init(void)
 	int err;
 	int rv;
 
-	rv = redirfs_register_filter(&avflt, &avflt_info);
-	if (rv) {
+	avflt = redirfs_register_filter(&avflt_info);
+	if (IS_ERR(avflt)) {
+		rv = PTR_ERR(avflt);
 		printk(KERN_ERR "avflt: register filter failed(%d)\n", rv);
 		return rv;
 	}
