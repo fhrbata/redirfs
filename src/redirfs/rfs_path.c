@@ -382,37 +382,38 @@ int redirfs_set_path(redirfs_filter filter, struct redirfs_path_info *info)
 	return rv;
 }
 
-int redirfs_get_path(redirfs_filter filter, struct vfsmount *mnt,
-		struct dentry *dentry, redirfs_path *path)
+redirfs_path redirfs_get_path(redirfs_filter filter, struct vfsmount *mnt,
+		struct dentry *dentry)
 {
 	struct rfs_flt *rflt = (struct rfs_flt *)filter;
 	struct rfs_path *rpath;
+	redirfs_path rv;
 
-	if (!rflt || !mnt || !dentry || !path)
-		return -EINVAL;
+	if (!rflt || !mnt || !dentry)
+		return ERR_PTR(-EINVAL);
 
 	mutex_lock(&rfs_path_mutex);
 	rpath = rfs_path_find(mnt, dentry);
 	mutex_unlock(&rfs_path_mutex);
 
 	if (!rpath)
-		return -ENOENT;
+		return ERR_PTR(-ENOENT);
 
 	if (rfs_chain_find(rpath->rinch, rflt) != -1)
-		*path = (redirfs_path)rpath;
+		rv = (redirfs_path)rpath;
 
 	else if (rfs_chain_find(rpath->rexch, rflt) != -1)
-		*path = (redirfs_path)rpath;
+		rv = (redirfs_path)rpath;
 
 	else 
-		*path = NULL;
+		rv = NULL;
 
-	if (!path) {
+	if (!rv) {
 		rfs_path_put(rpath);
-		return -ENOENT;
+		return ERR_PTR(-ENOENT);
 	}
 
-	return 0;
+	return rv;
 }
 
 void redirfs_put_path(redirfs_path *path)
@@ -422,65 +423,64 @@ void redirfs_put_path(redirfs_path *path)
 	rfs_path_put(rpath);
 }
 
-int redirfs_get_paths(redirfs_filter filter, struct redirfs_paths *paths)
+redirfs_path* redirfs_get_paths(redirfs_filter filter)
 {
 	struct rfs_flt *rflt = (struct rfs_flt *)filter;
 	struct rfs_path *rpath;
+	redirfs_path *paths;
 	int i = 0;
 
 	mutex_lock(&rfs_path_mutex);
 
-	if (!rflt->paths_nr) {
+	paths = kzalloc(sizeof(redirfs_path) * (rflt->paths_nr + 1),
+			GFP_KERNEL);
+	if (!paths) {
 		mutex_unlock(&rfs_path_mutex);
-		return -ENOENT;
-	}
-
-	paths->nr = rflt->paths_nr;
-	paths->path = kzalloc(sizeof(redirfs_path) * paths->nr, GFP_KERNEL);
-	if (!paths->path) {
-		mutex_unlock(&rfs_path_mutex);
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 	}
 
 	list_for_each_entry(rpath, &rfs_path_list, list) {
 		if (rfs_chain_find(rpath->rinch, rflt) != -1)
-			paths->path[i++] = (redirfs_path)rfs_path_get(rpath);
+			paths[i++] = (redirfs_path)rfs_path_get(rpath);
 
 		else if (rfs_chain_find(rpath->rexch, rflt) != -1)
-			paths->path[i++] = (redirfs_path)rfs_path_get(rpath);
+			paths[i++] = (redirfs_path)rfs_path_get(rpath);
 	}
 
 	mutex_unlock(&rfs_path_mutex);
+	paths[i] = NULL;
 
 	return 0;
 }
 
-void redirfs_put_paths(struct redirfs_paths *paths)
+void redirfs_put_paths(redirfs_path *paths)
 {
-	int i;
+	int i = 0;
 
 	if (!paths)
 		return;
 
-	for (i = 0; i < paths->nr; i++) {
-		redirfs_put_path(paths->path[i]);
+	while (paths[i]) {
+		redirfs_put_path(paths[i]);
+		i++;
 	}
 
-	kfree(paths->path);
-	paths->nr = 0;
-	paths->path = NULL;
+	kfree(paths);
 }
 
-int redirfs_get_path_info(redirfs_filter filter, redirfs_path path,
-		struct redirfs_path_info *info)
+struct redirfs_path_info *redirfs_get_path_info(redirfs_filter filter,
+		redirfs_path path)
 {
 	struct rfs_path *rpath = (struct rfs_path *)path;
 	struct rfs_flt *rflt = (struct rfs_flt *)filter;
+	struct redirfs_path_info *info;
 
-	if (!rpath || !rflt || !info)
-		return -EINVAL;
+	if (!rpath || !rflt)
+		return ERR_PTR(-EINVAL);
 
-	info->flags = 0;
+	info = kzalloc(sizeof(struct redirfs_path_info), GFP_KERNEL);
+	if (!info)
+		return ERR_PTR(-ENOMEM);
 
 	mutex_lock(&rfs_path_mutex);
 
@@ -492,54 +492,69 @@ int redirfs_get_path_info(redirfs_filter filter, redirfs_path path,
 
 	mutex_unlock(&rfs_path_mutex);
 
-	if (!info->flags)
-		return -EINVAL;
+	if (!info->flags) {
+		kfree(info);
+		return ERR_PTR(-ENODATA);
+	}
 
-	info->mnt = rpath->mnt;
-	info->dentry = rpath->dentry;
+	info->mnt = mntget(rpath->mnt);
+	info->dentry = dget(rpath->dentry);
 
-	return 0;
+	return info;
+}
+
+void redirfs_put_path_info(struct redirfs_path_info *info)
+{
+	if (!info)
+		return;
+
+	mntput(info->mnt);
+	dput(info->dentry);
+	kfree(info);
 }
 
 int redirfs_rem_path(redirfs_filter filter, redirfs_path path)
 {
-	struct redirfs_path_info info;
+	struct redirfs_path_info *info;
 	int rv;
 
 	if (!filter || !path)
 		return -EINVAL;
 
-	rv = redirfs_get_path_info(filter, path, &info);
-	if (rv)
-		return rv;
+	info = redirfs_get_path_info(filter, path);
+	if (IS_ERR(info))
+		return PTR_ERR(info);
 
-	info.flags |= REDIRFS_PATH_REM;
+	info->flags |= REDIRFS_PATH_REM;
 
-	rv = redirfs_set_path(filter, &info);
+	rv = redirfs_set_path(filter, info);
+
+	redirfs_put_path_info(info);
 
 	return rv;
 }
 
 int redirfs_rem_paths(redirfs_filter filter)
 {
-	struct redirfs_paths paths;
+	redirfs_path *paths;
 	int rv;
-	int i;
+	int i = 0;
 
 	if (!filter)
 		return -EINVAL;
 
-	rv = redirfs_get_paths(filter, &paths);
-	if (rv)
-		return rv;
+	paths = redirfs_get_paths(filter);
+	if (IS_ERR(paths))
+		return PTR_ERR(paths);
 
-	for (i = 0; i < paths.nr; i++) {
-		rv = redirfs_rem_path(filter, paths.path[i]);
+	while (paths[i]) {
+		rv = redirfs_rem_path(filter, paths[i]);
 		if (rv)
 			break;
+		i++;
 	}
 
-	redirfs_put_paths(&paths);
+	redirfs_put_paths(paths);
 
 	return rv;
 }

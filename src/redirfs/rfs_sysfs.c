@@ -145,6 +145,7 @@ static int rfs_flt_paths_add(redirfs_filter filter, const char *buf,
 {
 	struct rfs_flt *rflt = (struct rfs_flt *)filter;
 	struct redirfs_ctl rctl;
+	struct redirfs_path_info info;
 	struct nameidata nd;
 	char *path;
 	char type;
@@ -159,14 +160,15 @@ static int rfs_flt_paths_add(redirfs_filter filter, const char *buf,
 		return -EINVAL;
 	}
 
+	rctl.data.path_info = &info;
 	rctl.id = REDIRFS_CTL_SET_PATH;
-	rctl.data.path_info.flags = REDIRFS_PATH_ADD;
+	info.flags = REDIRFS_PATH_ADD;
 
 	if (type == 'i')
-		rctl.data.path_info.flags |= REDIRFS_PATH_INCLUDE;
+		info.flags |= REDIRFS_PATH_INCLUDE;
 
 	else if (type == 'e')
-		rctl.data.path_info.flags |= REDIRFS_PATH_EXCLUDE;
+		info.flags |= REDIRFS_PATH_EXCLUDE;
 
 	else {
 		kfree(path);
@@ -179,13 +181,13 @@ static int rfs_flt_paths_add(redirfs_filter filter, const char *buf,
 		return rv;
 	}
 
-	rctl.data.path_info.dentry = nd.path.dentry;
-	rctl.data.path_info.mnt = nd.path.mnt;
+	info.dentry = nd.path.dentry;
+	info.mnt = nd.path.mnt;
 
 	if (rflt->ctl_cb && (rflt->ctl_id & REDIRFS_CTL_SET_PATH))
 		rv = rflt->ctl_cb(&rctl);
 	else
-		rv = redirfs_set_path(filter, &rctl.data.path_info);
+		rv = redirfs_set_path(filter, &info);
 
 	path_put(&nd.path);
 	kfree(path);
@@ -199,6 +201,7 @@ static int rfs_flt_paths_rem(redirfs_filter filter, const char *buf,
 	struct rfs_flt *rflt = (struct rfs_flt *)filter;
 	struct redirfs_ctl rctl;
 	struct rfs_path *rpath;
+	struct redirfs_path_info *info;
 	int id;
 	int rv;
 
@@ -215,20 +218,22 @@ static int rfs_flt_paths_rem(redirfs_filter filter, const char *buf,
 	}
 	mutex_unlock(&rfs_path_mutex);
 	
-	rv = redirfs_get_path_info(filter, (redirfs_path)rpath,
-			&rctl.data.path_info);
-	if (rv) {
+	info = redirfs_get_path_info(filter, (redirfs_path)rpath);
+	rctl.data.path_info = info;
+
+	if (IS_ERR(info)) {
 		rfs_path_put(rpath);
-		return rv;
+		return PTR_ERR(info);
 	}
 
-	rctl.data.path_info.flags |= REDIRFS_PATH_REM;
+	rctl.data.path_info->flags |= REDIRFS_PATH_REM;
 
 	if (rflt->ctl_cb && (rflt->ctl_id & REDIRFS_CTL_SET_PATH))
 		rv = rflt->ctl_cb(&rctl);
 	else
-		rv = redirfs_set_path(filter, &rctl.data.path_info);
+		rv = redirfs_set_path(filter, info);
 
+	redirfs_put_path_info(info);
 	rfs_path_put(rpath);
 
 	return rv;
