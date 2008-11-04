@@ -63,9 +63,6 @@ struct rfs_dentry *rfs_dentry_get(struct rfs_dentry *rdentry)
 
 void rfs_dentry_put(struct rfs_dentry *rdentry)
 {
-	struct redirfs_data *data;
-	struct redirfs_data *tmp;
-
 	if (!rdentry || IS_ERR(rdentry))
 		return;
 
@@ -76,11 +73,7 @@ void rfs_dentry_put(struct rfs_dentry *rdentry)
 	rfs_inode_put(rdentry->rinode);
 	rfs_info_put(rdentry->rinfo);
 
-	list_for_each_entry_safe(data, tmp, &rdentry->data, list) {
-		list_del(&data->list);
-		redirfs_put_data(data);
-	}
-
+	rfs_data_remove(&rdentry->data);
 	kmem_cache_free(rfs_dentry_cache, rdentry);
 }
 

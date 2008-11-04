@@ -228,6 +228,7 @@ enum redirfs_rv {
 typedef void *redirfs_filter;
 typedef void *redirfs_context;
 typedef void *redirfs_path;
+typedef void *redirfs_root;
 
 union redirfs_op_rv {
 	int		rv_int;
@@ -620,6 +621,11 @@ int redirfs_get_path_info(redirfs_filter filter, redirfs_path path,
 		struct redirfs_path_info *info);
 int redirfs_rem_path(redirfs_filter filter, redirfs_path path);
 int redirfs_rem_paths(redirfs_filter filter);
+redirfs_root redirfs_get_root_file(redirfs_filter filter, struct file *file);
+redirfs_root redirfs_get_root_dentry(redirfs_filter filter,
+		struct dentry *dentry);
+redirfs_root redirfs_get_root_inode(redirfs_filter filter, struct inode *inode);
+void redirfs_put_root(redirfs_root root);
 int redirfs_register_filter(redirfs_filter *filter,
 		struct redirfs_filter_info *info);
 int redirfs_unregister_filter(redirfs_filter filter);
@@ -633,29 +639,35 @@ int redirfs_init_data(struct redirfs_data *data, redirfs_filter filter,
 		void (*cb)(struct redirfs_data *));
 struct redirfs_data *redirfs_get_data(struct redirfs_data *data);
 void redirfs_put_data(struct redirfs_data *data);
-int redirfs_attach_data_file(redirfs_filter filter, struct file *file,
-		struct redirfs_data *data, struct redirfs_data **exist);
+struct redirfs_data *redirfs_attach_data_file(redirfs_filter filter,
+		struct file *file, struct redirfs_data *data);
 struct redirfs_data *redirfs_detach_data_file(redirfs_filter filter,
 		struct file *file);
 struct redirfs_data *redirfs_get_data_file(redirfs_filter filter,
 		struct file *file);
-int redirfs_attach_data_dentry(redirfs_filter filter, struct dentry *dentry,
-		struct redirfs_data *data, struct redirfs_data **exist);
+struct redirfs_data *redirfs_attach_data_dentry(redirfs_filter filter,
+		struct dentry *dentry, struct redirfs_data *data);
 struct redirfs_data *redirfs_detach_data_dentry(redirfs_filter filter,
 		struct dentry *dentry);
 struct redirfs_data *redirfs_get_data_dentry(redirfs_filter filter,
 		struct dentry *dentry);
-int redirfs_attach_data_inode(redirfs_filter filter, struct inode *inode,
-		struct redirfs_data *data, struct redirfs_data **exist);
+struct redirfs_data *redirfs_attach_data_inode(redirfs_filter filter,
+		struct inode *inode, struct redirfs_data *data);
 struct redirfs_data *redirfs_detach_data_inode(redirfs_filter filter,
 		struct inode *inode);
 struct redirfs_data *redirfs_get_data_inode(redirfs_filter filter,
 		struct inode *inode);
-int redirfs_attach_data_context(redirfs_filter filter, redirfs_context context,
-		struct redirfs_data *data, struct redirfs_data **exist);
+struct redirfs_data *redirfs_attach_data_context(redirfs_filter filter,
+		redirfs_context context, struct redirfs_data *data);
 struct redirfs_data *redirfs_detach_data_context(redirfs_filter filter,
 		redirfs_context context);
 struct redirfs_data *redirfs_get_data_context(redirfs_filter filter,
 		redirfs_context context);
+struct redirfs_data *redirfs_attach_data_root(redirfs_filter filter,
+		redirfs_root root, struct redirfs_data *data);
+struct redirfs_data *redirfs_detach_data_root(redirfs_filter filter,
+		redirfs_root root);
+struct redirfs_data *redirfs_get_data_root(redirfs_filter filter,
+		redirfs_root root);
 #endif
 

@@ -70,9 +70,6 @@ struct rfs_inode *rfs_inode_get(struct rfs_inode *rinode)
 
 void rfs_inode_put(struct rfs_inode *rinode)
 {
-	struct redirfs_data *data;
-	struct redirfs_data *tmp;
-
 	if (!rinode || IS_ERR(rinode))
 		return;
 
@@ -81,12 +78,7 @@ void rfs_inode_put(struct rfs_inode *rinode)
 		return;
 
 	rfs_info_put(rinode->rinfo);
-
-	list_for_each_entry_safe(data, tmp, &rinode->data, list) {
-		list_del(&data->list);
-		redirfs_put_data(data);
-	}
-
+	rfs_data_remove(&rinode->data);
 	kmem_cache_free(rfs_inode_cache, rinode);
 }
 

@@ -134,10 +134,12 @@ struct rfs_root {
 	struct list_head list;
 	struct list_head walk_list;
 	struct list_head rpaths;
+	struct list_head data;
 	struct rfs_chain *rinch;
 	struct rfs_chain *rexch;
 	struct rfs_info *rinfo;
 	struct dentry *dentry;
+	spinlock_t lock;
 	atomic_t count;
 };
 
@@ -355,6 +357,8 @@ extern struct kobj_type rfs_flt_ktype;
 
 int rfs_sysfs_create(void);
 void rfs_sysfs_destroy(void);
+
+void rfs_data_remove(struct list_head *head);
 
 #endif
 

@@ -66,9 +66,6 @@ struct rfs_file *rfs_file_get(struct rfs_file *rfile)
 
 void rfs_file_put(struct rfs_file *rfile)
 {
-	struct redirfs_data *data;
-	struct redirfs_data *tmp;
-
 	if (!rfile || IS_ERR(rfile))
 		return;
 
@@ -79,11 +76,7 @@ void rfs_file_put(struct rfs_file *rfile)
 	rfs_dentry_put(rfile->rdentry);
 	fops_put(rfile->op_old);
 
-	list_for_each_entry_safe(data, tmp, &rfile->data, list) {
-		list_del(&data->list);
-		redirfs_put_data(data);
-	}
-
+	rfs_data_remove(&rfile->data);
 	kmem_cache_free(rfs_file_cache, rfile);
 }
 
