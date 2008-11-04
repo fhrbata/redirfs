@@ -174,8 +174,10 @@ int rfs_root_add_include(struct rfs_root *rroot, struct rfs_flt *rflt)
 		return rv;
 	}
 
+	spin_lock(&rroot->lock);
 	rfs_chain_put(rroot->rinch);
 	rroot->rinch = rinch;
+	spin_unlock(&rroot->lock);
 	return 0;
 }
 
@@ -200,14 +202,17 @@ int rfs_root_add_exclude(struct rfs_root *rroot, struct rfs_flt *rflt)
 		return rv;
 	}
 
+	spin_lock(&rroot->lock);
 	rfs_chain_put(rroot->rexch);
 	rroot->rexch = rexch;
+	spin_unlock(&rroot->lock);
 	return 0;
 }
 
 int rfs_root_rem_include(struct rfs_root *rroot, struct rfs_flt *rflt)
 {
 	struct rfs_chain *rinch;
+	struct redirfs_data *data;
 	int rv;
 
 	if (rfs_root_flt_num(rroot, rflt, REDIRFS_PATH_INCLUDE) > 1)
@@ -223,14 +228,19 @@ int rfs_root_rem_include(struct rfs_root *rroot, struct rfs_flt *rflt)
 		return rv;
 	}
 
+	spin_lock(&rroot->lock);
 	rfs_chain_put(rroot->rinch);
 	rroot->rinch = rinch;
+	spin_unlock(&rroot->lock);
+	data = redirfs_detach_data_root(rflt, rroot);
+	redirfs_put_data(data);
 	return 0;
 }
 
 int rfs_root_rem_exclude(struct rfs_root *rroot, struct rfs_flt *rflt)
 {
 	struct rfs_chain *rexch;
+	struct redirfs_data *data;
 	int rv;
 
 	if (rfs_root_flt_num(rroot, rflt, REDIRFS_PATH_EXCLUDE) > 1)
@@ -246,9 +256,12 @@ int rfs_root_rem_exclude(struct rfs_root *rroot, struct rfs_flt *rflt)
 		return rv;
 	}
 
+	spin_lock(&rroot->lock);
 	rfs_chain_put(rroot->rexch);
 	rroot->rexch = rexch;
-
+	spin_unlock(&rroot->lock);
+	data = redirfs_detach_data_root(rflt, rroot);
+	redirfs_put_data(data);
 	return 0;
 }
 
@@ -289,8 +302,7 @@ int rfs_root_add_flt(struct rfs_root *rroot, void *data)
 	if (rv)
 		goto exit;
 
-	rfs_info_put(rroot->rinfo);
-	rroot->rinfo = rfs_info_get(rinfo);
+	rfs_root_set_rinfo(rroot, rinfo);
 exit:
 	rfs_dcache_data_free(rdata);
 	rfs_chain_put(rchain);
@@ -335,8 +347,7 @@ int rfs_root_rem_flt(struct rfs_root *rroot, void *data)
 	if (rv)
 		goto exit;
 
-	rfs_info_put(rroot->rinfo);
-	rroot->rinfo = rfs_info_get(rinfo);
+	rfs_root_set_rinfo(rroot, rinfo);
 exit:
 	rfs_dcache_data_free(rdata);
 	rfs_chain_put(rchain);
@@ -390,26 +401,23 @@ error:
 
 redirfs_root redirfs_get_root_file(redirfs_filter filter, struct file *file)
 {
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
 	struct rfs_file *rfile;
 	struct rfs_info *rinfo;
-	redirfs_root root= ERR_PTR(-ENODATA);
+	redirfs_root root = NULL;
 
 	if (!filter || !file)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	rfile = rfs_file_find(file);
 	if (!rfile)
-		return ERR_PTR(-ENODATA);
+		return NULL;
 
 	rinfo = rfs_dentry_get_rinfo(rfile->rdentry);
 
-	if (rfs_chain_find(rinfo->rchain, rflt) == -1)
+	if (rfs_chain_find(rinfo->rchain, filter) == -1)
 		goto exit;
 
-	root = (redirfs_root)rfs_root_get(rinfo->rroot);
-	if (!root)
-		root = ERR_PTR(-ENODATA);
+	root = rfs_root_get(rinfo->rroot);
 exit:
 	rfs_info_put(rinfo);
 	rfs_file_put(rfile);
@@ -419,26 +427,23 @@ exit:
 redirfs_root redirfs_get_root_dentry(redirfs_filter filter,
 		struct dentry *dentry)
 {
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
 	struct rfs_dentry *rdentry;
 	struct rfs_info *rinfo;
-	redirfs_root root= ERR_PTR(-ENODATA);
+	redirfs_root root = NULL;
 
 	if (!filter || !dentry)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	rdentry = rfs_dentry_find(dentry);
 	if (!rdentry)
-		return ERR_PTR(-ENODATA);
+		return NULL;
 
 	rinfo = rfs_dentry_get_rinfo(rdentry);
 
-	if (rfs_chain_find(rinfo->rchain, rflt) == -1)
+	if (rfs_chain_find(rinfo->rchain, filter) == -1)
 		goto exit;
 
-	root = (redirfs_root)rfs_root_get(rinfo->rroot);
-	if (!root)
-		root = ERR_PTR(-ENODATA);
+	root = rfs_root_get(rinfo->rroot);
 exit:
 	rfs_info_put(rinfo);
 	rfs_dentry_put(rdentry);
@@ -447,41 +452,59 @@ exit:
 
 redirfs_root redirfs_get_root_inode(redirfs_filter filter, struct inode *inode)
 {
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
 	struct rfs_inode *rinode;
 	struct rfs_info *rinfo;
-	redirfs_root root= ERR_PTR(-ENODATA);
+	redirfs_root root = NULL;
 
 	if (!filter || !inode)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	rinode = rfs_inode_find(inode);
 	if (!rinode)
-		return ERR_PTR(-ENODATA);
+		return NULL;
 
 	rinfo = rfs_inode_get_rinfo(rinode);
 
-	if (rfs_chain_find(rinfo->rchain, rflt) == -1)
+	if (rfs_chain_find(rinfo->rchain, filter) == -1)
 		goto exit;
 
-	root = (redirfs_root)rfs_root_get(rinfo->rroot);
-	if (!root)
-		root = ERR_PTR(-ENODATA);
+	root = rfs_root_get(rinfo->rroot);
 exit:
 	rfs_info_put(rinfo);
 	rfs_inode_put(rinode);
 	return root;
 }
 
+redirfs_root redirfs_get_root_path(redirfs_path path)
+{
+	struct rfs_path *rpath = path;
+
+	if (!path)
+		return NULL;
+
+	return rfs_root_get(rpath->rroot);
+}
+
+redirfs_root redirfs_get_root(redirfs_root root)
+{
+	return rfs_root_get(root);
+}
+
 void redirfs_put_root(redirfs_root root)
 {
-	struct rfs_root *rroot = (struct rfs_root *)root;
+	rfs_root_put(root);
+}
 
-	rfs_root_put(rroot);
+void rfs_root_set_rinfo(struct rfs_root *rroot, struct rfs_info *rinfo)
+{
+	rfs_info_put(rroot->rinfo);
+	rroot->rinfo = rfs_info_get(rinfo);
 }
 
 EXPORT_SYMBOL(redirfs_get_root_file);
 EXPORT_SYMBOL(redirfs_get_root_dentry);
 EXPORT_SYMBOL(redirfs_get_root_inode);
+EXPORT_SYMBOL(redirfs_get_root_path);
+EXPORT_SYMBOL(redirfs_get_root);
 EXPORT_SYMBOL(redirfs_put_root);
 

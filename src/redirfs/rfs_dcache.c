@@ -370,16 +370,15 @@ int rfs_dcache_rem(struct dentry *dentry, void *data)
 		return 1;
 	}
 
-	if (!rdata->rinfo->rchain) {
-		rv = rfs_dcache_rdentry_del(dentry, rfs_info_none);
-		if (rv)
-			return rv;
+	if (rdata->rinfo->rchain)
+		return rfs_dcache_rdentry_add(dentry, rdata->rinfo);
 
-		rfs_dentry_rem_data(dentry, rdata->rflt);
-		return 0;
-	}
+	rv = rfs_dcache_rdentry_del(dentry, rfs_info_none);
+	if (rv)
+		return rv;
 
-	return rfs_dcache_rdentry_add(dentry, rdata->rinfo);
+	rfs_dentry_rem_data(dentry, rdata->rflt);
+	return 0;
 }
 
 int rfs_dcache_set(struct dentry *dentry, void *data)

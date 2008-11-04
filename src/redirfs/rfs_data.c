@@ -43,7 +43,7 @@ int redirfs_init_data(struct redirfs_data *data, redirfs_filter filter,
 	INIT_LIST_HEAD(&data->list);
 	atomic_set(&data->cnt, 1);
 	data->cb = cb;
-	data->filter = (redirfs_filter)rfs_flt_get((struct rfs_flt *)filter);
+	data->filter = rfs_flt_get(filter);
 
 	return 0;
 }
@@ -90,24 +90,21 @@ static struct redirfs_data *rfs_find_data(struct list_head *head,
 struct redirfs_data *redirfs_attach_data_file(redirfs_filter filter,
 		struct file *file, struct redirfs_data *data)
 {
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
 	struct rfs_file *rfile;
-	struct redirfs_data *rv;
+	struct redirfs_data *rv = NULL;
 
 	if (!filter || !file || !data)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	rfile = rfs_file_find(file);
 	if (!rfile)
-		return ERR_PTR(-ENODATA);
+		return NULL;
 
 	spin_lock(&rfile->rdentry->lock);
 	spin_lock(&rfile->lock);
 
-	if (rfs_chain_find(rfile->rdentry->rinfo->rchain, rflt) == -1) {
-		rv = ERR_PTR(-ENODATA);
+	if (rfs_chain_find(rfile->rdentry->rinfo->rchain, filter) == -1)
 		goto exit;
-	}
 
 	rv = rfs_find_data(&rfile->data, filter);
 	if (rv)
@@ -130,22 +127,18 @@ struct redirfs_data *redirfs_detach_data_file(redirfs_filter filter,
 	struct redirfs_data *data;
 
 	if (!filter || !file)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	rfile = rfs_file_find(file);
 	if (!rfile)
-		return ERR_PTR(-ENODATA);
+		return NULL;
 
 	spin_lock(&rfile->lock);
 
 	data = rfs_find_data(&rfile->data, filter);
-	if (!data) {
-		spin_unlock(&rfile->lock);
-		rfs_file_put(rfile);
-		return ERR_PTR(-ENODATA);
-	}
+	if (data)
+		list_del(&data->list);
 
-	list_del(&data->list);
 	spin_unlock(&rfile->lock);
 	rfs_file_put(rfile);
 	return data;
@@ -158,20 +151,15 @@ struct redirfs_data *redirfs_get_data_file(redirfs_filter filter,
 	struct redirfs_data *data;
 
 	if (!filter || !file)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	rfile = rfs_file_find(file);
 	if (!rfile)
-		return ERR_PTR(-ENODATA);
+		return NULL;
 
 	spin_lock(&rfile->lock);
 
 	data = rfs_find_data(&rfile->data, filter);
-	if (!data) {
-		spin_unlock(&rfile->lock);
-		rfs_file_put(rfile);
-		return ERR_PTR(-ENODATA);
-	}
 
 	redirfs_get_data(data);
 	spin_unlock(&rfile->lock);
@@ -182,23 +170,20 @@ struct redirfs_data *redirfs_get_data_file(redirfs_filter filter,
 struct redirfs_data *redirfs_attach_data_dentry(redirfs_filter filter,
 		struct dentry *dentry, struct redirfs_data *data)
 {
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
 	struct rfs_dentry *rdentry;
-	struct redirfs_data *rv;
+	struct redirfs_data *rv = NULL;
 
 	if (!filter || !dentry || !data)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	rdentry = rfs_dentry_find(dentry);
 	if (!rdentry)
-		return ERR_PTR(-ENODATA);
+		return NULL;
 
 	spin_lock(&rdentry->lock);
 
-	if (rfs_chain_find(rdentry->rinfo->rchain, rflt) == -1) {
-		rv = ERR_PTR(-ENODATA);
+	if (rfs_chain_find(rdentry->rinfo->rchain, filter) == -1)
 		goto exit;
-	}
 
 	rv = rfs_find_data(&rdentry->data, filter);
 	if (rv)
@@ -220,22 +205,18 @@ struct redirfs_data *redirfs_detach_data_dentry(redirfs_filter filter,
 	struct redirfs_data *data;
 
 	if (!filter || !dentry)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	rdentry = rfs_dentry_find(dentry);
 	if (!rdentry)
-		return ERR_PTR(-ENODATA);
+		return NULL;
 
 	spin_lock(&rdentry->lock);
 
 	data = rfs_find_data(&rdentry->data, filter);
-	if (!data) {
-		spin_unlock(&rdentry->lock);
-		rfs_dentry_put(rdentry);
-		return ERR_PTR(-ENODATA);
-	}
+	if (data)
+		list_del(&data->list);
 
-	list_del(&data->list);
 	spin_unlock(&rdentry->lock);
 	rfs_dentry_put(rdentry);
 	return data;
@@ -248,20 +229,15 @@ struct redirfs_data *redirfs_get_data_dentry(redirfs_filter filter,
 	struct redirfs_data *data;
 
 	if (!filter || !dentry)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	rdentry = rfs_dentry_find(dentry);
 	if (!rdentry)
-		return ERR_PTR(-ENODATA);
+		return NULL;
 
 	spin_lock(&rdentry->lock);
 
 	data = rfs_find_data(&rdentry->data, filter);
-	if (!data) {
-		spin_unlock(&rdentry->lock);
-		rfs_dentry_put(rdentry);
-		return ERR_PTR(-ENODATA);
-	}
 
 	redirfs_get_data(data);
 	spin_unlock(&rdentry->lock);
@@ -272,23 +248,20 @@ struct redirfs_data *redirfs_get_data_dentry(redirfs_filter filter,
 struct redirfs_data *redirfs_attach_data_inode(redirfs_filter filter,
 		struct inode *inode, struct redirfs_data *data)
 {
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
 	struct rfs_inode *rinode;
-	struct redirfs_data *rv;
+	struct redirfs_data *rv = NULL;
 
 	if (!filter || !inode || !data)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	rinode = rfs_inode_find(inode);
 	if (!rinode)
-		return ERR_PTR(-ENODATA);
+		return NULL;
 
 	spin_lock(&rinode->lock);
 
-	if (rfs_chain_find(rinode->rinfo->rchain, rflt) == -1) {
-		rv = ERR_PTR(-ENODATA);
+	if (rfs_chain_find(rinode->rinfo->rchain, filter) == -1)
 		goto exit;
-	}
 
 	rv = rfs_find_data(&rinode->data, filter);
 	if (rv)
@@ -310,22 +283,18 @@ struct redirfs_data *redirfs_detach_data_inode(redirfs_filter filter,
 	struct redirfs_data *data;
 
 	if (!filter || !inode)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	rinode = rfs_inode_find(inode);
 	if (!rinode)
-		return ERR_PTR(-ENODATA);
+		return NULL;
 
 	spin_lock(&rinode->lock);
 
 	data = rfs_find_data(&rinode->data, filter);
-	if (!data) {
-		spin_unlock(&rinode->lock);
-		rfs_inode_put(rinode);
-		return ERR_PTR(-ENODATA);
-	}
+	if (data)
+		list_del(&data->list);
 
-	list_del(&data->list);
 	spin_unlock(&rinode->lock);
 	rfs_inode_put(rinode);
 	return data;
@@ -338,20 +307,15 @@ struct redirfs_data *redirfs_get_data_inode(redirfs_filter filter,
 	struct redirfs_data *data;
 
 	if (!filter || !inode)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	rinode = rfs_inode_find(inode);
 	if (!rinode)
-		return ERR_PTR(-ENODATA);
+		return NULL;
 
 	spin_lock(&rinode->lock);
 
 	data = rfs_find_data(&rinode->data, filter);
-	if (!data) {
-		spin_unlock(&rinode->lock);
-		rfs_inode_put(rinode);
-		return ERR_PTR(-ENODATA);
-	}
 
 	redirfs_get_data(data);
 	spin_unlock(&rinode->lock);
@@ -378,7 +342,7 @@ struct redirfs_data *redirfs_attach_data_context(redirfs_filter filter,
 	struct redirfs_data *rv;
 
 	if (!filter || !context || !data)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	rv = rfs_find_data(&rcont->data, filter);
 	if (rv)
@@ -397,13 +361,12 @@ struct redirfs_data *redirfs_detach_data_context(redirfs_filter filter,
 	struct redirfs_data *data;
 
 	if (!filter || !context)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	data = rfs_find_data(&rcont->data, filter);
-	if (!data)
-		return ERR_PTR(-ENODATA);
+	if (data)
+		list_del(&data->list);
 
-	list_del(&data->list);
 	return data;
 }
 
@@ -414,13 +377,11 @@ struct redirfs_data *redirfs_get_data_context(redirfs_filter filter,
 	struct redirfs_data *data;
 
 	if (!filter || !context)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	data = rfs_find_data(&rcont->data, filter);
-	if (!data)
-		return ERR_PTR(-ENODATA);
-
 	redirfs_get_data(data);
+
 	return data;
 }
 
@@ -428,12 +389,22 @@ struct redirfs_data *redirfs_attach_data_root(redirfs_filter filter,
 		redirfs_root root, struct redirfs_data *data)
 {
 	struct rfs_root *rroot = (struct rfs_root *)root;
-	struct redirfs_data *rv;
+	struct redirfs_data *rv = NULL;
+	int found = 0;
 
 	if (!filter || !root || !data)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	spin_lock(&rroot->lock);
+
+	if (rfs_chain_find(rroot->rinch, filter) != -1)
+		found = 1;
+
+	else if (rfs_chain_find(rroot->rexch, filter) != -1)
+		found = 1;
+
+	if (!found)
+		goto exit;
 
 	rv = rfs_find_data(&rroot->data, filter);
 	if (rv)
@@ -454,17 +425,13 @@ struct redirfs_data *redirfs_detach_data_root(redirfs_filter filter,
 	struct redirfs_data *data;
 
 	if (!filter || !root)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	spin_lock(&rroot->lock);
 
 	data = rfs_find_data(&rroot->data, filter);
-	if (!data) {
-		spin_unlock(&rroot->lock);
-		return ERR_PTR(-ENODATA);
-	}
-
-	list_del(&data->list);
+	if (data)
+		list_del(&data->list);
 
 	spin_unlock(&rroot->lock);
 
@@ -478,16 +445,11 @@ struct redirfs_data *redirfs_get_data_root(redirfs_filter filter,
 	struct redirfs_data *data;
 
 	if (!filter || !root)
-		return ERR_PTR(-EINVAL);
+		return NULL;
 
 	spin_lock(&rroot->lock);
 
 	data = rfs_find_data(&rroot->data, filter);
-	if (!data) {
-		spin_unlock(&rroot->lock);
-		return ERR_PTR(-ENODATA);
-	}
-
 	redirfs_get_data(data);
 
 	spin_unlock(&rroot->lock);

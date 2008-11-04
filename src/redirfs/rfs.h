@@ -159,6 +159,7 @@ int rfs_root_add_flt(struct rfs_root *rroot, void *data);
 int rfs_root_rem_flt(struct rfs_root *rroot, void *data);
 int rfs_root_walk(int (*cb)(struct rfs_root*, void *), void *data);
 void rfs_root_add_walk(struct dentry *dentry);
+void rfs_root_set_rinfo(struct rfs_root *rroot, struct rfs_info *rinfo);
 
 struct rfs_ops {
 	char *arr;

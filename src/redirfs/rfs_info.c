@@ -127,13 +127,8 @@ static int rfs_info_rdentry_add(struct rfs_info *rinfo)
 	if (IS_ERR(rdentry))
 		return PTR_ERR(rdentry);
 
-	spin_lock(&rdentry->lock);
-	rfs_info_put(rdentry->rinfo);
-	rdentry->rinfo = rfs_info_get(rinfo);
-	spin_unlock(&rdentry->lock);
-
+	rfs_dentry_set_rinfo(rdentry, rinfo);
 	rfs_dentry_put(rdentry);
-
 	return 0;
 }
 
@@ -243,8 +238,7 @@ int rfs_info_add_include(struct rfs_root *rroot, struct rfs_flt *rflt)
 	if (rv)
 		goto exit;
 
-	rfs_info_put(rroot->rinfo);
-	rroot->rinfo = rfs_info_get(rinfo);
+	rfs_root_set_rinfo(rroot, rinfo);
 exit:
 	rfs_info_put(rinfo_old);
 	rfs_info_put(rinfo);
@@ -291,8 +285,7 @@ int rfs_info_add_exclude(struct rfs_root *rroot, struct rfs_flt *rflt)
 	if (rv)
 		goto exit;
 
-	rfs_info_put(rroot->rinfo);
-	rroot->rinfo = rfs_info_get(rinfo);
+	rfs_root_set_rinfo(rroot, rinfo);
 exit:
 	rfs_info_put(rinfo);
 	rfs_info_put(rinfo_old);
@@ -327,8 +320,7 @@ int rfs_info_rem_include(struct rfs_root *rroot, struct rfs_flt *rflt)
 		else
 			rv = rfs_info_rem(rroot->dentry, rinfo, rflt);
 
-		rfs_info_put(rroot->rinfo);
-		rroot->rinfo = NULL;
+		rfs_root_set_rinfo(rroot, NULL);
 		goto exit;
 	}
 
@@ -343,8 +335,7 @@ int rfs_info_rem_include(struct rfs_root *rroot, struct rfs_flt *rflt)
 	if (rv)
 		goto exit;
 
-	rfs_info_put(rroot->rinfo);
-	rroot->rinfo = rfs_info_get(rinfo);
+	rfs_root_set_rinfo(rroot, rinfo);
 exit:
 	rfs_info_put(prinfo);
 	rfs_info_put(rinfo);
@@ -369,8 +360,7 @@ int rfs_info_rem_exclude(struct rfs_root *rroot, struct rfs_flt *rflt)
 		else  
 			rfs_info_rdentry_rem(rroot->dentry);
 
-		rfs_info_put(rroot->rinfo);
-		rroot->rinfo = NULL;
+		rfs_root_set_rinfo(rroot, NULL);
 		goto exit;
 	}
 
@@ -393,8 +383,7 @@ int rfs_info_rem_exclude(struct rfs_root *rroot, struct rfs_flt *rflt)
 	if (rv)
 		goto exit;
 
-	rfs_info_put(rroot->rinfo);
-	rroot->rinfo = rfs_info_get(rinfo);
+	rfs_root_set_rinfo(rroot, rinfo);
 exit:
 	rfs_info_put(prinfo);
 	rfs_info_put(rinfo);
