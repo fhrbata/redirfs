@@ -49,8 +49,7 @@ struct rfs_flt *rfs_flt_alloc(struct redirfs_filter_info *flt_info)
 	rflt->name = name;
 	rflt->priority = flt_info->priority;
 	rflt->owner = flt_info->owner;
-	rflt->ctl_cb = flt_info->ctl_cb;
-	rflt->ctl_id = flt_info->ctl_id;
+	rflt->ops = flt_info->ops;
 	spin_lock_init(&rflt->lock);
 	try_module_get(rflt->owner);
 

@@ -100,8 +100,7 @@ struct rfs_flt {
 	int paths_nr;
 	spinlock_t lock;
 	atomic_t active;
-	int (*ctl_cb)(struct redirfs_ctl *ctl);
-	int ctl_id;
+	struct redirfs_operations *ops;
 };
 
 void rfs_flt_put(struct rfs_flt *rflt);

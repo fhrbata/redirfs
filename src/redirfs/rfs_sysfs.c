@@ -53,7 +53,7 @@ static ssize_t rfs_flt_show(struct kobject *kobj, struct attribute *attr,
 	if (IS_ERR(rflt))
 		return PTR_ERR(rflt);
 
-	rv = rattr->show((redirfs_filter)rflt, rattr, buf);
+	rv = rattr->show(rflt, rattr, buf);
 
 	rfs_flt_put(rflt);
 
@@ -68,13 +68,13 @@ static ssize_t rfs_flt_store(struct kobject *kobj, struct attribute *attr,
 	ssize_t rv;
 
 	if (strcmp(attr->name, "unregister") == 0)
-		return rattr->store((redirfs_filter)rflt, rattr, buf, count);
+		return rattr->store(rflt, rattr, buf, count);
 
 	rflt = rfs_sysfs_flt_get(rflt);
 	if (IS_ERR(rflt))
 		return PTR_ERR(rflt);
 
-	rv = rattr->store((redirfs_filter)rflt, rattr, buf, count);
+	rv = rattr->store(rflt, rattr, buf, count);
 
 	rfs_flt_put(rflt);
 
@@ -84,7 +84,7 @@ static ssize_t rfs_flt_store(struct kobject *kobj, struct attribute *attr,
 static ssize_t rfs_flt_priority_show(redirfs_filter filter,
 		struct redirfs_filter_attribute *attr, char *buf)
 {
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
+	struct rfs_flt *rflt = filter;
 
 	return snprintf(buf, PAGE_SIZE, "%d", rflt->priority);
 }
@@ -92,7 +92,7 @@ static ssize_t rfs_flt_priority_show(redirfs_filter filter,
 static ssize_t rfs_flt_active_show(redirfs_filter filter,
 		struct redirfs_filter_attribute *attr, char *buf)
 {
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
+	struct rfs_flt *rflt = filter;
 
 	return snprintf(buf, PAGE_SIZE, "%d",
 			atomic_read(&rflt->active));
@@ -102,8 +102,7 @@ static ssize_t rfs_flt_active_store(redirfs_filter filter,
 		struct redirfs_filter_attribute *attr, const char *buf,
 		size_t count)
 {
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
-	struct redirfs_ctl rctl;
+	struct rfs_flt *rflt = filter;
 	int act;
 	int rv;
 
@@ -111,18 +110,15 @@ static ssize_t rfs_flt_active_store(redirfs_filter filter,
 		return -EINVAL;
 
 	if (act) {
-		if (rflt->ctl_cb && (rflt->ctl_id & REDIRFS_CTL_ACTIVATE)) {
-			rctl.id = REDIRFS_CTL_ACTIVATE;
-			rv = rflt->ctl_cb(&rctl);
-
-		} else
+		if (rflt->ops && rflt->ops->activate)
+			rv = rflt->ops->activate();
+		else
 			rv = redirfs_activate_filter(filter);
 
 	} else {
-		if (rflt->ctl_cb && (rflt->ctl_id & REDIRFS_CTL_DEACTIVATE)) {
-			rctl.id = REDIRFS_CTL_DEACTIVATE;
-			rv = rflt->ctl_cb(&rctl);
-		} else
+		if (rflt->ops && rflt->ops->deactivate)
+			rv = rflt->ops->deactivate();
+		else
 			rv = redirfs_deactivate_filter(filter);
 	}
 
@@ -135,7 +131,7 @@ static ssize_t rfs_flt_active_store(redirfs_filter filter,
 static ssize_t rfs_flt_paths_show(redirfs_filter filter,
 		struct redirfs_filter_attribute *attr, char *buf)
 {
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
+	struct rfs_flt *rflt = filter;
 	
 	return rfs_path_get_info(rflt, buf, PAGE_SIZE);
 }
@@ -143,8 +139,7 @@ static ssize_t rfs_flt_paths_show(redirfs_filter filter,
 static int rfs_flt_paths_add(redirfs_filter filter, const char *buf,
 		size_t count)
 {
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
-	struct redirfs_ctl rctl;
+	struct rfs_flt *rflt = filter;
 	struct redirfs_path_info info;
 	struct nameidata nd;
 	char *path;
@@ -160,8 +155,6 @@ static int rfs_flt_paths_add(redirfs_filter filter, const char *buf,
 		return -EINVAL;
 	}
 
-	rctl.data.path_info = &info;
-	rctl.id = REDIRFS_CTL_SET_PATH;
 	info.flags = REDIRFS_PATH_ADD;
 
 	if (type == 'i')
@@ -184,8 +177,8 @@ static int rfs_flt_paths_add(redirfs_filter filter, const char *buf,
 	info.dentry = nd.path.dentry;
 	info.mnt = nd.path.mnt;
 
-	if (rflt->ctl_cb && (rflt->ctl_id & REDIRFS_CTL_SET_PATH))
-		rv = rflt->ctl_cb(&rctl);
+	if (rflt->ops && rflt->ops->set_path)
+		rv = rflt->ops->set_path(&info);
 	else
 		rv = redirfs_set_path(filter, &info);
 
@@ -198,8 +191,7 @@ static int rfs_flt_paths_add(redirfs_filter filter, const char *buf,
 static int rfs_flt_paths_rem(redirfs_filter filter, const char *buf,
 		size_t count)
 {
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
-	struct redirfs_ctl rctl;
+	struct rfs_flt *rflt = filter;
 	struct rfs_path *rpath;
 	struct redirfs_path_info *info;
 	int id;
@@ -207,8 +199,6 @@ static int rfs_flt_paths_rem(redirfs_filter filter, const char *buf,
 
 	if (sscanf(buf, "r:%d", &id) != 1)
 		return -EINVAL;
-
-	rctl.id = REDIRFS_CTL_SET_PATH;
 
 	mutex_lock(&rfs_path_mutex);
 	rpath = rfs_path_find_id(id);
@@ -218,18 +208,16 @@ static int rfs_flt_paths_rem(redirfs_filter filter, const char *buf,
 	}
 	mutex_unlock(&rfs_path_mutex);
 	
-	info = redirfs_get_path_info(filter, (redirfs_path)rpath);
-	rctl.data.path_info = info;
-
+	info = redirfs_get_path_info(filter, rpath);
 	if (IS_ERR(info)) {
 		rfs_path_put(rpath);
 		return PTR_ERR(info);
 	}
 
-	rctl.data.path_info->flags |= REDIRFS_PATH_REM;
+	info->flags |= REDIRFS_PATH_REM;
 
-	if (rflt->ctl_cb && (rflt->ctl_id & REDIRFS_CTL_SET_PATH))
-		rv = rflt->ctl_cb(&rctl);
+	if (rflt->ops && rflt->ops->set_path)
+		rv = rflt->ops->set_path(info);
 	else
 		rv = redirfs_set_path(filter, info);
 
@@ -242,8 +230,7 @@ static int rfs_flt_paths_rem(redirfs_filter filter, const char *buf,
 static int rfs_flt_paths_clean(redirfs_filter filter, const char *buf,
 		size_t count)
 {
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
-	struct redirfs_ctl rctl;
+	struct rfs_flt *rflt = filter;
 	char clean;
 	int rv;
 
@@ -253,10 +240,8 @@ static int rfs_flt_paths_clean(redirfs_filter filter, const char *buf,
 	if (clean != 'c')
 		return -EINVAL;
 
-	rctl.id = REDIRFS_CTL_REMOVE_PATHS;
-	
-	if (rflt->ctl_cb && (rflt->ctl_id & REDIRFS_CTL_REMOVE_PATHS))
-		rv = rflt->ctl_cb(&rctl);
+	if (rflt->ops && rflt->ops->remove_paths)
+		rv = rflt->ops->remove_paths();
 	else
 		rv = redirfs_rem_paths(filter);
 
@@ -294,8 +279,7 @@ static ssize_t rfs_flt_unregister_store(redirfs_filter filter,
 		struct redirfs_filter_attribute *attr, const char *buf,
 		size_t count)
 {
-	struct rfs_flt *rflt = (struct rfs_flt *)filter;
-	struct redirfs_ctl rctl;
+	struct rfs_flt *rflt = filter;
 	int unreg;
 	int rv;
 
@@ -305,10 +289,8 @@ static ssize_t rfs_flt_unregister_store(redirfs_filter filter,
 	if (unreg != 1)
 		return -EINVAL;
 
-	rctl.id = REDIRFS_CTL_UNREGISTER;
-
-	if (rflt->ctl_cb && (rflt->ctl_id & REDIRFS_CTL_UNREGISTER))
-		rv = rflt->ctl_cb(&rctl);
+	if (rflt->ops && rflt->ops->unregister)
+		rv = rflt->ops->unregister();
 	else
 		rv = redirfs_unregister_filter(filter);
 

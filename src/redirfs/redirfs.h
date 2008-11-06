@@ -41,12 +41,6 @@
 #define REDIRFS_PATH_INCLUDE		4
 #define REDIRFS_PATH_EXCLUDE		8
 
-#define REDIRFS_CTL_ACTIVATE		1
-#define REDIRFS_CTL_DEACTIVATE		2
-#define REDIRFS_CTL_SET_PATH		4
-#define REDIRFS_CTL_UNREGISTER		8
-#define REDIRFS_CTL_REMOVE_PATHS	16
-
 #define REDIRFS_FILTER_ATTRIBUTE(__name, __mode, __show, __store) \
 	__ATTR(__name, __mode, __show, __store)
 
@@ -567,13 +561,12 @@ struct redirfs_op_info {
 	enum redirfs_rv (*post_cb)(redirfs_context, struct redirfs_args *);
 };
 
-union redirfs_ctl_data {
-	struct redirfs_path_info *path_info;
-};
-
-struct redirfs_ctl {
-	int id;
-	union redirfs_ctl_data data;
+struct redirfs_operations {
+	 int (*activate)(void);
+	 int (*deactivate)(void);
+	 int (*set_path)(struct redirfs_path_info *);
+	 int (*unregister)(void);
+	 int (*remove_paths)(void);
 };
 
 struct redirfs_filter_info {
@@ -581,8 +574,7 @@ struct redirfs_filter_info {
 	const char *name;
 	int priority;
 	int active;
-	int ctl_id;
-	int (*ctl_cb)(struct redirfs_ctl *ctl);
+	struct redirfs_operations *ops;
 };
 
 struct redirfs_filter_attribute {
