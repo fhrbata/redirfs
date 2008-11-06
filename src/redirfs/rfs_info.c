@@ -186,7 +186,23 @@ int rfs_info_rem(struct dentry *dentry, struct rfs_info *rinfo,
 	return rv;
 }
 
-int rfs_info_set(struct dentry *dentry, struct rfs_info *rinfo)
+int rfs_info_set(struct dentry *dentry, struct rfs_info *rinfo,
+		struct rfs_flt *rflt)
+{
+	struct rfs_dcache_data *rdata = NULL;
+	int rv = 0;
+
+	rdata = rfs_dcache_data_alloc(dentry, rinfo, rflt);
+	if (IS_ERR(rdata))
+		return PTR_ERR(rdata);
+
+	rv = rfs_dcache_walk(dentry, rfs_dcache_set, rdata);
+	rfs_dcache_data_free(rdata);
+
+	return rv;
+}
+
+int rfs_info_reset(struct dentry *dentry, struct rfs_info *rinfo)
 {
 	struct rfs_dcache_data *rdata = NULL;
 	int rv = 0;
@@ -232,7 +248,7 @@ int rfs_info_add_include(struct rfs_root *rroot, struct rfs_flt *rflt)
 	}
 
 	if (rinfo_old && rfs_chain_find(rinfo_old->rchain, rflt) != -1)
-		rv = rfs_info_set(rroot->dentry, rinfo);
+		rv = rfs_info_set(rroot->dentry, rinfo, rflt);
 	else
 		rv = rfs_info_add(rroot->dentry, rinfo, rflt);
 	if (rv)
@@ -276,7 +292,7 @@ int rfs_info_add_exclude(struct rfs_root *rroot, struct rfs_flt *rflt)
 
 	if (rinfo_old) {
 		if (rfs_chain_find(rinfo_old->rchain, rflt) == -1)
-			rv = rfs_info_set(rroot->dentry, rinfo);
+			rv = rfs_info_set(rroot->dentry, rinfo, rflt);
 		else
 			rv = rfs_info_rem(rroot->dentry, rinfo, rflt);
 	} else
@@ -314,7 +330,7 @@ int rfs_info_rem_include(struct rfs_root *rroot, struct rfs_flt *rflt)
 
 	if (rroot->rinch->rflts_nr == 1 && !rroot->rexch) {
 		if (prinfo && rfs_chain_find(prinfo->rchain, rflt) != -1)
-			rv = rfs_info_set(rroot->dentry, prinfo);
+			rv = rfs_info_set(rroot->dentry, prinfo, rflt);
 		else if (prinfo && prinfo->rchain)
 			rv = rfs_info_rem(rroot->dentry, prinfo, rflt);
 		else
@@ -356,7 +372,7 @@ int rfs_info_rem_exclude(struct rfs_root *rroot, struct rfs_flt *rflt)
 		if (prinfo && rfs_chain_find(prinfo->rchain, rflt) != -1)
 			rv = rfs_info_add(rroot->dentry, prinfo, rflt);
 		else if (prinfo && prinfo->rchain)
-			rv = rfs_info_set(rroot->dentry, prinfo);
+			rv = rfs_info_set(rroot->dentry, prinfo, rflt);
 		else  
 			rfs_info_rdentry_rem(rroot->dentry);
 

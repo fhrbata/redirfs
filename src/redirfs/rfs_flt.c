@@ -193,7 +193,7 @@ static int rfs_flt_set_ops(struct rfs_flt *rflt)
 		if (IS_ERR(rinfo))
 			return PTR_ERR(rinfo);
 
-		rv = rfs_info_set(rroot->dentry, rinfo);
+		rv = rfs_info_reset(rroot->dentry, rinfo);
 		if (rv) {
 			rfs_info_put(rinfo);
 			return rv;

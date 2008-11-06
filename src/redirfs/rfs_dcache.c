@@ -394,3 +394,16 @@ int rfs_dcache_set(struct dentry *dentry, void *data)
 	return rfs_dcache_rdentry_add(dentry, rdata->rinfo);
 }
 
+int rfs_dcache_reset(struct dentry *dentry, void *data)
+{
+	struct rfs_dcache_data *rdata = (struct rfs_dcache_data *)data;
+
+	if (rfs_dcache_skip(dentry, rdata))
+		return 1;
+
+	if (!rdata->rinfo->rchain)
+		return rfs_dcache_rdentry_del(dentry, rfs_info_none);
+
+	return rfs_dcache_rdentry_add(dentry, rdata->rinfo);
+}
+

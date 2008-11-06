@@ -784,7 +784,7 @@ static int rfs_fsrename_add_dentry(struct rfs_root *rroot,
 	int i;
 
 	if (!rchain)
-		return rfs_info_set(dentry, rroot->rinfo);
+		return 0;
 
 	rdentry = rfs_dentry_find(dentry);
 	if (rdentry)
@@ -811,7 +811,7 @@ static int rfs_fsrename_add_dentry(struct rfs_root *rroot,
 			goto exit;
 	}
 
-	rv = rfs_info_set(dentry, rroot->rinfo);
+	rv = rfs_info_reset(dentry, rroot->rinfo);
 exit:
 	rfs_dentry_put(rdentry);
 	rfs_chain_put(rchadd);
@@ -845,6 +845,49 @@ static int rfs_fsrename_add(struct rfs_root *rroot_src,
 	return rv;
 }
 
+static int rfs_fsrename_set(struct rfs_root *rroot_src,
+		struct rfs_root *rroot_dst, struct dentry *dentry)
+{
+	struct rfs_dentry *rdentry;
+	struct rfs_chain *rchain_src;
+	struct rfs_chain *rchain_dst;
+	struct rfs_info *rinfo;
+	int rv = 0;
+	int i;
+
+	if (!rroot_src || rroot_dst)
+		return 0;
+
+	if (rroot_src->dentry == dentry) 
+		return 0;
+
+	rdentry = rfs_dentry_find(dentry);
+	if (!rdentry)
+		return 0;
+
+	rchain_src = rdentry->rinfo->rchain;
+	rchain_dst = rroot_dst->rinfo->rchain;
+
+	for (i = 0; i < rchain_src->rflts_nr; i++) {
+		if (rfs_chain_find(rchain_dst, rchain_src->rflts[i]) == -1)
+			continue;
+
+		rinfo = rfs_info_alloc(rroot_dst, rchain_src);
+		if (IS_ERR(rinfo)) {
+			rv = PTR_ERR(rinfo);
+			goto exit;
+		}
+
+		rv = rfs_info_set(dentry, rinfo, rchain_src->rflts[i]);
+		rfs_info_put(rinfo);
+		if (rv)
+			goto exit;
+	}
+exit:
+	rfs_dentry_put(rdentry);
+	return rv;
+}
+
 int rfs_fsrename(struct inode *old_dir, struct dentry *old_dentry,
 		struct inode *new_dir, struct dentry *new_dentry)
 {
@@ -872,6 +915,10 @@ int rfs_fsrename(struct inode *old_dir, struct dentry *old_dentry,
 		goto exit;
 
 	rv = rfs_fsrename_rem(rroot_src, rroot_dst, old_dentry);
+	if (rv)
+		goto exit;
+
+	rv = rfs_fsrename_set(rroot_src, rroot_dst, old_dentry);
 	if (rv)
 		goto exit;
 

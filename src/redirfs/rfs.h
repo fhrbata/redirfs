@@ -211,7 +211,9 @@ int rfs_info_add(struct dentry *dentry, struct rfs_info *rinfo,
 		struct rfs_flt *rflt);
 int rfs_info_rem(struct dentry *dentry, struct rfs_info *rinfo,
 		struct rfs_flt *rflt);
-int rfs_info_set(struct dentry *dentry, struct rfs_info *rinfo);
+int rfs_info_set(struct dentry *dentry, struct rfs_info *rinfo,
+		struct rfs_flt *rflt);
+int rfs_info_reset(struct dentry *dentry, struct rfs_info *rinfo);
 
 struct rfs_dentry {
 	struct list_head rinode_list;
@@ -332,6 +334,7 @@ int rfs_dcache_add_dir(struct dentry *dentry, void *data);
 int rfs_dcache_add(struct dentry *dentry, void *data);
 int rfs_dcache_rem(struct dentry *dentry, void *data);
 int rfs_dcache_set(struct dentry *dentry, void *data);
+int rfs_dcache_reset(struct dentry *dentry, void *data);
 int rfs_dcache_rdentry_add(struct dentry *dentry, struct rfs_info *rinfo);
 int rfs_dcache_rinode_del(struct rfs_dentry *rdentry, struct inode *inode);
 int rfs_dcache_get_subs(struct dentry *dir, struct list_head *sibs);
