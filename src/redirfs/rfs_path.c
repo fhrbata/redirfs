@@ -784,7 +784,7 @@ static int rfs_fsrename_add_dentry(struct rfs_root *rroot,
 	int i;
 
 	if (!rchain)
-		return 0;
+		return rfs_info_reset(dentry, rroot->rinfo);
 
 	rdentry = rfs_dentry_find(dentry);
 	if (rdentry)
