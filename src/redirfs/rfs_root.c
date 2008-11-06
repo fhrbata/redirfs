@@ -399,11 +399,46 @@ error:
 	return;
 }
 
+static struct rfs_root *rfs_get_root_flt(struct rfs_flt *rflt,
+		struct rfs_info *rinfo_start)
+{
+	struct rfs_root *rroot = NULL;
+	struct rfs_info *rinfo;
+
+	rinfo = rfs_info_get(rinfo_start);
+
+	while (rinfo) {
+		if (rfs_chain_find(rinfo->rchain, rflt) == -1)
+			goto exit;
+
+		rroot = rfs_root_get(rinfo->rroot);
+
+		spin_lock(&rroot->lock);
+
+		if (rfs_chain_find(rroot->rinch, rflt) != -1) {
+			spin_lock(&rroot->lock);
+			goto exit;
+
+		}
+
+		spin_unlock(&rroot->lock);
+
+		rfs_info_put(rinfo);
+		rinfo = rfs_info_parent(rroot->dentry);
+		rfs_root_put(rroot);
+		rroot = NULL;
+	}
+
+exit:
+	rfs_info_put(rinfo);
+	return rroot;
+}
+
 redirfs_root redirfs_get_root_file(redirfs_filter filter, struct file *file)
 {
+	struct rfs_root *rroot;
 	struct rfs_file *rfile;
 	struct rfs_info *rinfo;
-	redirfs_root root = NULL;
 
 	if (!filter || !file)
 		return NULL;
@@ -414,22 +449,19 @@ redirfs_root redirfs_get_root_file(redirfs_filter filter, struct file *file)
 
 	rinfo = rfs_dentry_get_rinfo(rfile->rdentry);
 
-	if (rfs_chain_find(rinfo->rchain, filter) == -1)
-		goto exit;
+	rroot = rfs_get_root_flt(filter, rinfo);
 
-	root = rfs_root_get(rinfo->rroot);
-exit:
 	rfs_info_put(rinfo);
 	rfs_file_put(rfile);
-	return root;
+	return rroot;
 }
 
 redirfs_root redirfs_get_root_dentry(redirfs_filter filter,
 		struct dentry *dentry)
 {
+	struct rfs_root *rroot;
 	struct rfs_dentry *rdentry;
 	struct rfs_info *rinfo;
-	redirfs_root root = NULL;
 
 	if (!filter || !dentry)
 		return NULL;
@@ -440,21 +472,18 @@ redirfs_root redirfs_get_root_dentry(redirfs_filter filter,
 
 	rinfo = rfs_dentry_get_rinfo(rdentry);
 
-	if (rfs_chain_find(rinfo->rchain, filter) == -1)
-		goto exit;
+	rroot = rfs_get_root_flt(filter, rinfo);
 
-	root = rfs_root_get(rinfo->rroot);
-exit:
 	rfs_info_put(rinfo);
 	rfs_dentry_put(rdentry);
-	return root;
+	return rroot;
 }
 
 redirfs_root redirfs_get_root_inode(redirfs_filter filter, struct inode *inode)
 {
+	struct rfs_root *rroot;
 	struct rfs_inode *rinode;
 	struct rfs_info *rinfo;
-	redirfs_root root = NULL;
 
 	if (!filter || !inode)
 		return NULL;
@@ -465,14 +494,11 @@ redirfs_root redirfs_get_root_inode(redirfs_filter filter, struct inode *inode)
 
 	rinfo = rfs_inode_get_rinfo(rinode);
 
-	if (rfs_chain_find(rinfo->rchain, filter) == -1)
-		goto exit;
+	rroot = rfs_get_root_flt(filter, rinfo);
 
-	root = rfs_root_get(rinfo->rroot);
-exit:
 	rfs_info_put(rinfo);
 	rfs_inode_put(rinode);
-	return root;
+	return rroot;
 }
 
 redirfs_root redirfs_get_root_path(redirfs_path path)

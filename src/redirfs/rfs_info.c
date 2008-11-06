@@ -106,7 +106,7 @@ static struct rfs_info *rfs_info_dentry(struct dentry *dentry)
 	return rinfo;
 }
 
-static struct rfs_info *rfs_info_parent(struct dentry *dentry)
+struct rfs_info *rfs_info_parent(struct dentry *dentry)
 {
 	struct dentry *dparent = NULL;
 	struct rfs_info *rinfo = NULL;

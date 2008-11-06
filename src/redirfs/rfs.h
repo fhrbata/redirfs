@@ -202,6 +202,7 @@ struct rfs_info *rfs_info_alloc(struct rfs_root *rroot,
 		struct rfs_chain *rchain);
 struct rfs_info *rfs_info_get(struct rfs_info *rinfo);
 void rfs_info_put(struct rfs_info *rinfo);
+struct rfs_info *rfs_info_parent(struct dentry *dentry);
 int rfs_info_add_include(struct rfs_root *rroot, struct rfs_flt *rflt);
 int rfs_info_add_exclude(struct rfs_root *rroot, struct rfs_flt *rflt);
 int rfs_info_rem_include(struct rfs_root *rroot, struct rfs_flt *rflt);
