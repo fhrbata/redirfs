@@ -449,12 +449,11 @@ void rfs_dentry_set_ops(struct rfs_dentry *rdentry)
 
 void rfs_dentry_rem_data(struct dentry *dentry, struct rfs_flt *rflt)
 {
-	redirfs_filter filter = (redirfs_filter)rflt;
 	struct redirfs_data *data;
 	struct rfs_dentry *rdentry;
 	struct rfs_file *rfile;
 	
-	data = redirfs_detach_data_dentry(filter, dentry);
+	data = redirfs_detach_data_dentry(rflt, dentry);
 	redirfs_put_data(data);
 
 	rdentry = rfs_dentry_find(dentry);
@@ -464,7 +463,7 @@ void rfs_dentry_rem_data(struct dentry *dentry, struct rfs_flt *rflt)
 	spin_lock(&rdentry->lock);
 
 	list_for_each_entry(rfile, &rdentry->rfiles, rdentry_list) {
-		data = redirfs_detach_data_file(filter, rfile->file);
+		data = redirfs_detach_data_file(rflt, rfile->file);
 		redirfs_put_data(data);
 	}
 
@@ -473,7 +472,30 @@ void rfs_dentry_rem_data(struct dentry *dentry, struct rfs_flt *rflt)
 	if (!dentry->d_inode)
 		return;
 
-	data = redirfs_detach_data_inode(filter, dentry->d_inode);
+	data = redirfs_detach_data_inode(rflt, dentry->d_inode);
 	redirfs_put_data(data);
+}
+
+int rfs_dentry_move(struct dentry *dentry, struct rfs_flt *rflt,
+		struct rfs_root *src, struct rfs_root *dst)
+{
+	int rv = 0;
+
+	if (!rflt->ops)
+		return 0;
+
+	if (rflt->ops->dentry_moved)
+		rv = rflt->ops->dentry_moved(src, dst, dentry);
+
+	if (rv)
+		return rv;
+
+	if (!dentry->d_inode)
+		return 0;
+
+	if (rflt->ops->inode_moved)
+		rv = rflt->ops->inode_moved(src, dst, dentry->d_inode);
+
+	return rv;
 }
 

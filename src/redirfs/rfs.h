@@ -249,6 +249,8 @@ void rfs_dentry_set_ops(struct rfs_dentry *dentry);
 int rfs_dentry_cache_create(void);
 void rfs_dentry_cache_destory(void);
 void rfs_dentry_rem_data(struct dentry *dentry, struct rfs_flt *rflt);
+int rfs_dentry_move(struct dentry *dentry, struct rfs_flt *rflt,
+		struct rfs_root *src, struct rfs_root *dst);
 
 struct rfs_inode {
 	struct list_head rdentries;

@@ -350,7 +350,7 @@ int rfs_dcache_add_dir(struct dentry *dentry, void *data)
 
 int rfs_dcache_add(struct dentry *dentry, void *data)
 {
-	struct rfs_dcache_data *rdata = (struct rfs_dcache_data *)data;
+	struct rfs_dcache_data *rdata = data;
 
 	if (rfs_dcache_skip(dentry, rdata)) {
 		rfs_root_add_walk(dentry);
@@ -362,7 +362,7 @@ int rfs_dcache_add(struct dentry *dentry, void *data)
 
 int rfs_dcache_rem(struct dentry *dentry, void *data)
 {
-	struct rfs_dcache_data *rdata = (struct rfs_dcache_data *)data;
+	struct rfs_dcache_data *rdata = data;
 	int rv;
 
 	if (rfs_dcache_skip(dentry, rdata)) {
@@ -383,7 +383,10 @@ int rfs_dcache_rem(struct dentry *dentry, void *data)
 
 int rfs_dcache_set(struct dentry *dentry, void *data)
 {
-	struct rfs_dcache_data *rdata = (struct rfs_dcache_data *)data;
+	struct rfs_dcache_data *rdata = data;
+	struct rfs_dentry *rdentry = NULL;
+	struct rfs_root *rroot = NULL;
+	int rv = 0;
 
 	if (rfs_dcache_skip(dentry, rdata))
 		return 1;
@@ -391,12 +394,30 @@ int rfs_dcache_set(struct dentry *dentry, void *data)
 	if (!rdata->rinfo->rchain)
 		return rfs_dcache_rdentry_del(dentry, rfs_info_none);
 
-	return rfs_dcache_rdentry_add(dentry, rdata->rinfo);
+	rdentry = rfs_dentry_find(dentry);
+	if (rdentry)
+		rroot = rfs_root_get(rdentry->rinfo->rroot);
+
+	rv = rfs_dcache_rdentry_add(dentry, rdata->rinfo);
+	if (rv)
+		goto exit;
+
+	if (!rroot)
+		goto exit;
+
+	if (rroot == rdata->rinfo->rroot)
+		goto exit;
+
+	rv = rfs_dentry_move(dentry, rdata->rflt, rroot, rdata->rinfo->rroot);
+exit:
+	rfs_dentry_put(rdentry);
+	rfs_root_put(rroot);
+	return rv;
 }
 
 int rfs_dcache_reset(struct dentry *dentry, void *data)
 {
-	struct rfs_dcache_data *rdata = (struct rfs_dcache_data *)data;
+	struct rfs_dcache_data *rdata = data;
 
 	if (rfs_dcache_skip(dentry, rdata))
 		return 1;

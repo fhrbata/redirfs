@@ -567,6 +567,10 @@ struct redirfs_operations {
 	 int (*set_path)(struct redirfs_path_info *);
 	 int (*unregister)(void);
 	 int (*remove_paths)(void);
+	 void (*move_begin)(void);
+	 void (*move_end)(void);
+	 int (*dentry_moved)(redirfs_root, redirfs_root, struct dentry *);
+	 int (*inode_moved)(redirfs_root, redirfs_root, struct inode *);
 };
 
 struct redirfs_filter_info {
