@@ -564,9 +564,10 @@ struct redirfs_op_info {
 struct redirfs_operations {
 	 int (*activate)(void);
 	 int (*deactivate)(void);
-	 int (*set_path)(struct redirfs_path_info *);
+	 int (*add_path)(struct redirfs_path_info *);
+	 int (*rem_path)(redirfs_path);
 	 int (*unregister)(void);
-	 int (*remove_paths)(void);
+	 int (*rem_paths)(void);
 	 void (*move_begin)(void);
 	 void (*move_end)(void);
 	 int (*dentry_moved)(redirfs_root, redirfs_root, struct dentry *);
@@ -602,9 +603,9 @@ int redirfs_create_attribute(redirfs_filter filter,
 int redirfs_remove_attribute(redirfs_filter filter,
 		struct redirfs_filter_attribute *attr);
 struct kobject *redirfs_filter_kobject(redirfs_filter filter);
-int redirfs_set_path(redirfs_filter filter, struct redirfs_path_info *info);
-redirfs_path redirfs_get_path_md(redirfs_filter filter, struct vfsmount *mnt,
-		struct dentry *dentry);
+redirfs_path redirfs_add_path(redirfs_filter filter,
+		struct redirfs_path_info *info);
+int redirfs_rem_path(redirfs_filter filter, redirfs_path path);
 redirfs_path redirfs_get_path(redirfs_path path);
 void redirfs_put_path(redirfs_path path);
 redirfs_path* redirfs_get_paths(redirfs_filter filter);
@@ -612,7 +613,6 @@ void redirfs_put_paths(redirfs_path *paths);
 struct redirfs_path_info *redirfs_get_path_info(redirfs_filter filter,
 		redirfs_path path);
 void redirfs_put_path_info(struct redirfs_path_info *info);
-int redirfs_rem_path(redirfs_filter filter, redirfs_path path);
 int redirfs_rem_paths(redirfs_filter filter);
 redirfs_root redirfs_get_root_file(redirfs_filter filter, struct file *file);
 redirfs_root redirfs_get_root_dentry(redirfs_filter filter,

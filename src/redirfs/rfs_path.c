@@ -320,92 +320,70 @@ static int rfs_path_rem_exclude(struct rfs_path *rpath, struct rfs_flt *rflt)
 	return 0;
 }
 
-static int rfs_path_set(struct rfs_path *rpath, struct rfs_flt *rflt, int flags)
-{
-	int rv = 0;
-
-	switch (flags) {
-		case REDIRFS_PATH_ADD | REDIRFS_PATH_INCLUDE:
-			rv = rfs_path_add_include(rpath, rflt);
-			break;
-
-		case REDIRFS_PATH_ADD | REDIRFS_PATH_EXCLUDE:
-			rv = rfs_path_add_exclude(rpath, rflt);
-			break;
-
-		case REDIRFS_PATH_REM | REDIRFS_PATH_INCLUDE:
-			rv = rfs_path_rem_include(rpath, rflt);
-			break;
-
-		case REDIRFS_PATH_REM | REDIRFS_PATH_EXCLUDE:
-			rv = rfs_path_rem_exclude(rpath, rflt);
-			break;
-
-		default:
-			rv = -EINVAL;
-	}
-
-	return rv;
-}
-
-int redirfs_set_path(redirfs_filter filter, struct redirfs_path_info *info)
+redirfs_path redirfs_add_path(redirfs_filter filter,
+		struct redirfs_path_info *info)
 {
 	struct rfs_path *rpath;
 	int rv;
 
 	if (!filter || !info)
-		return -EINVAL;
+		return ERR_PTR(-EINVAL);
 
 	if (!info->mnt || !info->dentry || !info->flags)
-		return -EINVAL;
+		return ERR_PTR(-EINVAL);
 
 	mutex_lock(&info->dentry->d_inode->i_sb->s_vfs_rename_mutex);
 	mutex_lock(&rfs_path_mutex);
 
 	rpath = rfs_path_add(info->mnt, info->dentry);
-	if (IS_ERR(rpath)) {
-		mutex_unlock(&rfs_path_mutex);
-		return PTR_ERR(rpath);
-	}
+	if (IS_ERR(rpath))
+		goto exit;
 
-	rv = rfs_path_set(rpath, filter, info->flags);
+	if (info->flags == REDIRFS_PATH_INCLUDE)
+		rv = rfs_path_add_include(rpath, filter);
+
+	else if (info->flags == REDIRFS_PATH_EXCLUDE)
+		rv = rfs_path_add_exclude(rpath, filter);
+
+	else
+		rv = -EINVAL;
+
+	rfs_path_rem(rpath);
+
+	if (rv) {
+		rfs_path_put(rpath);
+		rpath = ERR_PTR(rv);
+	}
+exit:
+	mutex_unlock(&rfs_path_mutex);
+	mutex_unlock(&info->dentry->d_inode->i_sb->s_vfs_rename_mutex);
+	return rpath;
+}
+
+int redirfs_rem_path(redirfs_filter filter, redirfs_path path)
+{
+	struct rfs_path *rpath = (struct rfs_path *)path;
+	int rv;
+
+	if (!filter || !path)
+		return -EINVAL;
+
+	mutex_lock(&rpath->dentry->d_inode->i_sb->s_vfs_rename_mutex);
+	mutex_lock(&rfs_path_mutex);
+
+	if (rfs_chain_find(rpath->rinch, filter) != -1)
+		rv = rfs_path_rem_include(path, filter);
+
+	else if (rfs_chain_find(rpath->rexch, filter) != -1)
+		rv = rfs_path_rem_exclude(path, filter);
+
+	else
+		rv = -EINVAL;
+
 	rfs_path_rem(rpath);
 
 	mutex_unlock(&rfs_path_mutex);
-	mutex_unlock(&info->dentry->d_inode->i_sb->s_vfs_rename_mutex);
-
-	rfs_path_put(rpath);
-
-	return rv;
-}
-
-redirfs_path redirfs_get_path_md(redirfs_filter filter, struct vfsmount *mnt,
-		struct dentry *dentry)
-{
-	struct rfs_path *rpath;
-	redirfs_path rv;
-
-	if (!filter || !mnt || !dentry)
-		return NULL;
-
-	mutex_lock(&rfs_path_mutex);
-	rpath = rfs_path_find(mnt, dentry);
-	mutex_unlock(&rfs_path_mutex);
-
-	if (!rpath)
-		return NULL;
-
-	if (rfs_chain_find(rpath->rinch, filter) != -1)
-		rv = (redirfs_path)rpath;
-
-	else if (rfs_chain_find(rpath->rexch, filter) != -1)
-		rv = (redirfs_path)rpath;
-
-	else 
-		rv = NULL;
-
-	if (!rv)
-		rfs_path_put(rpath);
+	mutex_unlock(&rpath->dentry->d_inode->i_sb->s_vfs_rename_mutex);
 
 	return rv;
 }
@@ -507,27 +485,6 @@ void redirfs_put_path_info(struct redirfs_path_info *info)
 	mntput(info->mnt);
 	dput(info->dentry);
 	kfree(info);
-}
-
-int redirfs_rem_path(redirfs_filter filter, redirfs_path path)
-{
-	struct redirfs_path_info *info;
-	int rv;
-
-	if (!filter || !path)
-		return -EINVAL;
-
-	info = redirfs_get_path_info(filter, path);
-	if (IS_ERR(info))
-		return PTR_ERR(info);
-
-	info->flags |= REDIRFS_PATH_REM;
-
-	rv = redirfs_set_path(filter, info);
-
-	redirfs_put_path_info(info);
-
-	return rv;
 }
 
 int redirfs_rem_paths(redirfs_filter filter)
@@ -932,13 +889,13 @@ exit:
 	return rv;
 }
 
-EXPORT_SYMBOL(redirfs_set_path);
-EXPORT_SYMBOL(redirfs_get_path_md);
 EXPORT_SYMBOL(redirfs_get_path);
 EXPORT_SYMBOL(redirfs_put_path);
 EXPORT_SYMBOL(redirfs_get_paths);
 EXPORT_SYMBOL(redirfs_put_paths);
 EXPORT_SYMBOL(redirfs_get_path_info);
+EXPORT_SYMBOL(redirfs_put_path_info);
+EXPORT_SYMBOL(redirfs_add_path);
 EXPORT_SYMBOL(redirfs_rem_path);
 EXPORT_SYMBOL(redirfs_rem_paths);
 EXPORT_SYMBOL(redirfs_get_filename);

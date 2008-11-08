@@ -140,6 +140,7 @@ static int rfs_flt_paths_add(redirfs_filter filter, const char *buf,
 		size_t count)
 {
 	struct rfs_flt *rflt = filter;
+	struct rfs_path *rpath;
 	struct redirfs_path_info info;
 	struct nameidata nd;
 	char *path;
@@ -155,13 +156,11 @@ static int rfs_flt_paths_add(redirfs_filter filter, const char *buf,
 		return -EINVAL;
 	}
 
-	info.flags = REDIRFS_PATH_ADD;
-
 	if (type == 'i')
-		info.flags |= REDIRFS_PATH_INCLUDE;
+		info.flags = REDIRFS_PATH_INCLUDE;
 
 	else if (type == 'e')
-		info.flags |= REDIRFS_PATH_EXCLUDE;
+		info.flags = REDIRFS_PATH_EXCLUDE;
 
 	else {
 		kfree(path);
@@ -177,10 +176,14 @@ static int rfs_flt_paths_add(redirfs_filter filter, const char *buf,
 	info.dentry = nd.path.dentry;
 	info.mnt = nd.path.mnt;
 
-	if (rflt->ops && rflt->ops->set_path)
-		rv = rflt->ops->set_path(&info);
-	else
-		rv = redirfs_set_path(filter, &info);
+	if (!rflt->ops || !rflt->ops->add_path) {
+		rpath = redirfs_add_path(filter, &info);
+		if (IS_ERR(rpath))
+			rv = PTR_ERR(rpath);
+		rfs_path_put(rpath);
+
+	} else
+		rv = rflt->ops->add_path(&info);
 
 	path_put(&nd.path);
 	kfree(path);
@@ -193,7 +196,6 @@ static int rfs_flt_paths_rem(redirfs_filter filter, const char *buf,
 {
 	struct rfs_flt *rflt = filter;
 	struct rfs_path *rpath;
-	struct redirfs_path_info *info;
 	int id;
 	int rv;
 
@@ -208,20 +210,11 @@ static int rfs_flt_paths_rem(redirfs_filter filter, const char *buf,
 	}
 	mutex_unlock(&rfs_path_mutex);
 	
-	info = redirfs_get_path_info(filter, rpath);
-	if (IS_ERR(info)) {
-		rfs_path_put(rpath);
-		return PTR_ERR(info);
-	}
-
-	info->flags |= REDIRFS_PATH_REM;
-
-	if (rflt->ops && rflt->ops->set_path)
-		rv = rflt->ops->set_path(info);
+	if (rflt->ops && rflt->ops->rem_path)
+		rv = rflt->ops->rem_path(rpath);
 	else
-		rv = redirfs_set_path(filter, info);
+		rv = redirfs_rem_path(filter, rpath);
 
-	redirfs_put_path_info(info);
 	rfs_path_put(rpath);
 
 	return rv;
@@ -240,8 +233,8 @@ static int rfs_flt_paths_clean(redirfs_filter filter, const char *buf,
 	if (clean != 'c')
 		return -EINVAL;
 
-	if (rflt->ops && rflt->ops->remove_paths)
-		rv = rflt->ops->remove_paths();
+	if (rflt->ops && rflt->ops->rem_paths)
+		rv = rflt->ops->rem_paths();
 	else
 		rv = redirfs_rem_paths(filter);
 
