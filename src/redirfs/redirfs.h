@@ -559,7 +559,7 @@ struct redirfs_op_info {
 	enum redirfs_rv (*post_cb)(redirfs_context, struct redirfs_args *);
 };
 
-struct redirfs_operations {
+struct redirfs_filter_operations {
 	 int (*activate)(void);
 	 int (*deactivate)(void);
 	 int (*add_path)(struct redirfs_path_info *);
@@ -577,7 +577,7 @@ struct redirfs_filter_info {
 	const char *name;
 	int priority;
 	int active;
-	struct redirfs_operations *ops;
+	struct redirfs_filter_operations *ops;
 };
 
 struct redirfs_filter_attribute {
