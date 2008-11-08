@@ -36,10 +36,8 @@
 
 #define REDIRFS_VERSION "0.4"
 
-#define REDIRFS_PATH_ADD		1
-#define REDIRFS_PATH_REM		2
-#define REDIRFS_PATH_INCLUDE		4
-#define REDIRFS_PATH_EXCLUDE		8
+#define REDIRFS_PATH_INCLUDE		1
+#define REDIRFS_PATH_EXCLUDE		2
 
 #define REDIRFS_FILTER_ATTRIBUTE(__name, __mode, __show, __store) \
 	__ATTR(__name, __mode, __show, __store)
