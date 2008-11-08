@@ -593,7 +593,8 @@ struct redirfs_data {
 	struct list_head list;
 	atomic_t cnt;
 	redirfs_filter filter;
-	void (*cb)(struct redirfs_data *);
+	void (*free)(struct redirfs_data *);
+	void (*detach)(struct redirfs_data *);
 };
 
 int redirfs_create_attribute(redirfs_filter filter,
@@ -629,7 +630,8 @@ int redirfs_deactivate_filter(redirfs_filter filter);
 int redirfs_get_filename(struct vfsmount *mnt, struct dentry *dentry, char *buf,
 		int size);
 int redirfs_init_data(struct redirfs_data *data, redirfs_filter filter,
-		void (*cb)(struct redirfs_data *));
+		void (*free)(struct redirfs_data *),
+		void (*detach)(struct redirfs_data *));
 struct redirfs_data *redirfs_get_data(struct redirfs_data *data);
 void redirfs_put_data(struct redirfs_data *data);
 struct redirfs_data *redirfs_attach_data_file(redirfs_filter filter,

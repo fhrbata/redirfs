@@ -29,20 +29,24 @@ void rfs_data_remove(struct list_head *head)
 	struct redirfs_data *tmp;
 
 	list_for_each_entry_safe(data, tmp, head, list) {
-		list_del(&data->list);
+		list_del_init(&data->list);
+		if (data->detach)
+			data->detach(data);
 		redirfs_put_data(data);
 	}
 }
 
 int redirfs_init_data(struct redirfs_data *data, redirfs_filter filter,
-		void (*cb)(struct redirfs_data *))
+		void (*free)(struct redirfs_data *),
+		void (*detach)(struct redirfs_data *))
 {
-	if (!data || !filter || !cb)
+	if (!data || !filter || !free)
 		return -EINVAL;
 
 	INIT_LIST_HEAD(&data->list);
 	atomic_set(&data->cnt, 1);
-	data->cb = cb;
+	data->free = free;
+	data->detach = detach;
 	data->filter = rfs_flt_get(filter);
 
 	return 0;
@@ -70,8 +74,8 @@ void redirfs_put_data(struct redirfs_data *data)
 	if (!atomic_dec_and_test(&data->cnt))
 		return;
 
-	data->cb(data);
-	rfs_flt_put((struct rfs_flt *)data->filter);
+	data->free(data);
+	rfs_flt_put(data->filter);
 }
 
 static struct redirfs_data *rfs_find_data(struct list_head *head,
