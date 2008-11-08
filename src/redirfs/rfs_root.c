@@ -39,6 +39,7 @@ static struct rfs_root *rfs_root_alloc(struct dentry *dentry)
 	INIT_LIST_HEAD(&rroot->rpaths);
 	INIT_LIST_HEAD(&rroot->data);
 	rroot->dentry = dentry;
+	rroot->paths_nr = 0;
 	spin_lock_init(&rroot->lock);
 	atomic_set(&rroot->count, 1);
 
@@ -101,17 +102,27 @@ static void rfs_root_list_rem(struct rfs_root *rroot)
 
 void rfs_root_add_rpath(struct rfs_root *rroot, struct rfs_path *rpath)
 {
+	spin_lock(&rroot->lock);
+	rroot->paths_nr++;
 	list_add_tail(&rpath->rroot_list, &rroot->rpaths);
+	spin_unlock(&rroot->lock);
 	rfs_path_get(rpath);
 }
 
 void rfs_root_rem_rpath(struct rfs_root *rroot, struct rfs_path *rpath)
 {
+	spin_lock(&rroot->lock);
+	rroot->paths_nr--;
 	list_del_init(&rpath->rroot_list);
-	rfs_path_put(rpath);
 
-	if (!list_empty(&rroot->rpaths))
+	if (!list_empty(&rroot->rpaths)) {
+		spin_unlock(&rroot->lock);
+		rfs_path_put(rpath);
 		return;
+	}
+
+	spin_unlock(&rroot->lock);
+	rfs_path_put(rpath);
 
 	rfs_root_list_rem(rroot);
 }

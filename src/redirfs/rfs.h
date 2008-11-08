@@ -138,6 +138,7 @@ struct rfs_root {
 	struct rfs_chain *rexch;
 	struct rfs_info *rinfo;
 	struct dentry *dentry;
+	int paths_nr;
 	spinlock_t lock;
 	atomic_t count;
 };

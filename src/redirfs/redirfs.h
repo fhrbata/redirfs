@@ -608,6 +608,7 @@ redirfs_path redirfs_add_path(redirfs_filter filter,
 int redirfs_rem_path(redirfs_filter filter, redirfs_path path);
 redirfs_path redirfs_get_path(redirfs_path path);
 void redirfs_put_path(redirfs_path path);
+redirfs_path* redirfs_get_paths_root(redirfs_filter filter, redirfs_root root);
 redirfs_path* redirfs_get_paths(redirfs_filter filter);
 void redirfs_put_paths(redirfs_path *paths);
 struct redirfs_path_info *redirfs_get_path_info(redirfs_filter filter,
