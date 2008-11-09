@@ -173,21 +173,19 @@ static int avflt_wait_for_reply(struct avflt_event *event)
 	return 0;
 }
 
-static int avflt_update_cache(struct avflt_event *event)
+static void avflt_update_cache(struct avflt_event *event)
 {
-	struct avflt_data *data;
+	struct avflt_inode_data *data;
 
 	if (!event->result)
-		return 0;
+		return;
 
-	data = avflt_attach_data(event->dentry->d_inode);
-	if (IS_ERR(data))
-		return PTR_ERR(data);
+	data = avflt_attach_inode_data(event->dentry->d_inode);
+	if (!data)
+		return;
 
 	atomic_set(&data->state, event->result);
-
-	avflt_put_data(data);
-	return 0;
+	avflt_put_inode_data(data);
 }
 
 int avflt_process_request(struct file *file, int type)
@@ -206,10 +204,7 @@ int avflt_process_request(struct file *file, int type)
 	if (rv)
 		goto exit;
 
-	rv = avflt_update_cache(event);
-	if (rv)
-		goto exit;
-
+	avflt_update_cache(event);
 	rv = event->result;
 exit:
 	avflt_rem_request(event);
@@ -411,8 +406,44 @@ struct avflt_event *avflt_get_reply(const char __user *buf, size_t size)
 	return event;
 }
 
+void avflt_invalidate_root_cache(redirfs_root root)
+{
+	struct avflt_root_data *root_data;
+	struct avflt_inode_data *inode_data;
+
+	root_data = avflt_get_root_data_root(root);
+	if (!root_data)
+		return;
+
+	mutex_lock(&avflt_root_mutex);
+	list_for_each_entry(inode_data, &root_data->list, root_list) {
+		atomic_set(&inode_data->state, 0);
+	}
+	mutex_unlock(&avflt_root_mutex);
+
+	avflt_put_root_data(root_data);
+}
+
 void avflt_invalidate_cache(void)
 {
+	redirfs_path *paths;
+	redirfs_root *root;
+	int i = 0;
+
+	paths = redirfs_get_paths(avflt);
+	if (!paths)
+		return;
+
+	while (paths[i]) {
+		root = redirfs_get_root_path(paths[i++]);
+		if (!root)
+			continue;
+
+		avflt_invalidate_root_cache(root);
+		redirfs_put_root(root);
+	}
+
+	redirfs_put_paths(paths);
 }
 
 int avflt_check_init(void)

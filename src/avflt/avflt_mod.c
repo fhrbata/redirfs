@@ -31,9 +31,13 @@ static int __init avflt_init(void)
 	if (rv)
 		return rv;
 
-	rv = avflt_rfs_init();
+	rv = avflt_data_init();
 	if (rv)
 		goto err_check;
+
+	rv = avflt_rfs_init();
+	if (rv)
+		goto err_data;
 
 	rv = avflt_sys_init();
 	if (rv) 
@@ -51,6 +55,8 @@ err_sys:
 	avflt_sys_exit();
 err_rfs:
 	avflt_rfs_exit();
+err_data:
+	avflt_data_exit();
 err_check:
 	avflt_check_exit();
 	return rv;
@@ -61,6 +67,7 @@ static void __exit avflt_exit(void)
 	avflt_dev_exit();
 	avflt_sys_exit();
 	avflt_rfs_exit();
+	avflt_data_exit();
 	avflt_check_exit();
 }
 

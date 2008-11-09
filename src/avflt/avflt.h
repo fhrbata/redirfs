@@ -75,10 +75,10 @@ void avflt_proc_start_accept(void);
 void avflt_proc_stop_accept(void);
 void avflt_rem_requests(void);
 struct avflt_event *avflt_get_reply(const char __user *buf, size_t size);
+void avflt_invalidate_root_cache(redirfs_root root);
 void avflt_invalidate_cache(void);
 int avflt_check_init(void);
 void avflt_check_exit(void);
-
 
 struct avflt_proc {
 	struct list_head list;
@@ -101,19 +101,37 @@ void avflt_proc_add_event(struct avflt_proc *proc, struct avflt_event *event);
 void avflt_proc_rem_event(struct avflt_proc *proc, struct avflt_event *event);
 struct avflt_event *avflt_proc_get_event(struct avflt_proc *proc, int id);
 
-#define rfs_to_avflt_data(ptr) container_of(ptr, struct avflt_data, rfs_data)
+#define rfs_to_inode_data(ptr) \
+	container_of(ptr, struct avflt_inode_data, rfs_data)
 
-struct avflt_data {
+struct avflt_inode_data {
 	struct redirfs_data rfs_data;
+	struct list_head root_list;
 	atomic_t state;
 };
 
-struct avflt_data *avflt_get_data(struct inode *inode);
-void avflt_put_data(struct avflt_data *data);
-struct avflt_data *avflt_attach_data(struct inode *inode);
-int avflt_data_cache_init(void);
-void avflt_data_cache_exit(void);
+struct avflt_inode_data *avflt_get_inode_data_inode(struct inode *inode);
+struct avflt_inode_data *avflt_get_inode_data(struct avflt_inode_data *data);
+void avflt_put_inode_data(struct avflt_inode_data *data);
+struct avflt_inode_data *avflt_attach_inode_data(struct inode *inode);
+int avflt_data_init(void);
+void avflt_data_exit(void);
 
+#define rfs_to_root_data(ptr) \
+	container_of(ptr, struct avflt_root_data, rfs_data)
+
+struct avflt_root_data {
+	struct redirfs_data rfs_data;
+	struct list_head list;
+	atomic_t cache;
+};
+
+struct avflt_root_data *avflt_get_root_data_root(redirfs_root root);
+struct avflt_root_data *avflt_get_root_data(struct avflt_root_data *data);
+void avflt_put_root_data(struct avflt_root_data *data);
+struct avflt_root_data *avflt_attach_root_data(redirfs_root root);
+
+extern struct mutex avflt_root_mutex;
 
 int avflt_dev_init(void);
 void avflt_dev_exit(void);
