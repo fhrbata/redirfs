@@ -23,14 +23,12 @@
 
 #include "avflt.h"
 
-DEFINE_MUTEX(avflt_root_mutex);
 static struct kmem_cache *avflt_inode_data_cache = NULL;
 
 static void avflt_root_data_free(struct redirfs_data *rfs_data)
 {
 	struct avflt_root_data *data = rfs_to_root_data(rfs_data);
 
-	BUG_ON(!list_empty(&data->list));
 	kfree(data);
 }
 
@@ -50,7 +48,6 @@ static struct avflt_root_data *avflt_root_data_alloc(void)
 		return ERR_PTR(err);
 	}
 
-	INIT_LIST_HEAD(&data->list);
 	atomic_set(&data->cache, 1);
 
 	return data;
@@ -123,17 +120,6 @@ static void avflt_inode_data_free(struct redirfs_data *rfs_data)
 	kmem_cache_free(avflt_inode_data_cache, data);
 }
 
-static void avflt_inode_data_detach(struct redirfs_data *rfs_data)
-{
-	struct avflt_inode_data *data = rfs_to_inode_data(rfs_data);
-
-	mutex_lock(&avflt_root_mutex);
-	if (!list_empty(&data->root_list))
-		list_del_init(&data->root_list);
-	mutex_unlock(&avflt_root_mutex);
-	avflt_put_inode_data(data);
-}
-
 static struct avflt_inode_data *avflt_inode_data_alloc(void)
 {
 	struct avflt_inode_data *data;
@@ -144,15 +130,13 @@ static struct avflt_inode_data *avflt_inode_data_alloc(void)
 		return ERR_PTR(-ENOMEM);
 
 	err = redirfs_init_data(&data->rfs_data, avflt, avflt_inode_data_free,
-			avflt_inode_data_detach);
+			NULL);
 	if (err) {
 		 kmem_cache_free(avflt_inode_data_cache, data);
 		 return ERR_PTR(err);
 	}
 
-	INIT_LIST_HEAD(&data->root_list);
-	atomic_set(&data->state, 0);
-
+	spin_lock_init(&data->lock);
 	return data;
 }
 
@@ -192,55 +176,28 @@ void avflt_put_inode_data(struct avflt_inode_data *data)
 struct avflt_inode_data *avflt_attach_inode_data(struct inode *inode)
 {
 	struct redirfs_data *rfs_data = NULL;
-	struct avflt_root_data *root_data = NULL;
-	struct avflt_inode_data *inode_data = NULL;
+	struct avflt_inode_data *data = NULL;
 	struct avflt_inode_data *rv = NULL;
-	redirfs_root root = NULL;
 
-	inode_data = avflt_get_inode_data_inode(inode);
-	if (inode_data)
-		return inode_data;
+	data = avflt_get_inode_data_inode(inode);
+	if (data)
+		return data;
 
-	if (!atomic_read(&avflt_cache_enabled))
-		return NULL;
-
-	inode_data = avflt_inode_data_alloc();
-	if (!inode_data) 
-		return inode_data;
-
-	mutex_lock(&avflt_root_mutex);
-
-	root = redirfs_get_root_inode(avflt, inode);
-	if (!root)
-		goto exit;
-
-	rfs_data = redirfs_get_data_root(avflt, root);
-	if (!rfs_data)
-		goto exit;
-
-	root_data = rfs_to_root_data(rfs_data);
-
-	if (!atomic_read(&root_data->cache))
-		goto exit;
+	data = avflt_inode_data_alloc();
+	if (!data) 
+		return data;
 
 	rfs_data = redirfs_attach_data_inode(avflt, inode,
-			&inode_data->rfs_data);
+			&data->rfs_data);
 	if (!rfs_data)
 		goto exit;
 
-	if (rfs_data != &inode_data->rfs_data) {
+	if (rfs_data != &data->rfs_data)
 		rv = rfs_to_inode_data(rfs_data);
-		goto exit;
-	}
-
-	list_add_tail(&inode_data->root_list, &root_data->list);
-	avflt_get_inode_data(inode_data);
-	rv = inode_data;
+	else
+		rv = data;
 exit:
-	mutex_unlock(&avflt_root_mutex);
-	redirfs_put_root(root);
-	avflt_put_root_data(root_data);
-	avflt_put_inode_data(inode_data);
+	avflt_put_inode_data(data);
 	return rv;
 }
 

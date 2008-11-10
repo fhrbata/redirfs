@@ -40,17 +40,18 @@ static int avflt_should_check(struct file *file)
 	return 1;
 }
 
-static int avflt_use_cache(struct file *file, int type)
+int avflt_use_cache(struct inode *inode, mode_t mode, int type, int update)
 {
 	struct avflt_root_data *data;
 	redirfs_root root;
 	int cache;
+	int event;
 	int wc;
 
 	if (!atomic_read(&avflt_cache_enabled))
 		return 0;
 
-	root = redirfs_get_root_inode(avflt, file->f_dentry->d_inode);
+	root = redirfs_get_root_inode(avflt, inode);
 	if (!root)
 		return 0;
 
@@ -64,9 +65,7 @@ static int avflt_use_cache(struct file *file, int type)
 	if (!cache)
 		return 0;
 
-	spin_lock(&file->f_dentry->d_inode->i_lock);
-	wc = atomic_read(&file->f_dentry->d_inode->i_writecount);
-	spin_unlock(&file->f_dentry->d_inode->i_lock);
+	wc = atomic_read(&inode->i_writecount);
 
 	if (wc <= 0)
 		return 1;
@@ -74,10 +73,11 @@ static int avflt_use_cache(struct file *file, int type)
 	if (wc > 1)
 		return 0;
 
-	if (!(file->f_mode & FMODE_WRITE))
+	if (!(mode & FMODE_WRITE))
 		return 0;
 
-	if (type == AVFLT_EVENT_OPEN)
+	event = update ? AVFLT_EVENT_CLOSE : AVFLT_EVENT_OPEN;
+	if (type == event)
 		return 1;
 
 	return 0;
@@ -88,14 +88,19 @@ static int avflt_check_cache(struct file *file, int type)
 	struct avflt_inode_data *data;
 	int state;
 
-	if (!avflt_use_cache(file, type))
+	if (!avflt_use_cache(file->f_dentry->d_inode, file->f_mode, type, 0))
 		return 0;
 
 	data = avflt_get_inode_data_inode(file->f_dentry->d_inode);
 	if (!data)
 		return 0;
 
-	state = atomic_read(&data->state);
+	spin_lock(&data->lock);
+	if (data->cache_ver != atomic_read(&avflt_cache_ver))
+		state = 0;
+	else
+		state = data->state;
+	spin_unlock(&data->lock);
 
 	avflt_put_inode_data(data);
 
@@ -154,91 +159,14 @@ static enum redirfs_rv avflt_post_release(redirfs_context context,
 
 static int avflt_activate(void)
 {
-	int rv;
-
-	rv = redirfs_activate_filter(avflt);
-	if (rv)
-		return rv;
-
-	avflt_start_accept();
-	return 0;
-}
-
-static int avflt_deactivate(void)
-{
-	int rv;
-
-	rv = redirfs_deactivate_filter(avflt);
-	if (rv)
-		return rv;
-
-	avflt_stop_accept();
-	return 0;
-}
-
-static int avflt_add_path(struct redirfs_path_info *info)
-{
-	struct avflt_root_data *data;
-	redirfs_path path;
-	redirfs_root root;
-
-	path = redirfs_add_path(avflt, info);
-	if (IS_ERR(path))
-		return PTR_ERR(path);
-
-	if (info->flags != REDIRFS_PATH_INCLUDE) {
-		redirfs_put_path(path);
-		return 0;
-	}
-
-	root = redirfs_get_root_path(path);
-	redirfs_put_path(path);
-	if (!root)
-		return 0;
-
-
-	data = avflt_attach_root_data(root);
-	redirfs_put_root(root);
-	avflt_put_root_data(data);
-	return 0;
-}
-
-static void avflt_move_begin(void)
-{
-	mutex_lock(&avflt_root_mutex);
-}
-
-static void avflt_move_end(void)
-{
-	mutex_unlock(&avflt_root_mutex);
-}
-
-static int avflt_inode_moved(redirfs_root root_src, redirfs_root root_dst,
-		struct inode *inode)
-{
-	struct avflt_inode_data *inode_data;
-	struct avflt_root_data *root_data;
-	
-	inode_data = avflt_get_inode_data_inode(inode);
-	root_data = avflt_get_root_data_root(root_dst);
-
-	if (inode_data && root_data)
-		list_move(&inode_data->root_list, &root_data->list);
-
-	avflt_put_root_data(root_data);
-	avflt_put_inode_data(inode_data);
-	return 0;
+	avflt_invalidate_cache();
+	return redirfs_activate_filter(avflt);
 }
 
 redirfs_filter avflt;
 
 static struct redirfs_filter_operations avflt_ops = {
 	.activate = avflt_activate,
-	.deactivate = avflt_deactivate,
-	.add_path = avflt_add_path,
-	.move_begin = avflt_move_begin,
-	.move_end = avflt_move_end,
-	.inode_moved = avflt_inode_moved
 };
 
 static struct redirfs_filter_info avflt_info = {

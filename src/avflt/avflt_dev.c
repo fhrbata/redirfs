@@ -31,12 +31,15 @@ static int avflt_dev_open(struct inode *inode, struct file *file)
 {
 	struct avflt_proc *proc;
 
+	if (avflt_proc_empty())
+		avflt_invalidate_cache();
+
 	proc = avflt_proc_add(current->tgid);
 	if (IS_ERR(proc))
 		return PTR_ERR(proc);
 
 	avflt_proc_put(proc);
-	avflt_proc_start_accept();
+	avflt_start_accept();
 	return 0;
 }
 
@@ -46,9 +49,8 @@ static int avflt_dev_release(struct inode *inode, struct file *file)
 	if (!avflt_proc_empty())
 		return 0;
 
-	avflt_proc_stop_accept();
+	avflt_stop_accept();
 	avflt_rem_requests();
-	avflt_invalidate_cache();
 	return 0;
 }
 

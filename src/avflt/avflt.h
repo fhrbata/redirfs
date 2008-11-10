@@ -54,6 +54,8 @@ struct avflt_event {
 	int result;
 	struct file *file;
 	int fd;
+	mode_t f_mode;
+	int cache_ver;
 };
 
 struct avflt_event *avflt_event_get(struct avflt_event *event);
@@ -71,12 +73,8 @@ int avflt_add_reply(struct avflt_event *event);
 void avflt_start_accept(void);
 void avflt_stop_accept(void);
 int avflt_is_stopped(void);
-void avflt_proc_start_accept(void);
-void avflt_proc_stop_accept(void);
 void avflt_rem_requests(void);
 struct avflt_event *avflt_get_reply(const char __user *buf, size_t size);
-void avflt_invalidate_root_cache(redirfs_root root);
-void avflt_invalidate_cache(void);
 int avflt_check_init(void);
 void avflt_check_exit(void);
 
@@ -106,8 +104,9 @@ struct avflt_event *avflt_proc_get_event(struct avflt_proc *proc, int id);
 
 struct avflt_inode_data {
 	struct redirfs_data rfs_data;
-	struct list_head root_list;
-	atomic_t state;
+	int cache_ver;
+	int state;
+	spinlock_t lock;
 };
 
 struct avflt_inode_data *avflt_get_inode_data_inode(struct inode *inode);
@@ -122,7 +121,6 @@ void avflt_data_exit(void);
 
 struct avflt_root_data {
 	struct redirfs_data rfs_data;
-	struct list_head list;
 	atomic_t cache;
 };
 
@@ -131,7 +129,8 @@ struct avflt_root_data *avflt_get_root_data(struct avflt_root_data *data);
 void avflt_put_root_data(struct avflt_root_data *data);
 struct avflt_root_data *avflt_attach_root_data(redirfs_root root);
 
-extern struct mutex avflt_root_mutex;
+int avflt_use_cache(struct inode *inode, mode_t mode, int type, int update);
+void avflt_invalidate_cache(void);
 
 int avflt_dev_init(void);
 void avflt_dev_exit(void);
@@ -145,6 +144,7 @@ void avflt_sys_exit(void);
 extern atomic_t avflt_reply_timeout;
 extern atomic_t avflt_cache_enabled;
 extern redirfs_filter avflt;
+extern atomic_t avflt_cache_ver;
 
 #endif
 

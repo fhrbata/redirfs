@@ -28,6 +28,7 @@ static spinlock_t avflt_request_lock = SPIN_LOCK_UNLOCKED;
 static LIST_HEAD(avflt_request_list);
 static int avflt_request_accept = 0;
 static struct kmem_cache *avflt_event_cache = NULL;
+atomic_t avflt_cache_ver = ATOMIC_INIT(0);
 
 static struct avflt_event *avflt_event_alloc(struct file *file, int type)
 {
@@ -49,6 +50,8 @@ static struct avflt_event *avflt_event_alloc(struct file *file, int type)
 	event->result = 0;
 	event->file = NULL;
 	event->fd = -1;
+	event->f_mode = file->f_mode;
+	event->cache_ver = atomic_read(&avflt_cache_ver);
 
 	return event;
 }
@@ -83,7 +86,7 @@ static int avflt_add_request(struct avflt_event *event, int tail)
 {
 	spin_lock(&avflt_request_lock);
 
-	if (avflt_request_accept <= 0) {
+	if (avflt_request_accept == 0) {
 		spin_unlock(&avflt_request_lock);
 		return 1;
 	}
@@ -180,11 +183,18 @@ static void avflt_update_cache(struct avflt_event *event)
 	if (!event->result)
 		return;
 
+	if (!avflt_use_cache(event->dentry->d_inode, event->f_mode,
+				event->type, 1))
+		return;
+
 	data = avflt_attach_inode_data(event->dentry->d_inode);
 	if (!data)
 		return;
 
-	atomic_set(&data->state, event->result);
+	spin_lock(&data->lock);
+	data->state = event->result;
+	data->cache_ver = event->cache_ver;
+	spin_unlock(&data->lock);
 	avflt_put_inode_data(data);
 }
 
@@ -294,17 +304,15 @@ int avflt_add_reply(struct avflt_event *event)
 void avflt_start_accept(void)
 {
 	spin_lock(&avflt_request_lock);
-	if (avflt_proc_empty())
-		avflt_request_accept = 0;
-	else
-		avflt_request_accept = 1;
+	avflt_request_accept = 1;
 	spin_unlock(&avflt_request_lock);
 }
 
 void avflt_stop_accept(void)
 {
 	spin_lock(&avflt_request_lock);
-	avflt_request_accept = -1;
+	if (avflt_proc_empty())
+		avflt_request_accept = 0;
 	spin_unlock(&avflt_request_lock);
 }
 
@@ -313,39 +321,10 @@ int avflt_is_stopped(void)
 	int stopped;
 
 	spin_lock(&avflt_request_lock);
-	stopped = avflt_request_accept <= 0;
+	stopped = avflt_request_accept == 0;
 	spin_unlock(&avflt_request_lock);
 
 	return stopped;
-}
-
-void avflt_proc_start_accept(void)
-{
-	spin_lock(&avflt_request_lock);
-
-	if (avflt_proc_empty())
-		goto exit;
-
-	if (avflt_request_accept < 0)
-		goto exit;
-
-	avflt_request_accept = 1;
-exit:
-	spin_unlock(&avflt_request_lock);
-}
-
-void avflt_proc_stop_accept(void)
-{
-	spin_lock(&avflt_request_lock);
-	if (!avflt_proc_empty())
-		goto exit;
-
-	if (avflt_request_accept <= 0)
-		goto exit;
-
-	avflt_request_accept = 0;
-exit:
-	spin_unlock(&avflt_request_lock);
 }
 
 void avflt_rem_requests(void)
@@ -356,7 +335,7 @@ void avflt_rem_requests(void)
 
 	spin_lock(&avflt_request_lock);
 
-	if (avflt_request_accept > 0) {
+	if (avflt_request_accept == 1) {
 		spin_unlock(&avflt_request_lock);
 		return;
 
@@ -406,44 +385,9 @@ struct avflt_event *avflt_get_reply(const char __user *buf, size_t size)
 	return event;
 }
 
-void avflt_invalidate_root_cache(redirfs_root root)
-{
-	struct avflt_root_data *root_data;
-	struct avflt_inode_data *inode_data;
-
-	root_data = avflt_get_root_data_root(root);
-	if (!root_data)
-		return;
-
-	mutex_lock(&avflt_root_mutex);
-	list_for_each_entry(inode_data, &root_data->list, root_list) {
-		atomic_set(&inode_data->state, 0);
-	}
-	mutex_unlock(&avflt_root_mutex);
-
-	avflt_put_root_data(root_data);
-}
-
 void avflt_invalidate_cache(void)
 {
-	redirfs_path *paths;
-	redirfs_root *root;
-	int i = 0;
-
-	paths = redirfs_get_paths(avflt);
-	if (!paths)
-		return;
-
-	while (paths[i]) {
-		root = redirfs_get_root_path(paths[i++]);
-		if (!root)
-			continue;
-
-		avflt_invalidate_root_cache(root);
-		redirfs_put_root(root);
-	}
-
-	redirfs_put_paths(paths);
+	atomic_inc(&avflt_cache_ver);
 }
 
 int avflt_check_init(void)
