@@ -40,14 +40,12 @@ static int avflt_should_check(struct file *file)
 	return 1;
 }
 
-int avflt_use_cache(struct inode *inode, mode_t mode, int type, int update)
+int avflt_use_cache(struct inode *inode)
 {
 	struct avflt_root_data *data;
 	redirfs_root root;
 	int cache;
-	int event;
-	int wc;
-
+	
 	if (!atomic_read(&avflt_cache_enabled))
 		return 0;
 
@@ -65,30 +63,16 @@ int avflt_use_cache(struct inode *inode, mode_t mode, int type, int update)
 	if (!cache)
 		return 0;
 
-	wc = atomic_read(&inode->i_writecount);
-
-	if (wc <= 0)
-		return 1;
-
-	if (wc > 1)
-		return 0;
-
-	if (!(mode & FMODE_WRITE))
-		return 0;
-
-	event = update ? AVFLT_EVENT_CLOSE : AVFLT_EVENT_OPEN;
-	if (type == event)
-		return 1;
-
-	return 0;
+	return 1;
 }
 
 static int avflt_check_cache(struct file *file, int type)
 {
 	struct avflt_inode_data *data;
-	int state;
+	int wc;
+	int state = 0;
 
-	if (!avflt_use_cache(file->f_dentry->d_inode, file->f_mode, type, 0))
+	if (!avflt_use_cache(file->f_dentry->d_inode))
 		return 0;
 
 	data = avflt_get_inode_data_inode(file->f_dentry->d_inode);
@@ -96,14 +80,29 @@ static int avflt_check_cache(struct file *file, int type)
 		return 0;
 
 	spin_lock(&data->lock);
-	if (data->cache_ver != atomic_read(&avflt_cache_ver))
-		state = 0;
-	else
-		state = data->state;
+
+	wc = atomic_read(&file->f_dentry->d_inode->i_writecount);
+
+	if (wc == 1) {
+		if (!(file->f_mode & FMODE_WRITE))
+			data->inode_cache_ver++;
+
+		else if (type == AVFLT_EVENT_CLOSE)
+			data->inode_cache_ver++;
+
+	} else if (wc > 1)
+		data->inode_cache_ver++;
+
+	if (data->avflt_cache_ver != atomic_read(&avflt_cache_ver))
+		goto exit;
+
+	if (data->cache_ver != data->inode_cache_ver)
+		goto exit;
+
+	state = data->state;
+exit:
 	spin_unlock(&data->lock);
-
 	avflt_put_inode_data(data);
-
 	return state;
 }
 

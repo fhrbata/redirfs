@@ -33,9 +33,10 @@ atomic_t avflt_cache_ver = ATOMIC_INIT(0);
 static struct avflt_event *avflt_event_alloc(struct file *file, int type)
 {
 	struct avflt_event *event;
+	struct avflt_inode_data *data;
 
 	event = kmem_cache_zalloc(avflt_event_cache, GFP_KERNEL);
-	if (!event)
+	if (!event) 
 		return ERR_PTR(-ENOMEM);
 
 	INIT_LIST_HEAD(&event->req_list);
@@ -50,8 +51,16 @@ static struct avflt_event *avflt_event_alloc(struct file *file, int type)
 	event->result = 0;
 	event->file = NULL;
 	event->fd = -1;
-	event->f_mode = file->f_mode;
-	event->cache_ver = atomic_read(&avflt_cache_ver);
+	event->avflt_cache_ver = atomic_read(&avflt_cache_ver);
+
+	data = avflt_get_inode_data_inode(file->f_dentry->d_inode);
+	if (data) {
+		spin_lock(&data->lock);
+		event->cache_ver = data->inode_cache_ver;
+		spin_unlock(&data->lock);
+	}
+
+	avflt_put_inode_data(data);
 
 	return event;
 }
@@ -180,11 +189,7 @@ static void avflt_update_cache(struct avflt_event *event)
 {
 	struct avflt_inode_data *data;
 
-	if (!event->result)
-		return;
-
-	if (!avflt_use_cache(event->dentry->d_inode, event->f_mode,
-				event->type, 1))
+	if (!avflt_use_cache(event->dentry->d_inode))
 		return;
 
 	data = avflt_attach_inode_data(event->dentry->d_inode);
@@ -192,8 +197,9 @@ static void avflt_update_cache(struct avflt_event *event)
 		return;
 
 	spin_lock(&data->lock);
-	data->state = event->result;
+	data->avflt_cache_ver = event->avflt_cache_ver;
 	data->cache_ver = event->cache_ver;
+	data->state = event->result;
 	spin_unlock(&data->lock);
 	avflt_put_inode_data(data);
 }

@@ -54,7 +54,7 @@ struct avflt_event {
 	int result;
 	struct file *file;
 	int fd;
-	mode_t f_mode;
+	int avflt_cache_ver;
 	int cache_ver;
 };
 
@@ -104,6 +104,8 @@ struct avflt_event *avflt_proc_get_event(struct avflt_proc *proc, int id);
 
 struct avflt_inode_data {
 	struct redirfs_data rfs_data;
+	int avflt_cache_ver;
+	int inode_cache_ver;
 	int cache_ver;
 	int state;
 	spinlock_t lock;
@@ -129,7 +131,7 @@ struct avflt_root_data *avflt_get_root_data(struct avflt_root_data *data);
 void avflt_put_root_data(struct avflt_root_data *data);
 struct avflt_root_data *avflt_attach_root_data(redirfs_root root);
 
-int avflt_use_cache(struct inode *inode, mode_t mode, int type, int update);
+int avflt_use_cache(struct inode *inode);
 void avflt_invalidate_cache(void);
 
 int avflt_dev_init(void);
