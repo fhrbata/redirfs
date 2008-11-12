@@ -388,6 +388,21 @@ int redirfs_rem_path(redirfs_filter filter, redirfs_path path)
 	return rv;
 }
 
+int redirfs_get_id_path(redirfs_path path)
+{
+	struct rfs_path *rpath = path;
+
+	if (!path || IS_ERR(path))
+		return -EINVAL;
+
+	return rpath->id;
+}
+
+redirfs_path redirfs_get_path_id(int id)
+{
+	return rfs_path_find_id(id);
+}
+
 redirfs_path redirfs_get_path(redirfs_path path)
 {
 	return rfs_path_get(path);
@@ -936,4 +951,6 @@ EXPORT_SYMBOL(redirfs_add_path);
 EXPORT_SYMBOL(redirfs_rem_path);
 EXPORT_SYMBOL(redirfs_rem_paths);
 EXPORT_SYMBOL(redirfs_get_filename);
+EXPORT_SYMBOL(redirfs_get_id_path);
+EXPORT_SYMBOL(redirfs_get_path_id);
 

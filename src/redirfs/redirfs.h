@@ -605,6 +605,8 @@ struct kobject *redirfs_filter_kobject(redirfs_filter filter);
 redirfs_path redirfs_add_path(redirfs_filter filter,
 		struct redirfs_path_info *info);
 int redirfs_rem_path(redirfs_filter filter, redirfs_path path);
+int redirfs_get_id_path(redirfs_path path);
+redirfs_path redirfs_get_path_id(int id);
 redirfs_path redirfs_get_path(redirfs_path path);
 void redirfs_put_path(redirfs_path path);
 redirfs_path* redirfs_get_paths_root(redirfs_filter filter, redirfs_root root);
