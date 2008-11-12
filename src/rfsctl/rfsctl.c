@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <getopt.h>
-#include "rfsctl.h"
+#include <rfsctl.h>
 
 #define CMD_LIST	0x001
 #define CMD_SHOW	0x002
