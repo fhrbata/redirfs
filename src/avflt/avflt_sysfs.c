@@ -53,40 +53,137 @@ static ssize_t avflt_timeout_store(redirfs_filter filter,
 static ssize_t avflt_cache_show(redirfs_filter filter,
 		struct redirfs_filter_attribute *attr, char *buf)
 {
-	return snprintf(buf, PAGE_SIZE, "%d",
-			atomic_read(&avflt_cache_enabled));
+	char state;
+
+	if (atomic_read(&avflt_cache_enabled))
+		state = 'a';
+	else
+		state = 'd';
+
+	return snprintf(buf, PAGE_SIZE, "%d", state);
 }
 
 static ssize_t avflt_cache_store(redirfs_filter filter,
 		struct redirfs_filter_attribute *attr, const char *buf,
 		size_t count)
 {
-	int cache;
+	char cache;
 
-	if (sscanf(buf, "%d", &cache) != 1)
+	if (sscanf(buf, "%c", &cache) != 1)
 		return -EINVAL;
 
-	if (cache) {
-		atomic_set(&avflt_cache_enabled, 1);
-		return count;
-	}
+	switch (cache) {
+		case 'a':
+			avflt_invalidate_cache();
+			atomic_set(&avflt_cache_enabled, 1);
+			break;
 
-	atomic_set(&avflt_cache_enabled, 0);
-	avflt_invalidate_cache();
+		case 'd':
+			atomic_set(&avflt_cache_enabled, 0);
+			break;
+
+		case 'i':
+			avflt_invalidate_cache();
+			break;
+
+		default:
+			return -EINVAL;
+	}
 
 	return count;
 }
 
-static ssize_t avflt_pathcache_show(redirfs_filter filter,
+static ssize_t avflt_cache_paths_show(redirfs_filter filter,
 		struct redirfs_filter_attribute *attr, char *buf)
 {
-	return 0;
+	struct avflt_root_data *data;
+	redirfs_path *paths;
+	redirfs_root root;
+	ssize_t size = 0;
+	char state;
+	int i = 0;
+
+	paths = redirfs_get_paths(avflt);
+	if (IS_ERR(paths))
+		return PTR_ERR(paths);
+
+	while (paths[i]) {
+		root = redirfs_get_root_path(paths[i]);
+		if (!root)
+			goto next;
+
+		data = avflt_get_root_data_root(root);
+		redirfs_put_root(root);
+		if (!data)
+			goto next;
+
+		if (atomic_read(&data->cache_enabled))
+			state = 'a';
+		else
+			state = 'd';
+
+		avflt_put_root_data(data);
+
+		size += snprintf(buf + size, PAGE_SIZE - size, "%c:%d",
+				redirfs_get_id_path(paths[i]), state) + 1;
+
+		if (size >= PAGE_SIZE)
+			break;
+next:
+		i++;
+	}
+
+	redirfs_put_paths(paths);
+	return size;
 }
 
-static ssize_t avflt_pathcache_store(redirfs_filter filter,
+static ssize_t avflt_cache_paths_store(redirfs_filter filter,
 		struct redirfs_filter_attribute *attr, const char *buf,
 		size_t count)
 {
+	struct avflt_root_data *data;
+	redirfs_path path;
+	redirfs_root root;
+	char cache;
+	int id;
+
+	if (sscanf(buf, "%c:%d", &cache, &id) != 2)
+		return -EINVAL;
+
+	path = redirfs_get_path_id(id);
+	if (!path)
+		return -ENOENT;
+
+	root = redirfs_get_root_path(path);
+	redirfs_put_path(path);
+	if (!root)
+		return -ENOENT;
+
+	data = avflt_get_root_data_root(root);
+	redirfs_put_root(root);
+	if (!data)
+		return -ENOENT;
+
+	switch (cache) {
+		case 'a':
+			atomic_inc(&data->cache_ver);
+			atomic_set(&data->cache_enabled, 1);
+			break;
+		case 'd':
+			atomic_set(&data->cache_enabled, 0);
+			break;
+		case 'i':
+			atomic_inc(&data->cache_ver);
+			break;
+
+		default:
+			avflt_put_root_data(data);
+			return -EINVAL;
+
+	}
+
+	avflt_put_root_data(data);
+
 	return count;
 }
 
@@ -99,8 +196,8 @@ static struct redirfs_filter_attribute avflt_cache_attr =
 			avflt_cache_store);
 
 static struct redirfs_filter_attribute avflt_pathcache_attr = 
-	REDIRFS_FILTER_ATTRIBUTE(pathcache, 0644, avflt_pathcache_show,
-			avflt_pathcache_store);
+	REDIRFS_FILTER_ATTRIBUTE(cache_paths, 0644, avflt_cache_paths_show,
+			avflt_cache_paths_store);
 
 int avflt_sys_init(void)
 {

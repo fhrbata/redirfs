@@ -31,6 +31,7 @@
 #include <linux/mount.h>
 #include <linux/version.h>
 #include <linux/freezer.h>
+#include <linux/fs.h>
 #include <redirfs.h>
 
 #define AVFLT_VERSION	"0.1"
@@ -44,17 +45,17 @@
 struct avflt_event {
 	struct list_head req_list;
 	struct list_head proc_list;
-	struct vfsmount *mnt;
-	struct dentry *dentry;
+	struct avflt_root_data *root_data;
 	wait_queue_head_t wait;
 	atomic_t done;
 	atomic_t count;
 	int type;
 	int id;
 	int result;
+	struct file *file_orig;
 	struct file *file;
 	int fd;
-	int avflt_cache_ver;
+	int root_cache_ver;
 	int cache_ver;
 };
 
@@ -99,12 +100,28 @@ void avflt_proc_add_event(struct avflt_proc *proc, struct avflt_event *event);
 void avflt_proc_rem_event(struct avflt_proc *proc, struct avflt_event *event);
 struct avflt_event *avflt_proc_get_event(struct avflt_proc *proc, int id);
 
+#define rfs_to_root_data(ptr) \
+	container_of(ptr, struct avflt_root_data, rfs_data)
+
+struct avflt_root_data {
+	struct redirfs_data rfs_data;
+	atomic_t cache_enabled;
+	atomic_t cache_ver;
+};
+
+struct avflt_root_data *avflt_get_root_data_root(redirfs_root root);
+struct avflt_root_data *avflt_get_root_data_inode(struct inode *inode);
+struct avflt_root_data *avflt_get_root_data(struct avflt_root_data *data);
+void avflt_put_root_data(struct avflt_root_data *data);
+struct avflt_root_data *avflt_attach_root_data(redirfs_root root);
+
 #define rfs_to_inode_data(ptr) \
 	container_of(ptr, struct avflt_inode_data, rfs_data)
 
 struct avflt_inode_data {
 	struct redirfs_data rfs_data;
-	int avflt_cache_ver;
+	struct avflt_root_data *root_data;
+	int root_cache_ver;
 	int inode_cache_ver;
 	int cache_ver;
 	int state;
@@ -118,20 +135,7 @@ struct avflt_inode_data *avflt_attach_inode_data(struct inode *inode);
 int avflt_data_init(void);
 void avflt_data_exit(void);
 
-#define rfs_to_root_data(ptr) \
-	container_of(ptr, struct avflt_root_data, rfs_data)
-
-struct avflt_root_data {
-	struct redirfs_data rfs_data;
-	atomic_t cache;
-};
-
-struct avflt_root_data *avflt_get_root_data_root(redirfs_root root);
-struct avflt_root_data *avflt_get_root_data(struct avflt_root_data *data);
-void avflt_put_root_data(struct avflt_root_data *data);
-struct avflt_root_data *avflt_attach_root_data(redirfs_root root);
-
-int avflt_use_cache(struct inode *inode);
+void avflt_invalidate_cache_root(redirfs_root root);
 void avflt_invalidate_cache(void);
 
 int avflt_dev_init(void);
@@ -146,7 +150,6 @@ void avflt_sys_exit(void);
 extern atomic_t avflt_reply_timeout;
 extern atomic_t avflt_cache_enabled;
 extern redirfs_filter avflt;
-extern atomic_t avflt_cache_ver;
 
 #endif
 

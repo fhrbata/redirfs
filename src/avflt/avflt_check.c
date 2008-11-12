@@ -32,8 +32,9 @@ atomic_t avflt_cache_ver = ATOMIC_INIT(0);
 
 static struct avflt_event *avflt_event_alloc(struct file *file, int type)
 {
+	struct avflt_inode_data *inode_data;
+	struct avflt_root_data *root_data;
 	struct avflt_event *event;
-	struct avflt_inode_data *data;
 
 	event = kmem_cache_zalloc(avflt_event_cache, GFP_KERNEL);
 	if (!event) 
@@ -41,26 +42,31 @@ static struct avflt_event *avflt_event_alloc(struct file *file, int type)
 
 	INIT_LIST_HEAD(&event->req_list);
 	INIT_LIST_HEAD(&event->proc_list);
-	event->mnt = mntget(file->f_path.mnt);
-	event->dentry = dget(file->f_path.dentry);
 	init_waitqueue_head(&event->wait);
 	atomic_set(&event->done, 0);
 	atomic_set(&event->count, 1);
 	event->type = type;
 	event->id = -1;
-	event->result = 0;
-	event->file = NULL;
+	event->file_orig = file;
+	get_file(file);
 	event->fd = -1;
-	event->avflt_cache_ver = atomic_read(&avflt_cache_ver);
 
-	data = avflt_get_inode_data_inode(file->f_dentry->d_inode);
-	if (data) {
-		spin_lock(&data->lock);
-		event->cache_ver = data->inode_cache_ver;
-		spin_unlock(&data->lock);
+	root_data = avflt_get_root_data_inode(file->f_dentry->d_inode);
+	inode_data = avflt_get_inode_data_inode(file->f_dentry->d_inode);
+
+	if (root_data) 
+		event->root_cache_ver = atomic_read(&root_data->cache_ver);
+
+	event->root_data = avflt_get_root_data(root_data);
+
+	if (inode_data) {
+		spin_lock(&inode_data->lock);
+		event->cache_ver = inode_data->inode_cache_ver;
+		spin_unlock(&inode_data->lock);
 	}
 
-	avflt_put_inode_data(data);
+	avflt_put_inode_data(inode_data);
+	avflt_put_root_data(root_data);
 
 	return event;
 }
@@ -86,8 +92,8 @@ void avflt_event_put(struct avflt_event *event)
 	if (!atomic_dec_and_test(&event->count))
 		return;
 
-	dput(event->dentry);
-	mntput(event->mnt);
+	avflt_put_root_data(event->root_data);
+	fput(event->file_orig);
 	kmem_cache_free(avflt_event_cache, event);
 }
 
@@ -187,21 +193,38 @@ static int avflt_wait_for_reply(struct avflt_event *event)
 
 static void avflt_update_cache(struct avflt_event *event)
 {
-	struct avflt_inode_data *data;
+	struct avflt_inode_data *inode_data;
+	struct avflt_root_data *root_data;
+	struct inode *inode;
 
-	if (!avflt_use_cache(event->dentry->d_inode))
+	if (!atomic_read(&avflt_cache_enabled))
 		return;
 
-	data = avflt_attach_inode_data(event->dentry->d_inode);
-	if (!data)
+	inode = event->file_orig->f_dentry->d_inode;
+
+	root_data = avflt_get_root_data_inode(inode);
+	if (!root_data)
 		return;
 
-	spin_lock(&data->lock);
-	data->avflt_cache_ver = event->avflt_cache_ver;
-	data->cache_ver = event->cache_ver;
-	data->state = event->result;
-	spin_unlock(&data->lock);
-	avflt_put_inode_data(data);
+	if (!atomic_read(&root_data->cache_enabled)) {
+		avflt_put_root_data(root_data);
+		return;
+	}
+
+	avflt_put_root_data(root_data);
+
+	inode_data = avflt_attach_inode_data(event->file->f_dentry->d_inode);
+	if (!inode_data)
+		return;
+
+	spin_lock(&inode_data->lock);
+	avflt_put_root_data(inode_data->root_data);
+	inode_data->root_data = avflt_get_root_data(event->root_data);
+	inode_data->root_cache_ver = event->root_cache_ver;
+	inode_data->cache_ver = event->cache_ver;
+	inode_data->state = event->result;
+	spin_unlock(&inode_data->lock);
+	avflt_put_inode_data(inode_data);
 }
 
 int avflt_process_request(struct file *file, int type)
@@ -243,7 +266,8 @@ int avflt_get_file(struct avflt_event *event)
 	if (fd < 0)
 		return fd;
 
-	file = dentry_open(event->dentry, event->mnt, O_RDONLY);
+	file = dentry_open(event->file_orig->f_dentry,
+			event->file_orig->f_vfsmnt, O_RDONLY);
 	if (IS_ERR(file)) {
 		put_unused_fd(fd);
 		return PTR_ERR(file);
@@ -391,9 +415,38 @@ struct avflt_event *avflt_get_reply(const char __user *buf, size_t size)
 	return event;
 }
 
+void avflt_invalidate_cache_root(redirfs_root root)
+{
+	struct avflt_root_data *data;
+
+	if (!root)
+		return;
+
+	data = avflt_get_root_data_root(root);
+	if (!data)
+		return;
+
+	atomic_inc(&data->cache_ver);
+	avflt_put_root_data(data);
+}
+
 void avflt_invalidate_cache(void)
 {
-	atomic_inc(&avflt_cache_ver);
+	redirfs_path *paths;
+	redirfs_root root;
+	int i = 0;
+
+	paths = redirfs_get_paths(avflt);
+	if (IS_ERR(paths))
+		return;
+
+	while (paths[i]) {
+		root = redirfs_get_root_path(paths[i]);
+		avflt_invalidate_cache_root(root);
+		i++;
+	}
+
+	redirfs_put_paths(paths);
 }
 
 int avflt_check_init(void)

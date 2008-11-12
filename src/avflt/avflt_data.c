@@ -48,7 +48,8 @@ static struct avflt_root_data *avflt_root_data_alloc(void)
 		return ERR_PTR(err);
 	}
 
-	atomic_set(&data->cache, 1);
+	atomic_set(&data->cache_enabled, 1);
+	atomic_set(&data->cache_ver, 0);
 
 	return data;
 }
@@ -62,6 +63,21 @@ struct avflt_root_data *avflt_get_root_data_root(redirfs_root root)
 		return NULL;
 
 	return rfs_to_root_data(rfs_data);
+}
+
+struct avflt_root_data *avflt_get_root_data_inode(struct inode *inode)
+{
+	struct avflt_root_data *data;
+	redirfs_root root;
+
+	root = redirfs_get_root_inode(avflt, inode);
+	if (!root)
+		return NULL;
+
+	data = avflt_get_root_data_root(root);
+	redirfs_put_root(root);
+
+	return data;
 }
 
 struct avflt_root_data *avflt_get_root_data(struct avflt_root_data *data)
