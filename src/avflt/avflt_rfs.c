@@ -163,15 +163,13 @@ static int avflt_add_path(struct redirfs_path_info *info)
 		return PTR_ERR(path);
 
 	root = redirfs_get_root_path(path);
-	if (!root) {
-		redirfs_put_path(path);
+	redirfs_put_path(path);
+	if (!root)
 		return 0;
-	}
 
 	data = avflt_attach_root_data(root);
 
 	redirfs_put_root(root);
-	redirfs_put_path(path);
 	avflt_put_root_data(data);
 	
 	return 0;
