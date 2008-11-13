@@ -18,7 +18,8 @@ $(LIB_NAME).a: $(LIB_OBJS)
 	$(AR) $(ARFLAGS) $(LIB_NAME).a $(LIB_OBJS)
 
 $(LIB_NAME).so: $(LIB_OBJS)
-	$(CC) -shared -Wl,-soname,librfsctl.so.0 -o $(LIB_NAME).so $(LIB_OBJS)
+	$(CC) -shared -Wl,-soname,$(LIB_NAME).so.$(VMAR) \
+		-o $(LIB_NAME).so $(LIB_OBJS)
 
 install:
 	cp $(HDR_NAME) $(HDR_DIR)/$(HDR_NAME)

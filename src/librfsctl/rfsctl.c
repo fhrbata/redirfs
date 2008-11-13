@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <unistd.h>
 #include "rfsctl.h"
 
 static const char *rfsctl_dir = "/sys/fs/redirfs/filters";
@@ -71,7 +72,7 @@ static struct rfsctl_filter *rfsctl_alloc_filter(const char *name)
 		return NULL;
 	}
 
-	strncpy(flt->name, name, size - 1);
+	strncpy(flt->name, name, size);
 	flt->paths = NULL;
 
 	return flt;
@@ -119,8 +120,8 @@ static void rfsctl_free_filename(char *filename)
 	free(filename);
 }
 
-static int rfsctl_read_data(const char *fltname, const char *filename,
-		char *buf, int size)
+int rfsctl_read_data(const char *fltname, const char *filename, char *buf,
+		int size)
 {
 	char *fn;
 	int fd;
@@ -144,18 +145,27 @@ static int rfsctl_read_data(const char *fltname, const char *filename,
 	return rb;
 }
 
-static int rfsctl_write_data(const char *fltname, const char *filename,
-		char *buf, int size, int clean)
+int rfsctl_write_data(const char *fltname, const char *filename, char *buf,
+		int size)
 {
+	struct stat sb;
 	char *tmp;
 	char *fn;
 	int fd;
 	int wb;
 	int flags;
+	int clean;
 
 	fn = rfsctl_alloc_filename(fltname, filename);
 	if (!fn)
 		return -1;
+
+	if (stat(fn, &sb)) {
+		rfsctl_free_filename(fn);
+		return -1;
+	}
+
+	clean = sb.st_mode & S_IRUSR;
 
 	if (clean)
 		flags = O_RDWR;
@@ -226,6 +236,7 @@ static int rfsctl_set_filter_active(struct rfsctl_filter *flt)
 static int rfsctl_set_filter_paths(struct rfsctl_filter *flt)
 {
 	struct rfsctl_path *path;
+	struct rfsctl_path **paths;
 	int off = 0;
 	int rv = -1;
 	int i = 0;
@@ -256,13 +267,14 @@ static int rfsctl_set_filter_paths(struct rfsctl_filter *flt)
 		if (!path)
 			goto exit;
 
-		flt->paths = realloc(flt->paths,
+		paths = realloc(flt->paths,
 				sizeof(struct rfsctl_path *) * (i + 2));
-		if (!flt->paths) {
+		if (!paths) {
 			rfsctl_put_path(path);
 			goto exit;;
 		}
 
+		flt->paths = paths;
 		flt->paths[i++] = path;
 		flt->paths[i] = NULL;
 		
@@ -408,7 +420,7 @@ int rfsctl_add_path(const char *name, const char *path, int type)
 		return -1;
 	}
 
-	if (rfsctl_write_data(name, "paths", buf, size + 1, 1) == -1) {
+	if (rfsctl_write_data(name, "paths", buf, size + 1) == -1) {
 		free(buf);
 		return -1;
 	}
@@ -433,7 +445,7 @@ int rfsctl_rem_path(const char *name, int id)
 		return -1;
 	}
 
-	if (rfsctl_write_data(name, "paths", buf, size + 1, 1) == -1)
+	if (rfsctl_write_data(name, "paths", buf, size + 1) == -1)
 		return -1;
 
 	return 0;
@@ -446,7 +458,7 @@ int rfsctl_del_paths(const char *name)
 		return -1;
 	}
 
-	if (rfsctl_write_data(name, "paths", "c", 2, 1) == -1)
+	if (rfsctl_write_data(name, "paths", "c", 2) == -1)
 		return -1;
 
 	return 0;
@@ -459,7 +471,7 @@ int rfsctl_unregister(const char *name)
 		return -1;
 	}
 
-	if (rfsctl_write_data(name, "unregister", "1", 2, 0) == -1)
+	if (rfsctl_write_data(name, "unregister", "1", 2) == -1)
 		return -1;
 
 	return 0;
@@ -472,7 +484,7 @@ int rfsctl_activate(const char *name)
 		return -1;
 	}
 
-	if (rfsctl_write_data(name, "active", "1", 2, 1) == -1)
+	if (rfsctl_write_data(name, "active", "1", 2) == -1)
 		return -1;
 
 	return 0;
@@ -485,7 +497,7 @@ int rfsctl_deactivate(const char *name)
 		return -1;
 	}
 
-	if (rfsctl_write_data(name, "active", "0", 2, 1) == -1)
+	if (rfsctl_write_data(name, "active", "0", 2) == -1)
 		return -1;
 
 	return 0;

@@ -27,6 +27,10 @@ int rfsctl_del_paths(const char *name);
 int rfsctl_unregister(const char *name);
 int rfsctl_activate(const char *name);
 int rfsctl_deactivate(const char *name);
+int rfsctl_read_data(const char *fltname, const char *filename, char *buf,
+		int size);
+int rfsctl_write_data(const char *fltname, const char *filename, char *buf,
+		int size);
 
 #endif
 
