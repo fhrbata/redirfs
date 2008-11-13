@@ -1,0 +1,31 @@
+#ifndef __AV_H__
+#define __AV_H__
+
+#define AV_EVENT_OPEN  1
+#define AV_EVENT_CLOSE 2
+
+#define AV_ACCESS_ALLOW 1
+#define AV_ACCESS_DENY  2
+
+struct av_connection {
+	int fd;
+};
+
+struct av_event {
+	int id;
+	int type;
+	int fd;
+	pid_t pid;
+	pid_t tgid;
+	int res;
+};
+
+int av_register(struct av_connection *conn);
+int av_unregister(struct av_connection *conn);
+int av_request(struct av_connection *conn, struct av_event *event);
+int av_reply(struct av_connection *conn, struct av_event *event);
+int av_set_result(struct av_event *event, int res);
+int av_get_filename(struct av_event *event, char *buf, int size);
+
+#endif
+
