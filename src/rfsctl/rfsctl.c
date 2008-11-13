@@ -19,18 +19,18 @@
 static const char *version = "0.1";
 
 static const char *help =
-"-l, --list             list all registered filters\n"
-"-s, --show             show all available filter information\n"
-"-f, --filter <name>    specify filter by <name>\n"
-"-i, --include <path>   add new included path for filter\n"
-"-e, --exclude <path>   add new excluded path for filter\n"
-"-r, --remove <id>      remove filter path specified by <id>\n"
-"-c, --clean            remove all filter paths\n"
-"-a, --activate         activate filter\n"
-"-d, --deactivate       deactivate filter\n"
-"-u, --unregister       unregister filter\n"
-"-h, --help             print help\n"
-"-v, --version          print version";
+"-l, --list		list all registered filters\n"
+"-s, --show		show all available filter information\n"
+"-f, --filter <name>	specify filter by <name>\n"
+"-i, --include <path>	add new included path for filter\n"
+"-e, --exclude <path>	add new excluded path for filter\n"
+"-r, --remove <id>	remove filter path specified by <id>\n"
+"-c, --clean		remove all filter paths\n"
+"-a, --activate		activate filter\n"
+"-d, --deactivate	deactivate filter\n"
+"-u, --unregister	unregister filter\n"
+"-h, --help		print help\n"
+"-v, --version		print version";
 
 static const char *usage =
 "rfsctl -f <name> [-a | -d | -c | -u | -s]\n"

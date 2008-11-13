@@ -22,25 +22,25 @@
 static const char *version = "0.1";
 
 static const char *help_rfs =
-"-s, --show             show all available avflt information\n"
-"-i, --include <path>   add new included path for avflt\n"
-"-e, --exclude <path>   add new excluded path for avflt\n"
-"-r, --remove <id>      remove avflt path specified by <id>\n"
-"-c, --clean            remove all avflt paths\n"
-"-a, --activate         activate avflt\n"
-"-d, --deactivate       deactivate avflt\n"
-"-u, --unregister       unregister avflt\n"
-"-h, --help             print help\n"
-"-v, --version          print version\n";
+"-s, --show		show all available avflt information\n"
+"-i, --include <path>	add new included path for avflt\n"
+"-e, --exclude <path>	add new excluded path for avflt\n"
+"-r, --remove <id>	remove avflt path specified by <id>\n"
+"-c, --clean		remove all avflt paths\n"
+"-a, --activate		activate avflt\n"
+"-d, --deactivate	deactivate avflt\n"
+"-u, --unregister	unregister avflt\n"
+"-h, --help		print help\n"
+"-v, --version		print version\n";
 
 static const char *help_avflt =
-"-n, --cache-invalidate [id]   invalidate cache for path specified by <id>\n"
-"                              if no <id> is specified invalidate all caches\n"
-"-o, --cache-enable [id]       enable cache for path specified by <id>\n"
-"                              if no <id> is specified enable global cache\n"
-"-f, --cache-disable [id]      disable cache for path specifed by <id>\n"
-"                              if no <id> is specified disable global cache\n"
-"-t, --timeout                 set timeout for avflt requests";
+"-n, --cache-invalidate [id]	invalidate cache for path specified by <id>\n"
+"				if no <id> is specified invalidate all caches\n"
+"-o, --cache-enable [id]	enable cache for path specified by <id>\n"
+"				if no <id> is specified enable global cache\n"
+"-f, --cache-disable [id]	disable cache for path specifed by <id>\n"
+"				if no <id> is specified disable global cache\n"
+"-t, --timeout			set timeout for avflt requests";
 
 static const char *usage =
 "avfltctl [-a | -d | -c | -u | -s | -h | -v]\n"

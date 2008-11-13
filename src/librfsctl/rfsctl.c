@@ -106,7 +106,7 @@ static char *rfsctl_alloc_filename(const char *fltname, const char *filename)
 	if (!fn)
 		return NULL;
 
-	strncpy(fn, rfsctl_dir, strlen(rfsctl_dir));
+	strncpy(fn, rfsctl_dir, strlen(rfsctl_dir) + 1);
 	strncat(fn, "/", 1);
 	strncat(fn, fltname, strlen(fltname));
 	strncat(fn, "/", 1);
@@ -155,7 +155,10 @@ int rfsctl_write_data(const char *fltname, const char *filename, char *buf,
 	int wb;
 	int flags;
 	int clean;
+	long page_size;
 
+	page_size = sysconf(_SC_PAGESIZE);
+	printf("PAGE_SIZE: %lu\n", page_size);
 	fn = rfsctl_alloc_filename(fltname, filename);
 	if (!fn)
 		return -1;
@@ -179,14 +182,14 @@ int rfsctl_write_data(const char *fltname, const char *filename, char *buf,
 	}
 
 	if (clean) {
-		tmp = malloc(sizeof(char) * PAGE_SIZE);
+		tmp = malloc(sizeof(char) * page_size);
 		if (!tmp) {
 			rfsctl_free_filename(fn);
 			close(fd);
 			return -1;
 		}
 
-		if (read(fd, tmp, PAGE_SIZE) == -1) {
+		if (read(fd, tmp, page_size) == -1) {
 			rfsctl_free_filename(fn);
 			close(fd);
 			free(tmp);
@@ -242,12 +245,14 @@ static int rfsctl_set_filter_paths(struct rfsctl_filter *flt)
 	int i = 0;
 	char *buf;
 	int rb;
+	long page_size;
 
-	buf = malloc(sizeof(char) * PAGE_SIZE);
+	page_size = sysconf(_SC_PAGESIZE);
+	buf = malloc(sizeof(char) * page_size);
 	if (!buf)
 		return -1;
 
-	rb = rfsctl_read_data(flt->name, "paths", buf, PAGE_SIZE);
+	rb = rfsctl_read_data(flt->name, "paths", buf, page_size);
 	if (rb == -1)
 		goto exit;
 
@@ -393,6 +398,7 @@ int rfsctl_add_path(const char *name, const char *path, int type)
 	char *buf;
 	int size;
 	char t;
+	long page_size;
 
 	if (!name || !path) {
 		errno = EINVAL;
@@ -409,12 +415,13 @@ int rfsctl_add_path(const char *name, const char *path, int type)
 	else 
 		t = 'e';
 
-	buf = malloc(sizeof(char) * PAGE_SIZE);
+	page_size = sysconf(_SC_PAGESIZE);
+	buf = malloc(sizeof(char) * page_size);
 	if (!buf)
 		return -1;
 
-	size = snprintf(buf, PAGE_SIZE, "a:%c:%s", t, path);
-	if (size >= PAGE_SIZE || size < 0) {
+	size = snprintf(buf, page_size, "a:%c:%s", t, path);
+	if (size < 0) {
 		free(buf);
 		errno = EINVAL;
 		return -1;
@@ -440,7 +447,7 @@ int rfsctl_rem_path(const char *name, int id)
 	}
 
 	size = snprintf(buf, 256, "r:%d", id);
-	if (size >= PAGE_SIZE || size < 0) {
+	if (size < 0) {
 		errno = EINVAL;
 		return -1;
 	}

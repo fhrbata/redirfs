@@ -3,6 +3,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/user.h>
+#include <unistd.h>
 #include "avfltctl.h"
 
 struct avfltctl_path_cache {
@@ -65,12 +66,14 @@ static struct avfltctl_path_cache **avfltctl_get_path_caches(void)
 	int off = 0;
 	int i = 0;
 	int rb;
+	long page_size;
 
-	buf = malloc(sizeof(char) * PAGE_SIZE);
+	page_size = sysconf(_SC_PAGESIZE);
+	buf = malloc(sizeof(char) * page_size);
 	if (!buf)
 		return NULL;
 
-	rb = rfsctl_read_data("avflt", "cache_paths", buf, PAGE_SIZE);
+	rb = rfsctl_read_data("avflt", "cache_paths", buf, page_size);
 	if (rb == -1) {
 		free(buf);
 		return NULL;
@@ -402,7 +405,7 @@ int avfltctl_invalidate_path_cache(int id)
 	int size;
 
 	size = snprintf(buf, 256, "i:%d", id);
-	if (size >= PAGE_SIZE || size < 0) {
+	if (size < 0) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -420,7 +423,7 @@ int avfltctl_enable_path_cache(int id)
 	int size;
 
 	size = snprintf(buf, 256, "a:%d", id);
-	if (size >= PAGE_SIZE || size < 0) {
+	if (size < 0) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -437,7 +440,7 @@ int avfltctl_disable_path_cache(int id)
 	int size;
 
 	size = snprintf(buf, 256, "d:%d", id);
-	if (size >= PAGE_SIZE || size < 0) {
+	if (size < 0) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -454,7 +457,7 @@ int avfltctl_set_timeout(int timeout)
 	int size;
 
 	size = snprintf(buf, 256, "%d", timeout);
-	if (size >= PAGE_SIZE || size < 0) {
+	if (size < 0) {
 		errno = EINVAL;
 		return -1;
 	}
