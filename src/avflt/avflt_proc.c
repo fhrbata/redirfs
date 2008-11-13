@@ -79,15 +79,17 @@ void avflt_proc_put(struct avflt_proc *proc)
 
 static struct avflt_proc *avflt_proc_find_nolock(pid_t tgid)
 {
-	struct avflt_proc *proc = NULL;
+	struct avflt_proc *found = NULL;
+	struct avflt_proc *proc;
 
 	list_for_each_entry(proc, &avflt_proc_list, list) {
 		if (proc->tgid == tgid) {
-			return avflt_proc_get(proc);
+			found = avflt_proc_get(proc);
+			break;
 		}
 	}
 
-	return proc;
+	return found;
 }
 
 struct avflt_proc *avflt_proc_find(pid_t tgid)
