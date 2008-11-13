@@ -124,7 +124,7 @@ int avflt_dev_init(void)
 		return PTR_ERR(avflt_class);
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
 	avflt_device = device_create(avflt_class, NULL, avflt_dev, "avflt");
 #else
 	avflt_device = device_create(avflt_class, NULL, avflt_dev, NULL, "avflt");
