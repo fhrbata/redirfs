@@ -21,7 +21,7 @@ static struct avfltctl_path_cache *avfltctl_get_path_cache(const char *buf)
 	if (!cache)
 		return NULL;
 
-	if (sscanf(buf, "%d:%s", &id, &state) != 2) {
+	if (sscanf(buf, "%d:%c", &id, &state) != 2) {
 		free(cache);
 		return NULL;
 	}
@@ -206,7 +206,7 @@ static int avfltctl_set_path_cache(struct avfltctl_path *path,
 
 	for (i = 0; caches[i]; i++) {
 		if (caches[i]->id == path->id) {
-			path->cache = caches[i]->id;
+			path->cache = caches[i]->cache;
 			return 0;
 		}
 	}
