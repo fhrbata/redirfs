@@ -20,8 +20,14 @@ void sighandler(int sig)
 
 static void *check(void *data)
 {
+	sigset_t sigmask;
 	struct av_event av_event;
 	char fn[PATH_MAX];
+
+	sigemptyset(&sigmask);
+	sigaddset(&sigmask, SIGINT);
+	sigaddset(&sigmask, SIGTERM);
+	pthread_sigmask(SIG_BLOCK, &sigmask, NULL);
 
 	while (!stop) {
 		if (av_request(&av_conn, &av_event)) {
