@@ -45,8 +45,8 @@ static void *check(void *data)
 			return NULL;
 		}
 
-		printf("thread[%lu]: id: %d, type: %d, fd: %d, pid: %d, tgid: \
-				%d, res: %d, fn: %s\n", pthread_self(),
+		printf("thread[%lu]: id: %d, type: %d, fd: %d, pid: %d, "
+				"tgid: %d, res: %d, fn: %s\n", pthread_self(),
 				av_event.id, av_event.type, av_event.fd,
 				av_event.pid, av_event.tgid, av_event.res, fn);
 

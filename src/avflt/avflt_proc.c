@@ -39,7 +39,6 @@ static struct avflt_proc *avflt_proc_alloc(pid_t tgid)
 	spin_lock_init(&proc->lock);
 	atomic_set(&proc->count, 1);
 	proc->tgid = tgid;
-	proc->ids = 0;
 	proc->open = 1;
 	
 	return proc;
@@ -180,7 +179,6 @@ void avflt_proc_add_event(struct avflt_proc *proc, struct avflt_event *event)
 {
 	spin_lock(&proc->lock);
 
-	event->id = proc->ids++;
 	list_add_tail(&event->proc_list, &proc->events);
 	avflt_event_get(event);
 
@@ -205,20 +203,23 @@ void avflt_proc_rem_event(struct avflt_proc *proc, struct avflt_event *event)
 
 struct avflt_event *avflt_proc_get_event(struct avflt_proc *proc, int id)
 {
-	struct avflt_event *event = NULL;
+	struct avflt_event *found = NULL;
+	struct avflt_event *event;
 
 	spin_lock(&proc->lock);
 
 	list_for_each_entry(event, &proc->events, proc_list) {
-		if (event->id == id)
+		if (event->id == id) {
+			found = event;
 			break;
+		}
 	}
 
-	if (event)
+	if (found)
 		list_del_init(&event->proc_list);
 
 	spin_unlock(&proc->lock);
 
-	return event;
+	return found;
 }
 

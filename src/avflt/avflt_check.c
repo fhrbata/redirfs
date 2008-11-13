@@ -29,6 +29,7 @@ static LIST_HEAD(avflt_request_list);
 static int avflt_request_accept = 0;
 static struct kmem_cache *avflt_event_cache = NULL;
 atomic_t avflt_cache_ver = ATOMIC_INIT(0);
+atomic_t avflt_event_ids = ATOMIC_INIT(0);
 
 static struct avflt_event *avflt_event_alloc(struct file *file, int type)
 {
@@ -165,6 +166,7 @@ again:
 
 	spin_unlock(&avflt_request_lock);
 
+	event->id = atomic_inc_return(&avflt_event_ids);
 	return event;
 }
 
@@ -215,7 +217,8 @@ static void avflt_update_cache(struct avflt_event *event)
 
 	avflt_put_root_data(root_data);
 
-	inode_data = avflt_attach_inode_data(event->file->f_dentry->d_inode);
+	inode_data = avflt_attach_inode_data(
+			event->file_orig->f_dentry->d_inode);
 	if (!inode_data)
 		return;
 

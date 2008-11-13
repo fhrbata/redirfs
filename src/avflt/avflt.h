@@ -87,7 +87,6 @@ struct avflt_proc {
 	spinlock_t lock;
 	atomic_t count;
 	pid_t tgid;
-	unsigned long ids;
 	int open;
 };
 
