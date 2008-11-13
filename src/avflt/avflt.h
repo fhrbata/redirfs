@@ -57,6 +57,8 @@ struct avflt_event {
 	int fd;
 	int root_cache_ver;
 	int cache_ver;
+	pid_t pid;
+	pid_t tgid;
 };
 
 struct avflt_event *avflt_event_get(struct avflt_event *event);

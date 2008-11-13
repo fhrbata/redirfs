@@ -50,6 +50,8 @@ static struct avflt_event *avflt_event_alloc(struct file *file, int type)
 	event->file_orig = file;
 	get_file(file);
 	event->fd = -1;
+	event->pid = current->pid;
+	event->tgid = current->tgid;
 
 	root_data = avflt_get_root_data_inode(file->f_dentry->d_inode);
 	inode_data = avflt_get_inode_data_inode(file->f_dentry->d_inode);
@@ -301,8 +303,9 @@ ssize_t avflt_copy_cmd(char __user *buf, size_t size, struct avflt_event *event)
 	char cmd[256];
 	int len;
 
-	len = snprintf(cmd, 256, "id:%d,event:%d,fd:%d",
-			event->id, event->type, event->fd);
+	len = snprintf(cmd, 256, "id:%d,type:%d,fd:%d,pid:%d,tgid:%d",
+			event->id, event->type, event->fd, event->pid,
+			event->tgid);
 	if (len < 0)
 		return len;
 
