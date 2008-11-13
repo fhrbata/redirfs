@@ -124,7 +124,7 @@ static ssize_t avflt_cache_paths_show(redirfs_filter filter,
 
 		avflt_put_root_data(data);
 
-		size += snprintf(buf + size, PAGE_SIZE - size, "%c:%d",
+		size += snprintf(buf + size, PAGE_SIZE - size, "%d:%c",
 				redirfs_get_id_path(paths[i]), state) + 1;
 
 		if (size >= PAGE_SIZE)
