@@ -158,7 +158,6 @@ int rfsctl_write_data(const char *fltname, const char *filename, char *buf,
 	long page_size;
 
 	page_size = sysconf(_SC_PAGESIZE);
-	printf("PAGE_SIZE: %lu\n", page_size);
 	fn = rfsctl_alloc_filename(fltname, filename);
 	if (!fn)
 		return -1;
