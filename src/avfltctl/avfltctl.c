@@ -174,6 +174,7 @@ static int check_cmdl(void)
 		case CMD_CACHE_ENABLE:
 		case CMD_CACHE_DISABLE:
 			rv = 0;
+			break;
 
 		default:
 			rv = -1;

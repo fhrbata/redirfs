@@ -1,6 +1,10 @@
 CC = gcc
 CFLAGS += -Wall -pedantic -fpic
 
+ifdef DEBUG
+CFLAGS += -g -O0
+endif
+
 VMAR := 0
 VMIN := 0
 VREL := 0

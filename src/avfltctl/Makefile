@@ -1,6 +1,10 @@
 CC = gcc
 CFLAGS += -Wall -pedantic
 
+ifdef DEBUG
+CFLAGS += -g -O0
+endif
+
 BIN_NAME := avfltctl
 BIN_OBJS := avfltctl.o
 BIN_DIR := /usr/bin

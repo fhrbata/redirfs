@@ -1,6 +1,10 @@
 CC = gcc
 CFLAGS += -Wall -pedantic
 
+ifdef DEBUG
+CFLAGS += -g -O0
+endif
+
 BIN_NAME := rfsctl
 BIN_OBJS := rfsctl.o
 BIN_DIR := /usr/bin

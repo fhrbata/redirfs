@@ -220,7 +220,8 @@ static int avfltctl_set_filter_paths(struct avfltctl_filter *flt,
 	struct avfltctl_path_cache **caches;
 	struct avfltctl_path **paths;
 	struct avfltctl_path *path;
-	int i,j = 0;
+	int i = 0;
+	int j = 0;
 
 	caches = avfltctl_get_path_caches();
 	if (!caches)
