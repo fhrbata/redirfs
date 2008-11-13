@@ -21,7 +21,7 @@ $(LIB_NAME).so: $(LIB_OBJS)
 	$(CC) -shared -Wl,-soname,$(LIB_NAME).so.$(VMAR) \
 		-o $(LIB_NAME).so $(LIB_OBJS)
 
-install:
+install: $(LIB_NAME).a $(LIB_NAME).so
 	cp $(HDR_NAME) $(HDR_DIR)/$(HDR_NAME)
 	cp $(LIB_NAME).a $(LIB_DIR)/$(LIB_NAME).a
 	cp $(LIB_NAME).so $(LIB_DIR)/$(LIB_NAME).so.$(VMAR).$(VMIN).$(VREL)
