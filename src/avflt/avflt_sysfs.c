@@ -60,7 +60,7 @@ static ssize_t avflt_cache_show(redirfs_filter filter,
 	else
 		state = 'd';
 
-	return snprintf(buf, PAGE_SIZE, "%d", state);
+	return snprintf(buf, PAGE_SIZE, "%c", state);
 }
 
 static ssize_t avflt_cache_store(redirfs_filter filter,
