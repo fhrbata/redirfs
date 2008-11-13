@@ -214,8 +214,6 @@ int avflt_rfs_init(void)
 		goto error;
 	}
 
-	printk(KERN_INFO "Anti-Virus Filter Version "
-			AVFLT_VERSION " <www.redirfs.org>\n");
 	return 0;
 error:
 	err = redirfs_unregister_filter(avflt);
