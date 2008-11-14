@@ -268,7 +268,7 @@ int avflt_get_file(struct avflt_event *event)
 	if (fd < 0)
 		return fd;
 
-	file = dentry_open(event->dentry, event->mnt, O_RDONLY);
+	file = dentry_open(dget(event->dentry), mntget(event->mnt), O_RDONLY);
 	if (IS_ERR(file)) {
 		put_unused_fd(fd);
 		return PTR_ERR(file);
