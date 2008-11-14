@@ -454,6 +454,8 @@ void rfs_dentry_rem_data(struct dentry *dentry, struct rfs_flt *rflt)
 	struct rfs_file *rfile;
 	
 	data = redirfs_detach_data_dentry(rflt, dentry);
+	if (data && data->detach)
+		data->detach(data);
 	redirfs_put_data(data);
 
 	rdentry = rfs_dentry_find(dentry);
@@ -464,6 +466,8 @@ void rfs_dentry_rem_data(struct dentry *dentry, struct rfs_flt *rflt)
 
 	list_for_each_entry(rfile, &rdentry->rfiles, rdentry_list) {
 		data = redirfs_detach_data_file(rflt, rfile->file);
+		if (data && data->detach)
+			data->detach(data);
 		redirfs_put_data(data);
 	}
 
@@ -473,6 +477,8 @@ void rfs_dentry_rem_data(struct dentry *dentry, struct rfs_flt *rflt)
 		return;
 
 	data = redirfs_detach_data_inode(rflt, dentry->d_inode);
+	if (data && data->detach)
+		data->detach(data);
 	redirfs_put_data(data);
 }
 

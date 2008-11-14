@@ -144,6 +144,7 @@ struct redirfs_data *redirfs_detach_data_file(redirfs_filter filter,
 		list_del(&data->list);
 
 	spin_unlock(&rfile->lock);
+	redirfs_put_data(data);
 	rfs_file_put(rfile);
 	return data;
 }
@@ -165,7 +166,6 @@ struct redirfs_data *redirfs_get_data_file(redirfs_filter filter,
 
 	data = rfs_find_data(&rfile->data, filter);
 
-	redirfs_get_data(data);
 	spin_unlock(&rfile->lock);
 	rfs_file_put(rfile);
 	return data;
@@ -222,6 +222,7 @@ struct redirfs_data *redirfs_detach_data_dentry(redirfs_filter filter,
 		list_del(&data->list);
 
 	spin_unlock(&rdentry->lock);
+	redirfs_put_data(data);
 	rfs_dentry_put(rdentry);
 	return data;
 }
@@ -243,7 +244,6 @@ struct redirfs_data *redirfs_get_data_dentry(redirfs_filter filter,
 
 	data = rfs_find_data(&rdentry->data, filter);
 
-	redirfs_get_data(data);
 	spin_unlock(&rdentry->lock);
 	rfs_dentry_put(rdentry);
 	return data;
@@ -300,6 +300,7 @@ struct redirfs_data *redirfs_detach_data_inode(redirfs_filter filter,
 		list_del(&data->list);
 
 	spin_unlock(&rinode->lock);
+	redirfs_put_data(data);
 	rfs_inode_put(rinode);
 	return data;
 }
@@ -321,7 +322,6 @@ struct redirfs_data *redirfs_get_data_inode(redirfs_filter filter,
 
 	data = rfs_find_data(&rinode->data, filter);
 
-	redirfs_get_data(data);
 	spin_unlock(&rinode->lock);
 	rfs_inode_put(rinode);
 	return data;
@@ -371,6 +371,7 @@ struct redirfs_data *redirfs_detach_data_context(redirfs_filter filter,
 	if (data)
 		list_del(&data->list);
 
+	redirfs_put_data(data);
 	return data;
 }
 
@@ -384,7 +385,6 @@ struct redirfs_data *redirfs_get_data_context(redirfs_filter filter,
 		return NULL;
 
 	data = rfs_find_data(&rcont->data, filter);
-	redirfs_get_data(data);
 
 	return data;
 }
@@ -438,6 +438,7 @@ struct redirfs_data *redirfs_detach_data_root(redirfs_filter filter,
 		list_del(&data->list);
 
 	spin_unlock(&rroot->lock);
+	redirfs_put_data(data);
 
 	return data;
 }
@@ -454,7 +455,6 @@ struct redirfs_data *redirfs_get_data_root(redirfs_filter filter,
 	spin_lock(&rroot->lock);
 
 	data = rfs_find_data(&rroot->data, filter);
-	redirfs_get_data(data);
 
 	spin_unlock(&rroot->lock);
 
