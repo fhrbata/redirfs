@@ -52,7 +52,8 @@ struct avflt_event {
 	int type;
 	int id;
 	int result;
-	struct file *file_orig;
+	struct vfsmount *mnt;
+	struct dentry *dentry;
 	struct file *file;
 	int fd;
 	int root_cache_ver;

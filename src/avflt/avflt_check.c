@@ -48,8 +48,8 @@ static struct avflt_event *avflt_event_alloc(struct file *file, int type)
 	atomic_set(&event->count, 1);
 	event->type = type;
 	event->id = -1;
-	event->file_orig = file;
-	get_file(file);
+	event->mnt = mntget(file->f_vfsmnt);
+	event->dentry = dget(file->f_dentry);
 	event->fd = -1;
 	event->pid = current->pid;
 	event->tgid = current->tgid;
@@ -96,7 +96,8 @@ void avflt_event_put(struct avflt_event *event)
 		return;
 
 	avflt_put_root_data(event->root_data);
-	fput(event->file_orig);
+	mntput(event->mnt);
+	dput(event->dentry);
 	kmem_cache_free(avflt_event_cache, event);
 }
 
@@ -199,14 +200,11 @@ static void avflt_update_cache(struct avflt_event *event)
 {
 	struct avflt_inode_data *inode_data;
 	struct avflt_root_data *root_data;
-	struct inode *inode;
 
 	if (!atomic_read(&avflt_cache_enabled))
 		return;
 
-	inode = event->file_orig->f_dentry->d_inode;
-
-	root_data = avflt_get_root_data_inode(inode);
+	root_data = avflt_get_root_data_inode(event->dentry->d_inode);
 	if (!root_data)
 		return;
 
@@ -217,8 +215,7 @@ static void avflt_update_cache(struct avflt_event *event)
 
 	avflt_put_root_data(root_data);
 
-	inode_data = avflt_attach_inode_data(
-			event->file_orig->f_dentry->d_inode);
+	inode_data = avflt_attach_inode_data(event->dentry->d_inode);
 	if (!inode_data)
 		return;
 
@@ -271,8 +268,7 @@ int avflt_get_file(struct avflt_event *event)
 	if (fd < 0)
 		return fd;
 
-	file = dentry_open(event->file_orig->f_dentry,
-			event->file_orig->f_vfsmnt, O_RDONLY);
+	file = dentry_open(event->dentry, event->mnt, O_RDONLY);
 	if (IS_ERR(file)) {
 		put_unused_fd(fd);
 		return PTR_ERR(file);
