@@ -445,6 +445,7 @@ void avflt_invalidate_cache(void)
 	while (paths[i]) {
 		root = redirfs_get_root_path(paths[i]);
 		avflt_invalidate_cache_root(root);
+		redirfs_put_root(root);
 		i++;
 	}
 

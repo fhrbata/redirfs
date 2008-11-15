@@ -133,6 +133,7 @@ static void avflt_inode_data_free(struct redirfs_data *rfs_data)
 {
 	struct avflt_inode_data *data = rfs_to_inode_data(rfs_data);
 
+	avflt_put_root_data(data->root_data);
 	kmem_cache_free(avflt_inode_data_cache, data);
 }
 
