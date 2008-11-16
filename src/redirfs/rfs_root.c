@@ -244,6 +244,8 @@ int rfs_root_rem_include(struct rfs_root *rroot, struct rfs_flt *rflt)
 	rroot->rinch = rinch;
 	spin_unlock(&rroot->lock);
 	data = redirfs_detach_data_root(rflt, rroot);
+	if (data && data->detach)
+		data->detach(data);
 	redirfs_put_data(data);
 	return 0;
 }
@@ -272,6 +274,8 @@ int rfs_root_rem_exclude(struct rfs_root *rroot, struct rfs_flt *rflt)
 	rroot->rexch = rexch;
 	spin_unlock(&rroot->lock);
 	data = redirfs_detach_data_root(rflt, rroot);
+	if (data && data->detach)
+		data->detach(data);
 	redirfs_put_data(data);
 	return 0;
 }
