@@ -34,17 +34,44 @@ int av_unregister(struct av_connection *conn)
 	return 0;
 }
 
-int av_request(struct av_connection *conn, struct av_event *event)
+int av_request(struct av_connection *conn, struct av_event *event, int timeout)
 {
+	struct timeval tv;
+	struct timeval *ptv;
 	char buf[256];
+	fd_set rfds;
+	int rv = 0;
 
-	if (!conn || !event) {
+	if (!conn || !event || timeout < 0) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	if (read(conn->fd, buf, 256) == -1)
-		return -1;
+	FD_ZERO(&rfds);
+	FD_SET(conn->fd, &rfds);
+
+	if (timeout) {
+		tv.tv_sec = timeout / 1000;
+		tv.tv_usec = (timeout - (tv.tv_sec * 1000)) * 1000;
+		ptv = &tv;
+	} else
+		ptv = NULL;
+
+	while (!rv) {
+		printf("avlib: select\n");
+		rv = select(conn->fd + 1, &rfds, NULL, NULL, ptv);
+		if (rv == 0) {
+			errno = ETIMEDOUT;
+			return -1;
+		}
+		if (rv == -1)
+			return -1;
+
+		printf("avlib: read\n");
+		rv = read(conn->fd, buf, 256);
+		if (rv == -1)
+			return -1;
+	}
 
 	if (sscanf(buf, "id:%d,type:%d,fd:%d,pid:%d,tgid:%d",
 				&event->id, &event->type, &event->fd,
@@ -67,6 +94,7 @@ int av_reply(struct av_connection *conn, struct av_event *event)
 
 	snprintf(buf, 256, "id:%d,res:%d", event->id, event->res);
 
+	printf("avlib: write\n");
 	if (write(conn->fd, buf, strlen(buf) + 1) == -1)
 		return -1;
 
