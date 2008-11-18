@@ -25,10 +25,8 @@ static int check(void)
 
 	while (!stop) {
 		if (av_request(&av_conn, &av_event, 500)) {
-			if (errno == ETIMEDOUT) {
-				printf("timeout\n");
+			if (errno == ETIMEDOUT)
 				continue;
-			}
 
 			perror("av_request failed");
 			return -1;

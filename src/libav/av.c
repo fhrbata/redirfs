@@ -58,7 +58,6 @@ int av_request(struct av_connection *conn, struct av_event *event, int timeout)
 		ptv = NULL;
 
 	while (!rv) {
-		printf("avlib: select\n");
 		rv = select(conn->fd + 1, &rfds, NULL, NULL, ptv);
 		if (rv == 0) {
 			errno = ETIMEDOUT;
@@ -67,7 +66,6 @@ int av_request(struct av_connection *conn, struct av_event *event, int timeout)
 		if (rv == -1)
 			return -1;
 
-		printf("avlib: read\n");
 		rv = read(conn->fd, buf, 256);
 		if (rv == -1)
 			return -1;
@@ -94,7 +92,6 @@ int av_reply(struct av_connection *conn, struct av_event *event)
 
 	snprintf(buf, 256, "id:%d,res:%d", event->id, event->res);
 
-	printf("avlib: write\n");
 	if (write(conn->fd, buf, strlen(buf) + 1) == -1)
 		return -1;
 
