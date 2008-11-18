@@ -23,7 +23,7 @@
 
 #include "avflt.h"
 
-static DECLARE_COMPLETION(avflt_request_available);
+DECLARE_WAIT_QUEUE_HEAD(avflt_request_available);
 static spinlock_t avflt_request_lock = SPIN_LOCK_UNLOCKED;
 static LIST_HEAD(avflt_request_list);
 static int avflt_request_accept = 0;
@@ -43,8 +43,7 @@ static struct avflt_event *avflt_event_alloc(struct file *file, int type)
 
 	INIT_LIST_HEAD(&event->req_list);
 	INIT_LIST_HEAD(&event->proc_list);
-	init_waitqueue_head(&event->wait);
-	atomic_set(&event->done, 0);
+	init_completion(&event->wait);
 	atomic_set(&event->count, 1);
 	event->type = type;
 	event->id = -1;
@@ -116,8 +115,8 @@ static int avflt_add_request(struct avflt_event *event, int tail)
 		list_add(&event->req_list, &avflt_request_list);
 
 	avflt_event_get(event);
-
-	complete(&avflt_request_available);
+	
+	wake_up_interruptible(&avflt_request_available);
 
 	spin_unlock(&avflt_request_lock);
 
@@ -144,21 +143,13 @@ static void avflt_rem_request(struct avflt_event *event)
 
 struct avflt_event *avflt_get_request(void)
 {
-	struct avflt_event *event = NULL;
-	int rv;
-
-again:
-	rv = wait_for_completion_interruptible(&avflt_request_available);
-	if (rv) {
-		event = ERR_PTR(rv);
-		return event;
-	}
+	struct avflt_event *event;
 
 	spin_lock(&avflt_request_lock);
 
 	if (list_empty(&avflt_request_list)) {
 		spin_unlock(&avflt_request_lock);
-		goto again;
+		return NULL;
 	}
 
 	event = list_entry(avflt_request_list.next, struct avflt_event,
@@ -182,8 +173,8 @@ static int avflt_wait_for_reply(struct avflt_event *event)
 	else
 		jiffies = MAX_SCHEDULE_TIMEOUT;
 
-	jiffies = wait_event_freezable_timeout(event->wait,
-			atomic_read(&event->done), jiffies);
+	jiffies = wait_for_completion_interruptible_timeout(&event->wait,
+			jiffies);
 
 	if (jiffies < 0)
 		return (int)jiffies;
@@ -255,8 +246,7 @@ exit:
 
 void avflt_event_done(struct avflt_event *event)
 {
-	atomic_set(&event->done, 1);
-	wake_up(&event->wait);
+	complete(&event->wait);
 }
 
 int avflt_get_file(struct avflt_event *event)
@@ -331,6 +321,22 @@ int avflt_add_reply(struct avflt_event *event)
 	avflt_proc_put(proc);
 
 	return 0;
+}
+
+int avflt_request_empty(void)
+{
+	int rv;
+
+	spin_lock(&avflt_request_lock);
+
+	if (list_empty(&avflt_request_list))
+		rv = 1;
+	else
+		rv = 0;
+
+	spin_unlock(&avflt_request_lock);
+
+	return rv;
 }
 
 void avflt_start_accept(void)

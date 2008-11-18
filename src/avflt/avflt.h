@@ -46,8 +46,7 @@ struct avflt_event {
 	struct list_head req_list;
 	struct list_head proc_list;
 	struct avflt_root_data *root_data;
-	wait_queue_head_t wait;
-	atomic_t done;
+	struct completion wait;
 	atomic_t count;
 	int type;
 	int id;
@@ -74,6 +73,7 @@ void avflt_install_fd(struct avflt_event *event);
 ssize_t avflt_copy_cmd(char __user *buf, size_t size,
 		struct avflt_event *event);
 int avflt_add_reply(struct avflt_event *event);
+int avflt_request_empty(void);
 void avflt_start_accept(void);
 void avflt_stop_accept(void);
 int avflt_is_stopped(void);
@@ -152,6 +152,7 @@ void avflt_sys_exit(void);
 extern atomic_t avflt_reply_timeout;
 extern atomic_t avflt_cache_enabled;
 extern redirfs_filter avflt;
+extern wait_queue_head_t avflt_request_available;
 
 #endif
 

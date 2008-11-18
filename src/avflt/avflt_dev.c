@@ -58,17 +58,18 @@ static ssize_t avflt_dev_read(struct file *file, char __user *buf,
 		size_t size, loff_t *pos)
 {
 	struct avflt_event *event;
+	ssize_t len;
 	ssize_t rv;
 
 	event = avflt_get_request();
-	if (IS_ERR(event))
-		return PTR_ERR(event);
+	if (!event)
+		return 0;
 
 	rv = avflt_get_file(event);
 	if (rv)
 		goto error;
 
-	rv = avflt_copy_cmd(buf, size, event);
+	rv = len = avflt_copy_cmd(buf, size, event);
 	if (rv < 0)
 		goto error;
 
@@ -78,7 +79,7 @@ static ssize_t avflt_dev_read(struct file *file, char __user *buf,
 
 	avflt_install_fd(event);
 	avflt_event_put(event);
-	return rv;
+	return len;
 error:
 	avflt_put_file(event);
 	avflt_readd_request(event);
@@ -100,12 +101,27 @@ static ssize_t avflt_dev_write(struct file *file, const char __user *buf,
 	return size;
 }
 
+static unsigned int avflt_poll(struct file *file, poll_table *wait)
+{
+	unsigned int mask;
+
+	poll_wait(file, &avflt_request_available, wait);
+
+	mask = POLLOUT | POLLWRNORM;
+
+	if (!avflt_request_empty())
+		mask |= POLLIN | POLLRDNORM;
+
+	return mask;
+}
+
 static struct file_operations avflt_fops = {
 	.owner = THIS_MODULE,
 	.open = avflt_dev_open,
 	.release = avflt_dev_release,
 	.read = avflt_dev_read,
 	.write = avflt_dev_write,
+	.poll = avflt_poll
 };
 
 int avflt_dev_init(void)
