@@ -192,7 +192,7 @@ int rfs_info_set(struct dentry *dentry, struct rfs_info *rinfo,
 	struct rfs_dcache_data *rdata = NULL;
 	int rv = 0;
 
-	rdata = rfs_dcache_data_alloc(dentry, rinfo, NULL);
+	rdata = rfs_dcache_data_alloc(dentry, rinfo, rflt);
 	if (IS_ERR(rdata))
 		return PTR_ERR(rdata);
 
@@ -218,7 +218,7 @@ int rfs_info_reset(struct dentry *dentry, struct rfs_info *rinfo)
 	if (IS_ERR(rdata))
 		return PTR_ERR(rdata);
 
-	rv = rfs_dcache_walk(dentry, rfs_dcache_set, rdata);
+	rv = rfs_dcache_walk(dentry, rfs_dcache_reset, rdata);
 	rfs_dcache_data_free(rdata);
 
 	return rv;
