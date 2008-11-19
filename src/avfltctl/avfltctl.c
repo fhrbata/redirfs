@@ -22,25 +22,25 @@
 static const char *version = "0.1";
 
 static const char *help_rfs =
-"-s, --show		show all available avflt information\n"
-"-i, --include <path>	add new included path for avflt\n"
-"-e, --exclude <path>	add new excluded path for avflt\n"
-"-r, --remove <id>	remove avflt path specified by <id>\n"
-"-c, --clean		remove all avflt paths\n"
-"-a, --activate		activate avflt\n"
-"-d, --deactivate	deactivate avflt\n"
-"-u, --unregister	unregister avflt\n"
-"-h, --help		print help\n"
-"-v, --version		print version\n";
+"-s, --show                      show all available information\n"
+"-i, --include <path>            add new included path\n"
+"-e, --exclude <path>            add new excluded path\n"
+"-r, --remove <id>               remove path specified by <id>\n"
+"-c, --clean                     remove all paths\n"
+"-a, --activate                  activate\n"
+"-d, --deactivate                deactivate\n"
+"-u, --unregister                unregister\n"
+"-h, --help                      print help\n"
+"-v, --version                   print version\n";
 
 static const char *help_avflt =
-"-n, --cache-invalidate [id]	invalidate cache for path specified by <id>\n"
-"				if no <id> is specified invalidate all caches\n"
-"-o, --cache-enable [id]	enable cache for path specified by <id>\n"
-"				if no <id> is specified enable global cache\n"
-"-f, --cache-disable [id]	disable cache for path specifed by <id>\n"
-"				if no <id> is specified disable global cache\n"
-"-t, --timeout			set timeout for avflt requests";
+"-n[id], --cache-invalidate=[id] invalidate cache for path specified by [id]\n"
+"                                without [id] invalidate global cache\n"
+"-o[id], --cache-enable=[id]     enable cache for path specified by [id]\n"
+"                                without [id] enable global cache\n"
+"-f[id], --cache-disable=[id]    disable cache for path specifed by [id]\n"
+"                                without [id] disable global cache\n"
+"-t, --timeout                   set request timeout in millisecond";
 
 static const char *usage =
 "avfltctl [-a | -d | -c | -u | -s | -h | -v]\n"
@@ -48,7 +48,7 @@ static const char *usage =
 "         [-n | -o | -f] [id]\n"
 "         -r <id>";
 
-static const char *sopts = "si:e:r:cadut:i::o::f::hv";
+static const char *sopts = "si:e:r:cadut:n::o::f::hv";
 
 static struct option lopts[] = {
 	{"show", 0, 0, 's'},
@@ -193,21 +193,23 @@ static int cmd_show(void)
 	if (!flt)
 		return -1;
 
-	printf("priority: %d ", flt->priority);
-	printf("status: %s ", flt->active ? "active" : "inactive");
-	printf("cache: %s\n", flt->cache ? "active" : "inactive");
+	printf("priority: %d\n", flt->priority);
+	printf("status  : %s\n", flt->active ? "active" : "inactive");
+	printf("cache   : %s\n", flt->cache ? "active" : "inactive");
+	printf("timeout : %d\n", flt->timeout);
+	printf("paths   :\n");
 
 	while (flt->paths[i]) {
-		printf("path: %s ", flt->paths[i]->name);
-		printf("id: %d ", flt->paths[i]->id);
+		printf("          path : %s\n", flt->paths[i]->name);
+		printf("          id   : %d\n", flt->paths[i]->id);
 		if (flt->paths[i]->type == AVFLTCTL_PATH_INCLUDE)
 		       	type = "include";
 		else
 			type = "exclude";
 
-		printf("type: %s ", type);
+		printf("          type : %s\n", type);
 		type = flt->paths[i]->cache ? "active" : "inactive";
-		printf("cache: %s\n", type);
+		printf("          cache: %s\n\n", type);
 		i++;
 	}
 
