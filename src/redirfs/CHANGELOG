@@ -1,3 +1,14 @@
+version 0.4
+        * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- added support for private data - file, dentry, inode, redirfs root
+	- introduced redirfs_root handle representing redirfs root object
+	- simplified sysfs interface
+	- small changes in the redirfs interface (not compatible with previous
+	  versions)
+	- redirfs_ctl control callbacks replaced with generic
+	  redirfs_filter_operations table
+	- fixed rinfo memory leak
+
 version 0.3
         * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- reflected changes in the permission function interface
