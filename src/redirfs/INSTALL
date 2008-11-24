@@ -33,7 +33,7 @@
 	* Install module
 		$ make -C /lib/modules/`uname -r`/build M=`pwd` modules_install
 
-	* Insert redirfs.ko module
+	* Load redirfs.ko module
 		# modprobe redirfs
 
 5. Problems & Bugs
