@@ -10,6 +10,8 @@
 
 #define THREADS_COUNT 10
 
+static const char *version = "0.1";
+
 static struct av_connection av_conn;
 static int stop = 0;
 
@@ -81,6 +83,7 @@ int main(int argc, char *argv[])
 	int i;
 	int rv;
 
+	printf("avtest: version %s\n", version);
 	memset(&sa, 0, sizeof(struct sigaction));
 	sa.sa_handler = sighandler;
 	sigemptyset(&sa.sa_mask);
