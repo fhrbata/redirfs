@@ -193,7 +193,7 @@ static int cmd_show(void)
 
 	while (flt->paths[i]) {
 		printf("          path : %s\n", flt->paths[i]->name);
-		printf("          id   : %d ", flt->paths[i]->id);
+		printf("          id   : %d\n", flt->paths[i]->id);
 		if (flt->paths[i]->type == RFSCTL_PATH_INCLUDE)
 		       	type = "include";
 		else
