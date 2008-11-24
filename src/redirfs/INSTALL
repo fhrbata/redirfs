@@ -1,12 +1,12 @@
 			======================================
 				 Installing RedirFS
-				   A Quick Guide
 			======================================
 
 1. Requirements
 	
 	* Running Linux kernel version 2.6.25 and higher
-	* Source code for running Linux kernel
+	* Source code and configuration for running Linux kernel
+	  - at least make scripts and make prepare
 	* Linux kernel compiled with modules support
 
 2. Download
@@ -30,8 +30,11 @@
 	* Change user to root
 		$ su
 
+	* Install module
+		$ make -C /lib/modules/`uname -r`/build M=`pwd` modules_install
+
 	* Insert redirfs.ko module
-		# insmod redirfs.ko
+		# modprobe redirfs
 
 5. Problems & Bugs
 
