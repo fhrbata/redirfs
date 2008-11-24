@@ -186,19 +186,20 @@ static int cmd_show(void)
 	if (!flt)
 		return -1;
 
-	printf("%s ", flt->name);
-	printf("priority: %d ", flt->priority);
-	printf("status: %s\n", flt->active ? "active" : "inactive");
+	printf("filter  : %s\n", flt->name);
+	printf("priority: %d\n", flt->priority);
+	printf("status  : %s\n", flt->active ? "active" : "inactive");
+	printf("paths   :\n");
 
 	while (flt->paths[i]) {
-		printf("path: %s ", flt->paths[i]->name);
-		printf("id: %d ", flt->paths[i]->id);
+		printf("          path : %s\n", flt->paths[i]->name);
+		printf("          id   : %d ", flt->paths[i]->id);
 		if (flt->paths[i]->type == RFSCTL_PATH_INCLUDE)
 		       	type = "include";
 		else
 			type = "exclude";
 
-		printf("type: %s\n", type);
+		printf("          type : %s\n\n", type);
 		i++;
 	}
 
