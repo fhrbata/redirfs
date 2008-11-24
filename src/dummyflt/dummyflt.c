@@ -1,27 +1,29 @@
 /*
- * DummyFlt: Dummy Filter for Redirecting File System
+ * DummyFlt: Dummy Filter
  * Written by Frantisek Hrbata <frantisek.hrbata@redirfs.org>
  *
  * Copyright (C) 2008 Frantisek Hrbata
  * All rights reserved.
  *
- * This program is free software: you can redistribute it and/or modify
+ * This file is part of RedirFS.
+ *
+ * RedirFS is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * RedirFS is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with RedirFS. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <redirfs.h>
 
-#define DUMMYFLT_VERSION "0.2"
+#define DUMMYFLT_VERSION "0.3"
 
 static redirfs_filter dummyflt;
 
@@ -173,7 +175,9 @@ static int __init dummyflt_init(void)
 	/*
 	struct redirfs_path_info dummyflt_path_info;
 	struct nameidata nd;
+	redirfs_path path;
 	*/
+
 	int err;
 	int rv;
 
@@ -199,16 +203,18 @@ static int __init dummyflt_init(void)
 
 	dummyflt_path_info.dentry = nd.path.dentry;
 	dummyflt_path_info.mnt  = nd.path.mnt;
-	dummyflt_path_info.flags  = REDIRFS_PATH_ADD | REDIRFS_PATH_INCLUDE;
+	dummyflt_path_info.flags  = REDIRFS_PATH_INCLUDE;
 
-	rv = redirfs_set_path(dummyflt, &dummyflt_path_info);
-	if (rv) {
+	path = redirfs_add_path(dummyflt, &dummyflt_path_info);
+	if (IS_ERR(path)) {
+		rv = PTR_ERR(path);
 		printk(KERN_ERR "dummyflt: redirfs_set_path failed(%d)\n", rv);
 		path_put(&nd.path);
 		goto error;
 	}
 
 	path_put(&nd.path);
+	redirfs_put_path(path);
 	*/
 
 	printk(KERN_INFO "Dummy Filter Version "

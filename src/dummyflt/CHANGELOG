@@ -1,3 +1,7 @@
+version 0.3
+        * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- adapted for RedirFS 0.4 interface
+
 version 0.2
         * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- added INSTALL and README file
