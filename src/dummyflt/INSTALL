@@ -6,7 +6,8 @@
 1. Requirements
 	
 	* Running Linux kernel version 2.6.25 and higher
-	* Source code for running Linux kernel
+	* Source code and configuration for running Linux kernel
+	  - at least make scripts and make prepare
 	* Linux kernel compiled with modules support
 	* Compiled RedirFS Framework, please see the RedirFS's INSTALL file
 
@@ -37,8 +38,13 @@
 	* Change user to root
 		$ su
 
-	* Insert dummyflt.ko module
-		# insmod dummyflt.ko
+	* Install modules 
+		$ make -C /lib/modules/`uname -r`/build M=`pwd` \
+			EXTRA_CFLAGS=-I<full path to the redirfs dir> \
+			modules_install
+
+	* Load dummyflt.ko module
+		# modprobe dummyflt
 
 5. Problems & Bugs
 
