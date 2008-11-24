@@ -256,6 +256,12 @@ int rfs_inode_set_rinfo(struct rfs_inode *rinode)
 	}
 
 	rinfo->rchain = rchain;
+
+	if (!rinfo->rchain) {
+		rfs_info_put(rinfo);
+		rinfo = rfs_info_get(rfs_info_none);
+	}
+
 	rfs_chain_ops(rinfo->rchain, rinfo->rops);
 	rfs_info_put(rinode->rinfo);
 	rinode->rinfo = rinfo;
