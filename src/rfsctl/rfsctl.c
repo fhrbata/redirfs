@@ -186,7 +186,6 @@ static int cmd_show(void)
 	if (!flt)
 		return -1;
 
-	printf("filter  : %s\n", flt->name);
 	printf("priority: %d\n", flt->priority);
 	printf("status  : %s\n", flt->active ? "active" : "inactive");
 	printf("paths   :\n");
