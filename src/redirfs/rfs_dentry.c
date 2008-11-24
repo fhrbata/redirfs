@@ -473,13 +473,17 @@ void rfs_dentry_rem_data(struct dentry *dentry, struct rfs_flt *rflt)
 
 	spin_unlock(&rdentry->lock);
 
-	if (!dentry->d_inode)
+	if (!dentry->d_inode) {
+		rfs_dentry_put(rdentry);
 		return;
+	}
 
 	data = redirfs_detach_data_inode(rflt, dentry->d_inode);
 	if (data && data->detach)
 		data->detach(data);
 	redirfs_put_data(data);
+
+	rfs_dentry_put(rdentry);
 }
 
 int rfs_dentry_move(struct dentry *dentry, struct rfs_flt *rflt,
