@@ -88,6 +88,7 @@ void rfs_info_put(struct rfs_info *rinfo)
 	rfs_chain_put(rinfo->rchain);
 	rfs_ops_put(rinfo->rops);
 	rfs_root_put(rinfo->rroot);
+	kfree(rinfo);
 }
 
 static struct rfs_info *rfs_info_dentry(struct dentry *dentry)
