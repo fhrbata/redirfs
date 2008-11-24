@@ -427,6 +427,8 @@ static struct rfs_root *rfs_get_root_flt(struct rfs_flt *rflt,
 			goto exit;
 
 		rroot = rfs_root_get(rinfo->rroot);
+		if (!rroot)
+			goto exit;
 
 		spin_lock(&rroot->lock);
 
