@@ -252,13 +252,18 @@ void avflt_event_done(struct avflt_event *event)
 int avflt_get_file(struct avflt_event *event)
 {
 	struct file *file;
+	int flags;
 	int fd;
 
 	fd = get_unused_fd();
 	if (fd < 0)
 		return fd;
 
-	file = dentry_open(dget(event->dentry), mntget(event->mnt), O_RDONLY);
+	flags = O_RDONLY;
+	if (force_o_largefile())
+		flags |= O_LARGEFILE;
+
+	file = dentry_open(dget(event->dentry), mntget(event->mnt), flags);
 	if (IS_ERR(file)) {
 		put_unused_fd(fd);
 		return PTR_ERR(file);
