@@ -1,0 +1,7 @@
+version 0.2
+        * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- fixed open for files bigger then 2GB(MAX_NON_LFS)
+
+version 0.1
+        * initial release
+
