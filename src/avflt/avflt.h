@@ -53,6 +53,7 @@ struct avflt_event {
 	int result;
 	struct vfsmount *mnt;
 	struct dentry *dentry;
+	unsigned int flags;
 	struct file *file;
 	int fd;
 	int root_cache_ver;

@@ -49,6 +49,7 @@ static struct avflt_event *avflt_event_alloc(struct file *file, int type)
 	event->id = -1;
 	event->mnt = mntget(file->f_vfsmnt);
 	event->dentry = dget(file->f_dentry);
+	event->flags = file->f_flags;
 	event->fd = -1;
 	event->pid = current->pid;
 	event->tgid = current->tgid;
@@ -260,8 +261,7 @@ int avflt_get_file(struct avflt_event *event)
 		return fd;
 
 	flags = O_RDONLY;
-	if (force_o_largefile())
-		flags |= O_LARGEFILE;
+	flags |= event->flags & O_LARGEFILE;
 
 	file = dentry_open(dget(event->dentry), mntget(event->mnt), flags);
 	if (IS_ERR(file)) {
