@@ -1,7 +1,12 @@
+version 0.3
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- better fix of open for files bigger then 2GB
+	  O_LARGEFILE flag is set base on original f_flags
+
 version 0.2
-        * Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- fixed open for files bigger then 2GB(MAX_NON_LFS)
 
 version 0.1
-        * initial release
+	* initial release
 
