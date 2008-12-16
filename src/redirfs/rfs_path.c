@@ -863,7 +863,7 @@ static int rfs_fsrename_set(struct rfs_root *rroot_src,
 	int rv = 0;
 	int i;
 
-	if (!rroot_src || rroot_dst)
+	if (!rroot_src || !rroot_dst)
 		return 0;
 
 	if (rroot_src->dentry == dentry) 
