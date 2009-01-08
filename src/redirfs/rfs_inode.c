@@ -296,14 +296,14 @@ struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry,
 	struct redirfs_args rargs;
 	struct dentry *dadd = dentry;
 
-	rinode = rfs_inode_find(dir);
-	rinfo = rfs_inode_get_rinfo(rinode);
-	rfs_context_init(&rcont, 0);
-
 	if (S_ISDIR(dir->i_mode))
 		rargs.type.id = REDIRFS_DIR_IOP_LOOKUP;
 	else
-		BUG();
+		return ERR_PTR(-ENOTDIR);
+
+	rinode = rfs_inode_find(dir);
+	rinfo = rfs_inode_get_rinfo(rinode);
+	rfs_context_init(&rcont, 0);
 
 	rargs.args.i_lookup.dir = dir;
 	rargs.args.i_lookup.dentry = dentry;
