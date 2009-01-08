@@ -1,3 +1,7 @@
+version 0.6
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- fixed bug 13 - oops BUG at rfs_inode.c:306!
+
 version 0.5
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- fixed NULL pointer dereference in rfs_fsrename_set
