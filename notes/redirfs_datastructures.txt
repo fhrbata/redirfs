@@ -1,0 +1,310 @@
+RedirFS Datastructures
+======================
+
+enum redirfs_op_id {
+        ...
+};
+
+Description:
+
+  VFS operations identifiers.
+  
+Values:
+
+  Each value represents an operation from a VFS object's operations set.
+  They are defined using this pattern:
+  
+  REDIRFS_<file type>_<operation set>_<operation>
+  
+  <file type> can be one of the following:
+  
+  REG
+        Regular file
+  DIR
+        Directory
+  CHR
+        Character device
+  BLK
+        Block device
+  FIFO
+        Named pipe
+  LNK
+        Symbolic link
+  SOCK
+        Unix socket
+
+  <operation set> can be one of the following:
+  
+  DOP
+        dentry operations
+  IOP
+        inode operations
+  FOP
+        file operations
+  AOP
+        address_space operations
+
+  <operation> can be any operation a specific operation set as defined by VFS.
+
+  Example:
+        REDIRFS_REG_FOP_OPEN
+        Represents the file object's open operation on regular files.
+
+------------------------------------------------------------------------------
+
+enum redirfs_op_call {
+        REDIRFS_PRECALL,
+        REDIRFS_POSTCALL
+};
+
+Description:
+
+  Type of filter callback.
+  
+Values:
+
+  REDIRFS_PRECALL
+        Pre-callback. Called before the 
+
+------------------------------------------------------------------------------
+
+enum redirfs_rv {
+        REDIRFS_STOP,
+        REDIRFS_CONTIUE
+};
+
+Description:
+
+  Return value type used by filter pre-callbacks.
+
+Values:
+
+  REDIRFS_STOP
+        Don't call other filter's callbacks in the call chain.
+        The original VFS operation doesn't get called either.
+  REDIRFS_CONTINUE
+        Continue with the next filter's callback in the call chain.
+
+------------------------------------------------------------------------------
+
+typedef void *redirfs_filter;
+typedef void *redirfs_context;
+typedef void *redirfs_path;
+typedef void *redirfs_root;
+
+Description:
+
+  Pointers to the rfs_flt, rfs_context, rfs_path and rfs_root structures
+  respectively. These structures are used internally by RedirFS and are
+  defined this way to prevent filters from accessing their members directly.
+
+------------------------------------------------------------------------------
+
+union redirfs_op_rv {
+        int           rv_int;
+        ssize_t       rv_ssize;
+        unsigned int  rv_uint;
+        unsigned long rv_ulong;
+        loff_t        rv_loff;
+        struct dentry *rv_dentry;
+        sector_t      rv_sector;
+        struct page   *rv_page;
+};
+
+Description:
+
+  This union allows the creation of a single common interface for all VFS
+  operations as they return different types of values.
+
+------------------------------------------------------------------------------
+
+union redirfs_op_args {
+        ...
+};
+
+Description:
+
+  Union of structures representing the arguments for every supported VFS
+  operation.
+  
+  Example:
+  
+  struct {
+          struct dentry *dentry;
+          struct qstr   *name1;
+          struct qstr   *name2;
+  } d_compare;
+  
+  corresponds to the dentry operation d_compare defined by VFS as:
+  
+  d_compare(struct dentry *dentry, struct qstr *name1, struct qstr *name2);
+
+------------------------------------------------------------------------------
+
+struct redirfs_op_type {
+        enum redirfs_op_id   id;
+        enum redirfs_op_call call;
+};
+
+Description:
+
+  Used to describe filter callbacks.
+  
+  id
+        Operation identifier the callback is registered for.
+  call
+        Type of callback. (REDIRFS_PRECALL or REDIRFS_POSTCALL)
+
+------------------------------------------------------------------------------
+
+struct redirfs_args {
+        union redirfs_op_args  args;
+        union redirfs_op_rv    rv;
+        struct redirfs_op_type type;
+};
+
+Description:
+
+  A pointer to this structure is passed to filter callbacks.
+
+  args
+        Contains the operation arguments.
+  rv
+        For post-callbacks, this field contains the operation return value.
+  type
+        Identifies the operation and callback type.
+
+------------------------------------------------------------------------------
+
+struct redirfs_path_info {
+        struct dentry   *dentry;
+        struct vfsmount *mnt;
+        int             flags;
+};
+
+Description:
+
+  Identifies a directory subtree to be include/excluded from filter's selected
+  paths.
+
+  dentry
+        dentry information
+  vfsmount
+        mountpoint information
+
+  flags
+        REDIRFS_PATH_INCLUDE - the subtree is to be included.
+        REDIRFS_PATH_EXCLUDE - the subtree is to be excluded.
+
+------------------------------------------------------------------------------
+
+struct redirfs_op_info {
+        enum redirfs_op_id op_id;
+        enum redirfs_rv (*pre_cb)(redirfs_context, struct redirfs_args *);
+        enum redirfs_rv (*post_cb)(redirfs_context, struct redirfs_args *);
+};
+
+Description:
+
+  Structure used to register filter callbacks.
+  
+  op_id
+        VFS operation idenfitier.
+  pre_cb
+        Pointer to the pre-callback function.
+  post_cb
+        Pointer to the post-callback function.
+
+------------------------------------------------------------------------------
+
+struct redirfs_filter_operations {
+        ...
+};
+
+Description:
+
+  Contains pointers to common filter operations like activation, including
+  paths etc.
+  
+  Currently not used. TODO: ???
+
+------------------------------------------------------------------------------
+
+struct redirfs_filter_info {
+        struct module *owner;
+        const char    *name;
+        int           priority;
+        int           active;
+        struct redirfs_filter_operations *ops;
+};
+
+Description:
+
+  Structure used to register a new filter with RedirFS.
+
+  owner
+        Pointer to the module implementing the filter.
+  name
+        Name of the filter.
+  priority
+        If there are more filters registered for the same operation, this
+        number determines the order in which their callbacks get called.
+        Lower number means higher priority for pre-callbacks, post-callbacks
+        are called in the reverse order.
+  active
+        If non-zero, the filter is activated upon registration.
+  ops
+        Currently not used. TODO: ???
+
+------------------------------------------------------------------------------
+
+struct redirfs_filter_attribute {
+        struct attribute attr;
+        ssize_t (*show)(redirfs_filter filter,
+                        struct redirfs_filter_attribute *attr, char *buf);
+        ssize_t (*store)(redirfs_filter filter,
+                         struct redirfs_filter_attribute *attr,
+                         const char *buf, size_t count);
+};
+
+Description:
+
+  This structure defines a sysfs attribute with operations implementing it.
+  
+  attr
+        kobject attribute
+  show
+        Pointer to a function returning the attribute's value in buf.
+  store
+        Pointer to a function storing value from buf into the attribute.
+
+------------------------------------------------------------------------------
+
+struct redirfs_data {
+        struct list_head list;
+        atomic_t         cnt;
+        redirfs_filter   filter;
+        void (*free)(struct redirfs_data *);
+        void (*detach)(struct redirfs_data *);
+};
+
+Description:
+
+  Used by filters to attach private data to the current callback context
+  (redirfs_context) or VFS object.
+  
+  list
+      Filter private data are stored in the kernel's double linked list
+      structure.
+  cnt
+      Used for reference counting.
+  filter
+      Filter owning the data.
+  free
+      Pointer to a function called when the data is to be freed.
+      (When it's reference count drops to zero.)
+  detach
+      Pointer to a function called when the data is to be detached.
+      (When the object the data is attached to is being freed.)
+
+------------------------------------------------------------------------------

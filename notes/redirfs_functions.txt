@@ -1,0 +1,166 @@
+RedirFS Functions
+=================
+
+redirfs_filter redirfs_register_filter(struct redirfs_filter_info *info);
+
+Description:
+
+  Registers a new filter described by info with RedirFS and creates a basic
+  sysfs interface for it.
+  
+  info
+        Description of the filter to be registred.
+
+Return value:
+
+  Pointer to the registered filter on success.
+  
+------------------------------------------------------------------------------
+
+int redirfs_unregister_filter(redirfs_filter filter);
+
+Description:
+
+  Unregisters a previously registered filter with RedirFS.
+  
+  filter
+        Pointer to the filter to be unregistered.
+
+Return value:
+
+  Zero on success.
+  
+------------------------------------------------------------------------------
+
+void redirfs_delete_filter(redirfs_filter filter);
+
+Description:
+
+  Removes filter's sysfs interface.
+
+  filter
+        Pointer to the filter to be deleted.
+
+------------------------------------------------------------------------------
+
+int redirfs_set_operations(redirfs_filter filter, struct redirfs_op_info ops[]);
+
+Description:
+
+  Sets filter's pre and post callbacks for selected VFS operations.
+  
+  filter
+        Pointer to the filter whose callbacks we're setting.
+        
+  ops
+        Array of redirfs_op_info containing the callbacks details ending with
+        {REDIRFS_OP_END, NULL, NULL}.
+
+Return value:
+
+  Zero on success.
+  
+------------------------------------------------------------------------------
+
+int redirfs_activate_filter(redirfs_filter filter);
+
+Description:
+
+  Activates filter.
+  
+  filter
+        Pointer to the filter to be activated.
+        
+Return value:
+
+  Zero on success.
+  
+------------------------------------------------------------------------------
+
+int redirfs_deactivate_filter(redirfs_filter filter);
+
+Description:
+
+  Deactivates filter.
+  
+  filter
+        Pointer to the filter to be deactivated.
+        
+Return value:
+
+  Zero on success.
+  
+------------------------------------------------------------------------------
+
+int redirfs_add_path(redirfs_filter filter, struct redirfs_path_info *info);
+
+Description:
+
+  Adds the path described by info the the RedirFS path list. A new RedirFS root
+  object is created and filter is associated with it.
+
+  filter
+        Pointer to the filter inluding the path.
+  info
+        Describes the included path.
+        
+Return value:
+
+  Zero on success.
+  
+------------------------------------------------------------------------------
+
+int redirfs_rem_path(redirfs_filter filter, struct redirfs_path_info *info);
+
+Description:
+
+  Removes the path described by info from the RedirFS path list. The RedirFS
+  root object is deleted if there are no more filters associated with it.
+  
+  filter
+        Pointer to the filter excluding the path.
+  info
+        Describes the excluded path.
+
+Return value:
+
+  Zero on success.
+
+------------------------------------------------------------------------------
+
+int redirfs_create_attribute(redirfs_filter filter,
+                             struct redirfs_filter_attribute *attr);
+
+Description:
+
+  Creates a new sysfs attribute for filter.
+  
+  filter
+        Pointer to the filter receiving the attribute.
+  attr
+        Attribute description along with callback implementing it.
+
+Return value:
+
+  Zero on success.
+  
+------------------------------------------------------------------------------
+
+int redirfs_remove_attribute(redirfs_filter filter,
+                             struct redirfs_filter_attribute *attr);
+
+Description:
+
+  Removes filter's sysfs attribute described by attr.
+  
+  filter
+        Pointer to the filter removing the attribute.
+  attr
+        Attribute description.
+        
+Return value:
+
+  Zero on success.
+  
+------------------------------------------------------------------------------
+
