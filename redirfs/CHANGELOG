@@ -1,0 +1,87 @@
+version 0.6
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- fixed bug 13 - oops BUG at rfs_inode.c:306!
+
+version 0.5
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- fixed NULL pointer dereference in rfs_fsrename_set
+
+version 0.4
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- added support for private data - file, dentry, inode, redirfs root
+	- introduced redirfs_root handle representing redirfs root object
+	- simplified sysfs interface
+	- small changes in the redirfs interface (not compatible with previous
+	  versions)
+	- redirfs_ctl control callbacks replaced with generic
+	  redirfs_filter_operations table
+	- fixed rinfo memory leak
+
+version 0.3
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- reflected changes in the permission function interface
+	- fixed rdentry NULL dereference in rfs_fsrename
+	- rfs_lookup adds only dirs while there are no registered filters
+
+version 0.3-pre4
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- reworked global rename handling
+	- makefile cleanup
+
+	* John Ogness <redirfs@ogness.net> 
+	- fixed wrong reference usage in rfs_path_get
+
+version 0.3-pre3
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- removed usage of RCU due to CONFIG_PREEMPT_RCU
+	- redirfs is now a permanent module which cannot be unloaded
+	- fixed dead lock in rfs_dcache_walk and rfs_fsrename
+	- redirect readdir instead of d_compare to check newly added vfs objects(NFS)
+	- fixed removing of path attached to the file system root
+	- cleanup of the redirfs_get_filename function
+	- fixed full path name for the file system root
+	- added check if filter is active in post calls
+	- correct destruction of inode objects in the rfs_d_iput function
+	- rinode objects are removed in the rfs_d_iput function
+	- rdentry objects are removed in the rfs_d_release function
+	- fixed NULL pointer dereferences in the rfs_fsrename functions
+
+version 0.3-pre2
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- fixed removing of rfs_file objects
+	- added support for file systems which are adding dentry/inode objects
+	  during readdir (e.g. NFS)
+
+version 0.3-pre1
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- rewritten from scratch
+	- new path management
+	- new sysfs interface
+	- new redirfs framework interface
+	- supports kernel version 2.6.25 and higher
+	- not all features introduced in the 0.2 version implemented yet
+		- missing support for filter's private data
+		- missing support for address space operations
+		- limited set of redirected operations
+
+version 0.2.1
+	* never released, experimental support for sub-mounts
+
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- fixed bug 09: crash on rdentry_set_ops when changing path
+	- fixed bug 10: include subtree after include single path causes crash
+	- fixed bug 11: added rename support
+	- added support for sub-mounts and sub-unmounts
+	- added support for rename
+	- changed rfs_get_filename interface, now it requires vfsmount object
+
+	* Paolo Ambrosio <paolo.ambrosio@gmail.com>
+	- fixed typo RFS_REG_AOP_COMMINT_WRITE => RFS_REG_AOP_COMMIT_WRITE
+	- fixed bug 12: added mmap callback
+
+version 0.2
+	* rewritten from scratch
+
+version 0.1
+	* first stable version with limited functionality
+
