@@ -27,7 +27,7 @@ static struct class *avflt_class;
 static struct device *avflt_device;
 static dev_t avflt_dev;
 
-static int avflt_dev_open(struct inode *inode, struct file *file)
+static int avflt_dev_open_registered(struct inode *inode, struct file *file)
 {
 	struct avflt_proc *proc;
 
@@ -43,7 +43,20 @@ static int avflt_dev_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int avflt_dev_release(struct inode *inode, struct file *file)
+static int avflt_dev_open_trusted(struct inode *inode, struct file *file)
+{
+	return avflt_trusted_add(current->tgid);
+}
+
+static int avflt_dev_open(struct inode *inode, struct file *file)
+{
+	if (file->f_mode & FMODE_WRITE)
+		return avflt_dev_open_registered(inode, file);
+
+	return avflt_dev_open_trusted(inode, file);
+}
+
+static int avflt_dev_release_registered(struct inode *inode, struct file *file)
 {
 	avflt_proc_rem(current->tgid);
 	if (!avflt_proc_empty())
@@ -54,12 +67,29 @@ static int avflt_dev_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
+static int avflt_dev_release_trusted(struct inode *inode, struct file *file)
+{
+	avflt_trusted_rem(current->tgid);
+	return 0;
+}
+
+static int avflt_dev_release(struct inode *inode, struct file *file)
+{
+	if (file->f_mode & FMODE_WRITE)
+		return avflt_dev_release_registered(inode, file);
+
+	return avflt_dev_release_trusted(inode, file);
+}
+
 static ssize_t avflt_dev_read(struct file *file, char __user *buf,
 		size_t size, loff_t *pos)
 {
 	struct avflt_event *event;
 	ssize_t len;
 	ssize_t rv;
+
+	if (!(file->f_mode & FMODE_WRITE))
+		return -EINVAL;
 
 	event = avflt_get_request();
 	if (!event)

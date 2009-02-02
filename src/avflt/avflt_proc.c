@@ -26,6 +26,98 @@
 static LIST_HEAD(avflt_proc_list);
 static spinlock_t avflt_proc_lock = SPIN_LOCK_UNLOCKED;
 
+static LIST_HEAD(avflt_trusted_list);
+static spinlock_t avflt_trusted_lock = SPIN_LOCK_UNLOCKED;
+
+static struct avflt_trusted *avflt_trusted_alloc(pid_t tgid)
+{
+	struct avflt_trusted *trusted;
+
+	trusted = kzalloc(sizeof(struct avflt_trusted), GFP_KERNEL);
+	if (!trusted)
+		return ERR_PTR(-ENOMEM);
+
+	trusted->tgid = tgid;
+	trusted->open = 1;
+
+	return trusted;
+}
+
+static void avflt_trusted_free(struct avflt_trusted *trusted)
+{
+	kfree(trusted);
+}
+
+static struct avflt_trusted *avflt_trusted_find(pid_t tgid)
+{
+	struct avflt_trusted *trusted;
+
+	list_for_each_entry(trusted, &avflt_trusted_list, list) {
+		if (trusted->tgid == tgid)
+			return trusted;
+	}
+
+	return NULL;
+}
+
+int avflt_trusted_add(pid_t tgid)
+{
+	struct avflt_trusted *trusted;
+	struct avflt_trusted *found;
+
+	trusted = avflt_trusted_alloc(tgid);
+	if (IS_ERR(trusted))
+		return PTR_ERR(trusted);
+
+	spin_lock(&avflt_trusted_lock);
+
+	found = avflt_trusted_find(tgid);
+	if (found) {
+		found->open++;
+		avflt_trusted_free(trusted);
+
+	} else
+		list_add_tail(&trusted->list, &avflt_trusted_list);
+
+	spin_unlock(&avflt_trusted_lock);
+
+	return 0;
+}
+
+void avflt_trusted_rem(pid_t tgid)
+{
+	struct avflt_trusted *found;
+
+	spin_lock(&avflt_trusted_lock);
+
+	found = avflt_trusted_find(tgid);
+	if (!found)
+		goto exit;
+
+	if (--found->open)
+		goto exit;
+
+	list_del_init(&found->list);
+
+	avflt_trusted_free(found);
+exit:
+	spin_unlock(&avflt_trusted_lock);
+}
+
+int avflt_trusted_allow(pid_t tgid)
+{
+	struct avflt_trusted *found;
+
+	spin_lock(&avflt_trusted_lock);
+	found = avflt_trusted_find(tgid);
+	spin_unlock(&avflt_trusted_lock);
+
+	if (found)
+		return 1;
+
+	return 0;
+}
+
 static struct avflt_proc *avflt_proc_alloc(pid_t tgid)
 {
 	struct avflt_proc *proc;

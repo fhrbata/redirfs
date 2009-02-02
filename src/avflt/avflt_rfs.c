@@ -30,6 +30,9 @@ static int avflt_should_check(struct file *file)
 
 	if (avflt_proc_allow(current->tgid))
 		return 0;
+
+	if (avflt_trusted_allow(current->tgid))
+		return 0;
 	
 	if (!file->f_dentry->d_inode)
 		return 0;

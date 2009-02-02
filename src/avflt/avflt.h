@@ -83,6 +83,16 @@ struct avflt_event *avflt_get_reply(const char __user *buf, size_t size);
 int avflt_check_init(void);
 void avflt_check_exit(void);
 
+struct avflt_trusted {
+	struct list_head list;
+	pid_t tgid;
+	int open;
+};
+
+int avflt_trusted_add(pid_t tgid);
+void avflt_trusted_rem(pid_t tgid);
+int avflt_trusted_allow(pid_t tgid);
+
 struct avflt_proc {
 	struct list_head list;
 	struct list_head events; 
