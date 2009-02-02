@@ -1,3 +1,7 @@
+version 0.4
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- dentry_open adapted to new 2.6.29 security context - struct cred
+
 version 0.3
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- better fix of open for files bigger then 2GB

@@ -263,7 +263,12 @@ int avflt_get_file(struct avflt_event *event)
 	flags = O_RDONLY;
 	flags |= event->flags & O_LARGEFILE;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
 	file = dentry_open(dget(event->dentry), mntget(event->mnt), flags);
+#else
+	file = dentry_open(dget(event->dentry), mntget(event->mnt), flags,
+			current_cred());
+#endif
 	if (IS_ERR(file)) {
 		put_unused_fd(fd);
 		return PTR_ERR(file);
