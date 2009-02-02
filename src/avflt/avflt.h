@@ -34,7 +34,7 @@
 #include <linux/fs.h>
 #include <redirfs.h>
 
-#define AVFLT_VERSION	"0.3"
+#define AVFLT_VERSION	"0.4"
 
 #define AVFLT_EVENT_OPEN	1
 #define AVFLT_EVENT_CLOSE	2
