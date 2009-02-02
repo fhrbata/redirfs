@@ -92,6 +92,7 @@ struct avflt_trusted {
 int avflt_trusted_add(pid_t tgid);
 void avflt_trusted_rem(pid_t tgid);
 int avflt_trusted_allow(pid_t tgid);
+ssize_t avflt_trusted_get_info(char *buf, int size);
 
 struct avflt_proc {
 	struct list_head list;
@@ -112,6 +113,7 @@ int avflt_proc_empty(void);
 void avflt_proc_add_event(struct avflt_proc *proc, struct avflt_event *event);
 void avflt_proc_rem_event(struct avflt_proc *proc, struct avflt_event *event);
 struct avflt_event *avflt_proc_get_event(struct avflt_proc *proc, int id);
+ssize_t avflt_proc_get_info(char *buf, int size);
 
 #define rfs_to_root_data(ptr) \
 	container_of(ptr, struct avflt_root_data, rfs_data)

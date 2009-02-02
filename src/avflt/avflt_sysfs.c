@@ -187,6 +187,18 @@ static ssize_t avflt_cache_paths_store(redirfs_filter filter,
 	return count;
 }
 
+static ssize_t avflt_registered_show(redirfs_filter filter,
+		struct redirfs_filter_attribute *attr, char *buf)
+{
+	return avflt_proc_get_info(buf, PAGE_SIZE);
+}
+
+static ssize_t avflt_trusted_show(redirfs_filter filter,
+		struct redirfs_filter_attribute *attr, char *buf)
+{
+	return avflt_trusted_get_info(buf, PAGE_SIZE);
+}
+
 static struct redirfs_filter_attribute avflt_timeout_attr = 
 	REDIRFS_FILTER_ATTRIBUTE(timeout, 0644, avflt_timeout_show,
 			avflt_timeout_store);
@@ -199,6 +211,12 @@ static struct redirfs_filter_attribute avflt_pathcache_attr =
 	REDIRFS_FILTER_ATTRIBUTE(cache_paths, 0644, avflt_cache_paths_show,
 			avflt_cache_paths_store);
 
+static struct redirfs_filter_attribute avflt_registered_attr = 
+	REDIRFS_FILTER_ATTRIBUTE(registered, 0444, avflt_registered_show, NULL);
+
+static struct redirfs_filter_attribute avflt_trusted_attr = 
+	REDIRFS_FILTER_ATTRIBUTE(trusted, 0444, avflt_trusted_show, NULL);
+
 int avflt_sys_init(void)
 {
 	int rv;
@@ -208,19 +226,32 @@ int avflt_sys_init(void)
 		return rv;
 
 	rv = redirfs_create_attribute(avflt, &avflt_cache_attr);
-	if (rv) {
-		redirfs_remove_attribute(avflt, &avflt_timeout_attr);
-		return rv;
-	}
+	if (rv)
+		goto err_cache;
 
 	rv = redirfs_create_attribute(avflt, &avflt_pathcache_attr);
-	if (rv) {
-		redirfs_remove_attribute(avflt, &avflt_timeout_attr);
-		redirfs_remove_attribute(avflt, &avflt_cache_attr);
-		return rv;
-	}
+	if (rv)
+		goto err_pathcache;
+
+	rv = redirfs_create_attribute(avflt, &avflt_registered_attr);
+	if (rv)
+		goto err_registered;
+
+	rv = redirfs_create_attribute(avflt, &avflt_trusted_attr);
+	if (rv)
+		goto err_trusted;
 
 	return 0;
+
+err_trusted:
+	redirfs_remove_attribute(avflt, &avflt_registered_attr);
+err_registered:
+	redirfs_remove_attribute(avflt, &avflt_pathcache_attr);
+err_pathcache:
+	redirfs_remove_attribute(avflt, &avflt_cache_attr);
+err_cache:
+	redirfs_remove_attribute(avflt, &avflt_timeout_attr);
+	return rv;
 }
 
 void avflt_sys_exit(void)
@@ -228,5 +259,7 @@ void avflt_sys_exit(void)
 	redirfs_remove_attribute(avflt, &avflt_timeout_attr);
 	redirfs_remove_attribute(avflt, &avflt_cache_attr);
 	redirfs_remove_attribute(avflt, &avflt_pathcache_attr);
+	redirfs_remove_attribute(avflt, &avflt_registered_attr);
+	redirfs_remove_attribute(avflt, &avflt_trusted_attr);
 }
 

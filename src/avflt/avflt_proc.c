@@ -315,3 +315,43 @@ struct avflt_event *avflt_proc_get_event(struct avflt_proc *proc, int id)
 	return found;
 }
 
+ssize_t avflt_proc_get_info(char *buf, int size)
+{
+	struct avflt_proc *proc;
+	ssize_t len = 0;
+
+	spin_lock(&avflt_proc_lock);
+
+	list_for_each_entry(proc, &avflt_proc_list, list) {
+		len += snprintf(buf + len, size - len, "%d", proc->tgid) + 1;
+		if (len >= size) {
+			len = size;
+			break;
+		}
+	}
+
+	spin_unlock(&avflt_proc_lock);
+
+	return len;
+}
+
+ssize_t avflt_trusted_get_info(char *buf, int size)
+{
+	struct avflt_trusted *trusted;
+	ssize_t len = 0;
+
+	spin_lock(&avflt_trusted_lock);
+
+	list_for_each_entry(trusted, &avflt_trusted_list, list) {
+		len += snprintf(buf + len, size - len, "%d", trusted->tgid) + 1;
+		if (len >= size) {
+			len = size;
+			break;
+		}
+	}
+
+	spin_unlock(&avflt_trusted_lock);
+
+	return len;
+}
+
