@@ -5,7 +5,7 @@ ifdef DEBUG
 CFLAGS += -g -O0
 endif
 
-VMAR := 0
+VMAR := 1
 VMIN := 0
 VREL := 0
 LIB_NAME := libavfltctl

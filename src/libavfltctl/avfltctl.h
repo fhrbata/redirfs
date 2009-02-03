@@ -16,6 +16,8 @@ struct avfltctl_path {
 struct avfltctl_filter {
 	struct avfltctl_path **paths;
 	char *name;
+	pid_t *registered;
+	pid_t *trusted;
 	int priority;
 	int active;
 	int timeout;

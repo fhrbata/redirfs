@@ -177,6 +177,8 @@ static struct avfltctl_filter *avfltctl_alloc_filter(struct rfsctl_filter *rflt)
 	}
 
 	flt->paths = NULL;
+	flt->registered = NULL;
+	flt->trusted = NULL;
 	flt->name = fn;
 	flt->priority = rflt->priority;
 	flt->active = rflt->active;
@@ -195,6 +197,8 @@ static void avfltctl_free_filter(struct avfltctl_filter *flt)
 	}
 
 	free(flt->paths);
+	free(flt->registered);
+	free(flt->trusted);
 	free(flt->name);
 	free(flt);
 }
@@ -304,6 +308,74 @@ static int avfltctl_set_filter_cache(struct avfltctl_filter *flt)
 	return 0;
 }
 
+static pid_t *avfltctl_get_pids(const char *file)
+{
+	char *buf;
+	long page_size;
+	int rb;
+	int off = 0;
+	int i = 0;
+	pid_t *pids;
+	pid_t *pids_new;
+
+	page_size = sysconf(_SC_PAGESIZE);
+	buf = malloc(sizeof(char) * page_size);
+	if (!buf)
+		return NULL;
+
+	rb = rfsctl_read_data("avflt", file, buf, page_size);
+	if (rb == -1)
+		goto err_buf;
+
+	pids = malloc(sizeof(pid_t));
+	if (!pids) 
+		goto err_buf;
+
+	pids[0] = (pid_t)-1;
+
+	while (off < rb) {
+		pids_new = realloc(pids, sizeof(pid_t) * (i + 2));
+		if (!pids_new)
+			goto err_pids;
+
+		pids = pids_new;
+
+		if (sscanf(buf + off, "%d", &pids[i++]) != 1)
+			goto err_pids;
+
+		pids[i] = (pid_t)-1;
+
+		off += strlen(buf + off) + 1;
+	}
+
+	free(buf);
+	return pids;
+
+err_pids:
+	free(pids);
+err_buf:
+	free(buf);
+	return NULL;
+}
+
+static int avfltctl_set_filter_registered(struct avfltctl_filter *flt)
+{
+	flt->registered = avfltctl_get_pids("registered");
+	if (!flt->registered)
+		return -1;
+
+	return 0;
+}
+
+static int avfltctl_set_filter_trusted(struct avfltctl_filter *flt)
+{
+	flt->trusted = avfltctl_get_pids("trusted");
+	if (!flt->trusted)
+		return -1;
+
+	return 0;
+}
+
 struct avfltctl_filter *avfltctl_get_filter(void)
 {
 	struct avfltctl_filter *flt = NULL;
@@ -327,6 +399,14 @@ struct avfltctl_filter *avfltctl_get_filter(void)
 		goto error;
 
 	rv = avfltctl_set_filter_cache(flt);
+	if (rv)
+		goto error;
+
+	rv = avfltctl_set_filter_registered(flt);
+	if (rv)
+		goto error;
+
+	rv = avfltctl_set_filter_trusted(flt);
 	if (rv)
 		goto error;
 
