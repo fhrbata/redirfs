@@ -1,2 +1,6 @@
+version 0.1.0
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- added av_register_trusted and av_unregister_trusted
+	
 version 0.0.0
 	* initial release

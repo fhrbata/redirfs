@@ -8,17 +8,22 @@
 #include "av.h"
 
 
-int av_register(struct av_connection *conn)
+static int av_open_conn(struct av_connection *conn, int flags)
 {
 	if (!conn) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	if ((conn->fd = open("/dev/avflt", O_RDWR)) == -1)
+	if ((conn->fd = open("/dev/avflt", flags)) == -1)
 		return -1;
 
 	return 0;
+}
+
+int av_register(struct av_connection *conn)
+{
+	return av_open_conn(conn, O_RDWR);
 }
 
 int av_unregister(struct av_connection *conn)
@@ -32,6 +37,16 @@ int av_unregister(struct av_connection *conn)
 		return -1;
 
 	return 0;
+}
+
+int av_register_trusted(struct av_connection *conn)
+{
+	return av_open_conn(conn, O_RDONLY);
+}
+
+int av_unregister_trusted(struct av_connection *conn)
+{
+	return av_unregister(conn);
 }
 
 int av_request(struct av_connection *conn, struct av_event *event, int timeout)
