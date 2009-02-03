@@ -7,6 +7,8 @@
 #define AV_ACCESS_ALLOW 1
 #define AV_ACCESS_DENY  2
 
+#include <sys/types.h>
+
 struct av_connection {
 	int fd;
 };
