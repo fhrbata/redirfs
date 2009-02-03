@@ -19,7 +19,7 @@
 #define CMD_HELP		0x1000
 #define CMD_VERSION		0x2000
 
-static const char *version = "0.1";
+static const char *version = "0.2";
 
 static const char *help_rfs =
 "-s, --show                      show all available information\n"
@@ -187,30 +187,42 @@ static int cmd_show(void)
 {
 	struct avfltctl_filter *flt;
 	char *type;
-	int i = 0;
+	int i;
 
 	flt = avfltctl_get_filter();
 	if (!flt)
 		return -1;
 
-	printf("priority: %d\n", flt->priority);
-	printf("status  : %s\n", flt->active ? "active" : "inactive");
-	printf("cache   : %s\n", flt->cache ? "active" : "inactive");
-	printf("timeout : %d\n", flt->timeout);
-	printf("paths   :\n");
+	printf("priority   : %d\n", flt->priority);
+	printf("status     : %s\n", flt->active ? "active" : "inactive");
+	printf("cache      : %s\n", flt->cache ? "active" : "inactive");
+	printf("timeout    : %d\n", flt->timeout);
 
-	while (flt->paths[i]) {
-		printf("          path : %s\n", flt->paths[i]->name);
-		printf("          id   : %d\n", flt->paths[i]->id);
+	printf("registered :");
+	for (i = 0; flt->registered[i] != -1; i++) {
+		printf(" %d", flt->registered[i]);
+	}
+	printf("\n");
+
+	printf("trusted    :");
+	for (i = 0; flt->trusted[i] != -1; i++) {
+		printf(" %d", flt->trusted[i]);
+	}
+	printf("\n");
+
+	printf("paths      :\n");
+
+	for (i = 0; flt->paths[i]; i++) {
+		printf("             path : %s\n", flt->paths[i]->name);
+		printf("             id   : %d\n", flt->paths[i]->id);
 		if (flt->paths[i]->type == AVFLTCTL_PATH_INCLUDE)
 		       	type = "include";
 		else
 			type = "exclude";
 
-		printf("          type : %s\n", type);
+		printf("             type : %s\n", type);
 		type = flt->paths[i]->cache ? "active" : "inactive";
-		printf("          cache: %s\n\n", type);
-		i++;
+		printf("             cache: %s\n\n", type);
 	}
 
 	avfltctl_put_filter(flt);
