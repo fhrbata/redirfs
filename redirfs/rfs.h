@@ -229,6 +229,7 @@ struct rfs_dentry {
 	atomic_t count;
 };
 
+/* returns the rfs_dentry object associated with dentry */
 #define rfs_dentry_find(dentry) \
 	(dentry && dentry->d_op && dentry->d_op->d_iput == rfs_d_iput ? \
 	 rfs_dentry_get(container_of(dentry->d_op, struct rfs_dentry, op_new)) : \
@@ -270,6 +271,7 @@ struct rfs_inode {
 	int rdentries_nr;
 };
 
+/* returns the rfs_inode object associated with inode */
 #define rfs_inode_find(inode) \
 	(inode && inode->i_op && inode->i_op->lookup == rfs_lookup ? \
 	 rfs_inode_get(container_of(inode->i_op, struct rfs_inode, op_new)) : \
@@ -302,6 +304,7 @@ struct rfs_file {
 	atomic_t count;
 };
 
+/* returns the rfs_file object associated with file */
 #define rfs_file_find(file) \
 	(file && file->f_op && file->f_op->open == rfs_open ? \
 	 rfs_file_get(container_of(file->f_op, struct rfs_file, op_new)) : \
@@ -309,6 +312,10 @@ struct rfs_file {
 	 
 extern struct file_operations rfs_file_ops;
 
+ssize_t rfs_read(struct file *file, char __user *buf, size_t count,
+		loff_t *offset);
+ssize_t rfs_write(struct file *file, const char __user *buf, size_t count,
+		loff_t *offset);
 int rfs_open(struct inode *inode, struct file *file);
 struct rfs_file *rfs_file_get(struct rfs_file *rfile);
 void rfs_file_put(struct rfs_file *rfile);
@@ -357,7 +364,9 @@ int rfs_precall_flts(struct rfs_chain *rchain, struct rfs_context *rcont,
 void rfs_postcall_flts(struct rfs_chain *rchain, struct rfs_context *rcont,
 		struct redirfs_args *rargs);
 
+/* returns the redirfs filter rfs_flt object associated with __kobj kobject */
 #define rfs_kobj_to_rflt(__kobj) container_of(__kobj, struct rfs_flt, kobj)
+
 int rfs_flt_sysfs_init(struct rfs_flt *rflt);
 void rfs_flt_sysfs_exit(struct rfs_flt *rflt);
 extern struct kobj_type rfs_flt_ktype;

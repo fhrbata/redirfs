@@ -26,6 +26,8 @@
 static struct kmem_cache *rfs_file_cache = NULL;
 
 struct file_operations rfs_file_ops = {
+	/* .read = rfs_read,
+	   .write = rfs_write, */
 	.open = rfs_open
 };
 
@@ -122,6 +124,126 @@ int rfs_file_cache_create(void)
 void rfs_file_cache_destory(void)
 {
 	kmem_cache_destroy(rfs_file_cache);
+}
+
+ssize_t rfs_read(struct file *file, char __user *buf, size_t count,
+		loff_t *offset)
+{
+	struct rfs_file *rfile;
+	struct rfs_info *rinfo;
+	struct rfs_context rcont;
+	struct redirfs_args rargs;
+
+	printk(KERN_INFO "rfs_read\n");
+
+	rfile = rfs_file_find(file);
+
+	if (S_ISDIR(file->f_mode)) {
+		if (rfile->op_old && rfile->op_old->read)
+			rargs.rv.rv_ssize = rfile->op_old->read(
+					file, buf, count, offset);
+		else
+			rargs.rv.rv_ssize = -EISDIR;
+		rfs_file_put(rfile);
+		return rargs.rv.rv_ssize;
+	}
+
+	rinfo = rfs_dentry_get_rinfo(rfile->rdentry);
+	rfs_context_init(&rcont, 0);
+
+	if (S_ISREG(file->f_mode))
+		rargs.type.id = REDIRFS_REG_FOP_READ;
+	else if (S_ISLNK(file->f_mode))
+		rargs.type.id = REDIRFS_LNK_FOP_READ;
+	else if (S_ISCHR(file->f_mode))
+		rargs.type.id = REDIRFS_CHR_FOP_READ;
+	else if (S_ISBLK(file->f_mode))
+		rargs.type.id = REDIRFS_BLK_FOP_READ;
+	else if (S_ISFIFO(file->f_mode))
+		rargs.type.id = REDIRFS_FIFO_FOP_READ;
+
+	rargs.args.f_read.file = file;
+	rargs.args.f_read.buf = buf;
+	rargs.args.f_read.count = count;
+	rargs.args.f_read.pos = offset;
+
+	if (!rfs_precall_flts(rinfo->rchain, &rcont, &rargs)) {
+		if (rfile->op_old && rfile->op_old->read)
+			rargs.rv.rv_ssize = rfile->op_old->read(
+					rargs.args.f_read.file,
+					rargs.args.f_read.buf,
+					rargs.args.f_read.count,
+					rargs.args.f_read.pos);
+		else
+			rargs.rv.rv_ssize = -ENOSYS;
+	}
+
+	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
+	rfs_context_deinit(&rcont);
+
+	rfs_file_put(rfile);
+	rfs_info_put(rinfo);
+	return rargs.rv.rv_ssize;
+}
+
+ssize_t rfs_write(struct file *file, const char __user *buf, size_t count,
+		loff_t *offset)
+{
+	struct rfs_file *rfile;
+	struct rfs_info *rinfo;
+	struct rfs_context rcont;
+	struct redirfs_args rargs;
+
+	printk(KERN_INFO "rfs_write\n");
+
+	rfile = rfs_file_find(file);
+
+	if (S_ISDIR(file->f_mode)) {
+		if (rfile->op_old && rfile->op_old->write)
+			rargs.rv.rv_ssize = rfile->op_old->write(
+					file, buf, count, offset);
+		else
+			rargs.rv.rv_ssize = -EISDIR;
+		rfs_file_put(rfile);
+		return rargs.rv.rv_ssize;
+	}
+
+	rinfo = rfs_dentry_get_rinfo(rfile->rdentry);
+	rfs_context_init(&rcont, 0);
+
+	if (S_ISREG(file->f_mode))
+		rargs.type.id = REDIRFS_REG_FOP_WRITE;
+	else if (S_ISLNK(file->f_mode))
+		rargs.type.id = REDIRFS_LNK_FOP_WRITE;
+	else if (S_ISCHR(file->f_mode))
+		rargs.type.id = REDIRFS_CHR_FOP_WRITE;
+	else if (S_ISBLK(file->f_mode))
+		rargs.type.id = REDIRFS_BLK_FOP_WRITE;
+	else if (S_ISFIFO(file->f_mode))
+		rargs.type.id = REDIRFS_FIFO_FOP_WRITE;
+
+	rargs.args.f_write.file = file;
+	rargs.args.f_write.buf = buf;
+	rargs.args.f_write.count = count;
+	rargs.args.f_write.pos = offset;
+
+	if (!rfs_precall_flts(rinfo->rchain, &rcont, &rargs)) {
+		if (rfile->op_old && rfile->op_old->write)
+			rargs.rv.rv_ssize = rfile->op_old->write(
+					rargs.args.f_read.file,
+					rargs.args.f_read.buf,
+					rargs.args.f_read.count,
+					rargs.args.f_read.pos);
+		else
+			rargs.rv.rv_ssize = -ENOSYS;
+	}
+
+	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
+	rfs_context_deinit(&rcont);
+
+	rfs_file_put(rfile);
+	rfs_info_put(rinfo);
+	return rargs.rv.rv_ssize;
 }
 
 int rfs_open(struct inode *inode, struct file *file)
@@ -307,6 +429,8 @@ exit:
 
 static void rfs_file_set_ops_reg(struct rfs_file *rfile)
 {
+	RFS_SET_FOP(rfile, REDIRFS_REG_FOP_READ, read);
+	RFS_SET_FOP(rfile, REDIRFS_REG_FOP_WRITE, write);
 }
 
 static void rfs_file_set_ops_dir(struct rfs_file *rfile)
@@ -316,18 +440,26 @@ static void rfs_file_set_ops_dir(struct rfs_file *rfile)
 
 static void rfs_file_set_ops_lnk(struct rfs_file *rfile)
 {
+	RFS_SET_FOP(rfile, REDIRFS_LNK_FOP_READ, read);
+	RFS_SET_FOP(rfile, REDIRFS_LNK_FOP_WRITE, write);
 }
 
 static void rfs_file_set_ops_chr(struct rfs_file *rfile)
 {
+	RFS_SET_FOP(rfile, REDIRFS_CHR_FOP_READ, read);
+	RFS_SET_FOP(rfile, REDIRFS_CHR_FOP_WRITE, write);
 }
 
 static void rfs_file_set_ops_blk(struct rfs_file *rfile)
 {
+	RFS_SET_FOP(rfile, REDIRFS_BLK_FOP_READ, read);
+	RFS_SET_FOP(rfile, REDIRFS_BLK_FOP_WRITE, write);
 }
 
 static void rfs_file_set_ops_fifo(struct rfs_file *rfile)
 {
+	RFS_SET_FOP(rfile, REDIRFS_FIFO_FOP_READ, read);
+	RFS_SET_FOP(rfile, REDIRFS_FIFO_FOP_WRITE, write);
 }
 
 void rfs_file_set_ops(struct rfs_file *rfile)

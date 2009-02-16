@@ -161,8 +161,8 @@ enum redirfs_op_id {
 	REDIRFS_REG_FOP_OPEN,
 	REDIRFS_REG_FOP_RELEASE,
 	/* REDIRFS_REG_FOP_LLSEEK, */
-	/* REDIRFS_REG_FOP_READ, */
-	/* REDIRFS_REG_FOP_WRITE, */
+	REDIRFS_REG_FOP_READ,
+	REDIRFS_REG_FOP_WRITE,
 	/* REDIRFS_REG_FOP_AIO_READ, */
 	/* REDIRFS_REG_FOP_AIO_WRITE, */
 	/* REDIRFS_REG_FOP_MMAP, */
@@ -176,8 +176,8 @@ enum redirfs_op_id {
 	REDIRFS_CHR_FOP_OPEN,
 	REDIRFS_CHR_FOP_RELEASE,
 	/* REDIRFS_CHR_FOP_LLSEEK, */
-	/* REDIRFS_CHR_FOP_READ, */
-	/* REDIRFS_CHR_FOP_WRITE, */
+	REDIRFS_CHR_FOP_READ,
+	REDIRFS_CHR_FOP_WRITE,
 	/* REDIRFS_CHR_FOP_AIO_READ, */
 	/* REDIRFS_CHR_FOP_AIO_WRITE, */
 	/* REDIRFS_CHR_FOP_FLUSH, */
@@ -185,8 +185,8 @@ enum redirfs_op_id {
 	REDIRFS_BLK_FOP_OPEN,
 	REDIRFS_BLK_FOP_RELEASE,
 	/* REDIRFS_BLK_FOP_LLSEEK, */
-	/* REDIRFS_BLK_FOP_READ, */
-	/* REDIRFS_BLK_FOP_WRITE, */
+	REDIRFS_BLK_FOP_READ,
+	REDIRFS_BLK_FOP_WRITE,
 	/* REDIRFS_BLK_FOP_AIO_READ, */
 	/* REDIRFS_BLK_FOP_AIO_WRITE, */
 	/* REDIRFS_BLK_FOP_FLUSH, */
@@ -194,8 +194,8 @@ enum redirfs_op_id {
 	REDIRFS_FIFO_FOP_OPEN,
 	REDIRFS_FIFO_FOP_RELEASE,
 	/* REDIRFS_FIFO_FOP_LLSEEK, */
-	/* REDIRFS_FIFO_FOP_READ, */
-	/* REDIRFS_FIFO_FOP_WRITE, */
+	REDIRFS_FIFO_FOP_READ,
+	REDIRFS_FIFO_FOP_WRITE,
 	/* REDIRFS_FIFO_FOP_AIO_READ, */
 	/* REDIRFS_FIFO_FOP_AIO_WRITE, */
 	/* REDIRFS_FIFO_FOP_FLUSH, */
@@ -203,8 +203,8 @@ enum redirfs_op_id {
 	REDIRFS_LNK_FOP_OPEN,
 	REDIRFS_LNK_FOP_RELEASE,
 	/* REDIRFS_LNK_FOP_LLSEEK, */
-	/* REDIRFS_LNK_FOP_READ, */
-	/* REDIRFS_LNK_FOP_WRITE, */
+	REDIRFS_LNK_FOP_READ,
+	REDIRFS_LNK_FOP_WRITE,
 	/* REDIRFS_LNK_FOP_AIO_READ, */
 	/* REDIRFS_LNK_FOP_AIO_WRITE, */
 	/* REDIRFS_LNK_FOP_FLUSH, */
@@ -435,23 +435,19 @@ union redirfs_op_args {
 	} f_llseek;
 	*/
 
-	/*
 	struct {
 		struct file *file;
 		char __user *buf;
 		size_t count;
 		loff_t *pos;
 	} f_read;
-	*/
 
-	/*
 	struct {
 		struct file *file;
 		const char __user *buf;
 		size_t count;
 		loff_t *pos;
 	} f_write;
-	*/
 
 	/*
 	struct {
