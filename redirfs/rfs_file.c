@@ -26,8 +26,6 @@
 static struct kmem_cache *rfs_file_cache = NULL;
 
 struct file_operations rfs_file_ops = {
-	/* .read = rfs_read,
-	   .write = rfs_write, */
 	.open = rfs_open
 };
 
@@ -126,40 +124,32 @@ void rfs_file_cache_destory(void)
 	kmem_cache_destroy(rfs_file_cache);
 }
 
-ssize_t rfs_read(struct file *file, char __user *buf, size_t count,
+static ssize_t rfs_read(struct file *file, char __user *buf, size_t count,
 		loff_t *offset)
 {
 	struct rfs_file *rfile;
 	struct rfs_info *rinfo;
 	struct rfs_context rcont;
 	struct redirfs_args rargs;
+	umode_t imode;
 
 	printk(KERN_INFO "rfs_read\n");
 
 	rfile = rfs_file_find(file);
 
-	if (S_ISDIR(file->f_mode)) {
-		if (rfile->op_old && rfile->op_old->read)
-			rargs.rv.rv_ssize = rfile->op_old->read(
-					file, buf, count, offset);
-		else
-			rargs.rv.rv_ssize = -EISDIR;
-		rfs_file_put(rfile);
-		return rargs.rv.rv_ssize;
-	}
-
 	rinfo = rfs_dentry_get_rinfo(rfile->rdentry);
 	rfs_context_init(&rcont, 0);
 
-	if (S_ISREG(file->f_mode))
+	imode = file->f_dentry->d_inode->i_mode;
+	if (S_ISREG(imode))
 		rargs.type.id = REDIRFS_REG_FOP_READ;
-	else if (S_ISLNK(file->f_mode))
+	else if (S_ISLNK(imode))
 		rargs.type.id = REDIRFS_LNK_FOP_READ;
-	else if (S_ISCHR(file->f_mode))
+	else if (S_ISCHR(imode))
 		rargs.type.id = REDIRFS_CHR_FOP_READ;
-	else if (S_ISBLK(file->f_mode))
+	else if (S_ISBLK(imode))
 		rargs.type.id = REDIRFS_BLK_FOP_READ;
-	else if (S_ISFIFO(file->f_mode))
+	else if (S_ISFIFO(imode))
 		rargs.type.id = REDIRFS_FIFO_FOP_READ;
 
 	rargs.args.f_read.file = file;
@@ -186,40 +176,32 @@ ssize_t rfs_read(struct file *file, char __user *buf, size_t count,
 	return rargs.rv.rv_ssize;
 }
 
-ssize_t rfs_write(struct file *file, const char __user *buf, size_t count,
+static ssize_t rfs_write(struct file *file, const char __user *buf, size_t count,
 		loff_t *offset)
 {
 	struct rfs_file *rfile;
 	struct rfs_info *rinfo;
 	struct rfs_context rcont;
 	struct redirfs_args rargs;
+	umode_t imode;
 
 	printk(KERN_INFO "rfs_write\n");
 
 	rfile = rfs_file_find(file);
 
-	if (S_ISDIR(file->f_mode)) {
-		if (rfile->op_old && rfile->op_old->write)
-			rargs.rv.rv_ssize = rfile->op_old->write(
-					file, buf, count, offset);
-		else
-			rargs.rv.rv_ssize = -EISDIR;
-		rfs_file_put(rfile);
-		return rargs.rv.rv_ssize;
-	}
-
 	rinfo = rfs_dentry_get_rinfo(rfile->rdentry);
 	rfs_context_init(&rcont, 0);
 
-	if (S_ISREG(file->f_mode))
+	imode = file->f_dentry->d_inode->i_mode;
+	if (S_ISREG(imode))
 		rargs.type.id = REDIRFS_REG_FOP_WRITE;
-	else if (S_ISLNK(file->f_mode))
+	else if (S_ISLNK(imode))
 		rargs.type.id = REDIRFS_LNK_FOP_WRITE;
-	else if (S_ISCHR(file->f_mode))
+	else if (S_ISCHR(imode))
 		rargs.type.id = REDIRFS_CHR_FOP_WRITE;
-	else if (S_ISBLK(file->f_mode))
+	else if (S_ISBLK(imode))
 		rargs.type.id = REDIRFS_BLK_FOP_WRITE;
-	else if (S_ISFIFO(file->f_mode))
+	else if (S_ISFIFO(imode))
 		rargs.type.id = REDIRFS_FIFO_FOP_WRITE;
 
 	rargs.args.f_write.file = file;

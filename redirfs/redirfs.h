@@ -209,8 +209,8 @@ enum redirfs_op_id {
 	/* REDIRFS_LNK_FOP_AIO_WRITE, */
 	/* REDIRFS_LNK_FOP_FLUSH, */
 
-	/* REDIRFS_REG_AOP_READPAGE, */
-	/* REDIRFS_REG_AOP_WRITEPAGE, */
+	REDIRFS_REG_AOP_READPAGE,
+	REDIRFS_REG_AOP_WRITEPAGE,
 	/* REDIRFS_REG_AOP_READPAGES, */
 	/* REDIRFS_REG_AOP_WRITEPAGES, */
 	/* REDIRFS_REG_AOP_SYNC_PAGE, */
@@ -467,19 +467,15 @@ union redirfs_op_args {
 	} f_aio_write;
 	*/
 
-	/*
 	struct {
 		struct file *file;
 		struct page *page;
 	} a_readpage;
-	*/
 
-	/*
 	struct {
 		struct page *page;
 		struct writeback_control *wbc;
 	} a_writepage;
-	*/
 
 	/*
 	struct {

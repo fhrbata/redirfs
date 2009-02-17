@@ -713,6 +713,73 @@ static int rfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	return rargs.rv.rv_int;
 }
 
+static int rfs_readpage(struct file *file, struct page *page)
+{
+	struct rfs_inode *rinode;
+	struct rfs_info *rinfo;
+	struct rfs_context rcont;
+	struct redirfs_args rargs;
+
+	printk(KERN_INFO "rfs_readpage\n");
+
+	rinode = rfs_inode_find(page->mapping->host);
+	rinfo = rfs_inode_get_rinfo(rinode);
+	rfs_context_init(&rcont, 0);
+
+	rargs.type.id = REDIRFS_REG_AOP_READPAGE;
+	rargs.args.a_readpage.file = file;
+	rargs.args.a_readpage.page = page;
+
+	if (!rfs_precall_flts(rinfo->rchain, &rcont, &rargs)) {
+		if (rinode->aop_old && rinode->aop_old->readpage)
+			rargs.rv.rv_int  = rinode->aop_old->readpage(
+					rargs.args.a_readpage.file,
+					rargs.args.a_readpage.page);
+		else
+			rargs.rv.rv_int = -ENOSYS;
+	}
+
+	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
+	rfs_context_deinit(&rcont);
+
+	rfs_inode_put(rinode);
+	rfs_info_put(rinfo);
+	return rargs.rv.rv_int;
+}
+
+static int rfs_writepage(struct page *page, struct writeback_control *wbc)
+{
+	struct rfs_inode *rinode;
+	struct rfs_info *rinfo;
+	struct rfs_context rcont;
+	struct redirfs_args rargs;
+
+	printk(KERN_INFO "rfs_writepage\n");
+
+	rinode = rfs_inode_find(page->mapping->host);
+	rinfo = rfs_inode_get_rinfo(rinode);
+	rfs_context_init(&rcont, 0);
+
+	rargs.type.id = REDIRFS_REG_AOP_WRITEPAGE;
+	rargs.args.a_writepage.page = page;
+	rargs.args.a_writepage.wbc = wbc;
+
+	if (!rfs_precall_flts(rinfo->rchain, &rcont, &rargs)) {
+		if (rinode->aop_old && rinode->aop_old->writepage)
+			rargs.rv.rv_int  = rinode->aop_old->writepage(
+					rargs.args.a_writepage.page,
+					rargs.args.a_writepage.wbc);
+		else
+			rargs.rv.rv_int = -ENOSYS;
+	}
+
+	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
+	rfs_context_deinit(&rcont);
+
+	rfs_inode_put(rinode);
+	rfs_info_put(rinfo);
+	return rargs.rv.rv_int;
+}
 
 static void rfs_inode_set_ops_reg(struct rfs_inode *rinode)
 {
@@ -759,6 +826,8 @@ static void rfs_inode_set_ops_sock(struct rfs_inode *rinode)
 
 static void rfs_inode_set_aops_reg(struct rfs_inode *rinode)
 {
+	RFS_SET_AOP(rinode, REDIRFS_REG_AOP_READPAGE, readpage);
+	RFS_SET_AOP(rinode, REDIRFS_REG_AOP_WRITEPAGE, writepage);
 }
 
 void rfs_inode_set_ops(struct rfs_inode *rinode)

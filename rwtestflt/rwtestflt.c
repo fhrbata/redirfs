@@ -5,7 +5,7 @@
 #include <redirfs.h>
 #include <linux/namei.h>
 
-#define RWTESTFLT_VERSION "0.1"
+#define RWTESTFLT_VERSION "0.2"
 
 static redirfs_filter rwtestflt;
 
@@ -37,10 +37,26 @@ enum redirfs_rv rwtestflt_write(redirfs_context context,
 	return REDIRFS_CONTINUE;
 }
 
+enum redirfs_rv rwtestflt_readpage(redirfs_context context,
+		struct redirfs_args *args)
+{
+	printk(KERN_INFO "rwtestflt: readpage callback\n");
+	return REDIRFS_CONTINUE;
+}
+
+enum redirfs_rv rwtestflt_writepage(redirfs_context context,
+		struct redirfs_args *args)
+{
+	printk(KERN_INFO "rwtestflt: writepage callback\n");
+	return REDIRFS_CONTINUE;
+}
+
 static struct redirfs_op_info rwtestflt_op_info[] = {
 	{REDIRFS_REG_FOP_OPEN, rwtestflt_open, rwtestflt_open},
 	{REDIRFS_REG_FOP_READ, rwtestflt_read, rwtestflt_read},
 	{REDIRFS_REG_FOP_WRITE, rwtestflt_write, rwtestflt_write},
+	{REDIRFS_REG_AOP_READPAGE, rwtestflt_readpage, rwtestflt_readpage},
+	{REDIRFS_REG_AOP_WRITEPAGE, rwtestflt_writepage, rwtestflt_writepage},
 	{REDIRFS_OP_END, NULL, NULL}
 };
 
