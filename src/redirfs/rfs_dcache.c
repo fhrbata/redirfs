@@ -47,20 +47,33 @@ void rfs_dcache_data_free(struct rfs_dcache_data *rdata)
 	kfree(rdata);
 }
 
-static struct rfs_dcache_entry *rfs_dcache_entry_alloc(struct dentry *dentry,
-		struct list_head *list, int type)
+static struct rfs_dcache_entry *rfs_dcache_entry_alloc_locked(
+		struct dentry *dentry, struct list_head *list)
 {
 	struct rfs_dcache_entry *entry;
 
-	entry = kzalloc(sizeof(struct rfs_dcache_entry), type);
+	entry = kzalloc(sizeof(struct rfs_dcache_entry), GFP_ATOMIC);
 	if (!entry)
 		return ERR_PTR(-ENOMEM);
 
 	INIT_LIST_HEAD(&entry->list);
-	spin_lock(&dentry->d_lock);
-	atomic_inc(&dentry->d_count);
-	entry->dentry = dentry;
-	spin_unlock(&dentry->d_lock);
+	entry->dentry = dget_locked(dentry);
+	list_add_tail(&entry->list, list);
+
+	return entry;
+}
+
+static struct rfs_dcache_entry *rfs_dcache_entry_alloc(struct dentry *dentry,
+		struct list_head *list)
+{
+	struct rfs_dcache_entry *entry;
+
+	entry = kzalloc(sizeof(struct rfs_dcache_entry), GFP_KERNEL);
+	if (!entry)
+		return ERR_PTR(-ENOMEM);
+
+	INIT_LIST_HEAD(&entry->list);
+	entry->dentry = dget(dentry);
 	list_add_tail(&entry->list, list);
 
 	return entry;
@@ -86,7 +99,7 @@ int rfs_dcache_get_subs(struct dentry *dir, struct list_head *sibs)
 
 	list_for_each_entry(dentry, &dir->d_subdirs, d_u.d_child) {
 
-		sib = rfs_dcache_entry_alloc(dentry, sibs, GFP_ATOMIC);
+		sib = rfs_dcache_entry_alloc_locked(dentry, sibs);
 		if (IS_ERR(sib)) {
 			rv = PTR_ERR(sib);
 			break;
@@ -135,7 +148,7 @@ static int rfs_dcache_get_dirs(struct list_head *dirs, struct list_head *sibs)
 		if (!S_ISDIR(entry->dentry->d_inode->i_mode))
 			continue;
 
-		dir = rfs_dcache_entry_alloc(entry->dentry, dirs, GFP_KERNEL);
+		dir = rfs_dcache_entry_alloc(entry->dentry, dirs);
 		if (IS_ERR(dir))
 			return PTR_ERR(dir);
 
@@ -154,7 +167,7 @@ int rfs_dcache_walk(struct dentry *root, int (*cb)(struct dentry *, void *),
 	struct rfs_dcache_entry *sib;
 	int rv = 0;
 
-	dir = rfs_dcache_entry_alloc(root, &dirs, GFP_KERNEL);
+	dir = rfs_dcache_entry_alloc(root, &dirs);
 	if (IS_ERR(dir))
 		return PTR_ERR(dir);
 
