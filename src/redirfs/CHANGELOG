@@ -2,6 +2,7 @@ version 0.7
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- used dget_locked instead of direct increase of d_count
           it allows redirfs to run at kernel with openvz patches
+	- added REDIRFS_DIR_IOP_UNLINK and REDIRFS_DIR_IOP_RMDIR callbacks
 
 version 0.6
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>

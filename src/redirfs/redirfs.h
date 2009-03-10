@@ -113,10 +113,10 @@ enum redirfs_op_id {
 	REDIRFS_DIR_IOP_CREATE,
 	REDIRFS_DIR_IOP_LOOKUP,
 	REDIRFS_DIR_IOP_LINK,
-	/* REDIRFS_DIR_IOP_UNLINK, */
+	REDIRFS_DIR_IOP_UNLINK,
 	REDIRFS_DIR_IOP_SYMLINK, 
 	REDIRFS_DIR_IOP_MKDIR,
-	/* REDIRFS_DIR_IOP_RMDIR, */
+	REDIRFS_DIR_IOP_RMDIR,
 	REDIRFS_DIR_IOP_MKNOD,
 	REDIRFS_DIR_IOP_RENAME,
 	REDIRFS_DIR_IOP_PERMISSION,
@@ -288,12 +288,10 @@ union redirfs_op_args {
 		struct dentry *dentry;
 	} i_link;
 
-	/*
 	struct {
 		struct inode *dir;
 		struct dentry *dentry;
 	} i_unlink;
-	*/
 
 	struct {
 		struct inode *dir;
@@ -307,12 +305,10 @@ union redirfs_op_args {
 		int mode;
 	} i_mkdir;
 
-	/*
 	struct {
 		struct inode *dir;
 		struct dentry *dentry;
 	} i_rmdir;
-	*/
 
 	struct {
 		struct inode *dir;
