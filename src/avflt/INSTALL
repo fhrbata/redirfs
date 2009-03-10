@@ -20,7 +20,7 @@
 	* Unpack package
 		$ tar -xvzf avflt-x.y.tar.gz
 
-	* Change to the avfltt-x.y directory
+	* Change to the avflt-x.y directory
 		$ cd avflt-x.y
 
 	* Copy the RedirFS's Module.symvers file to the AVFlt source tree.
@@ -42,7 +42,7 @@
 			EXTRA_CFLAGS=-I<full path to the redirfs dir> \
 			modules_install
 
-	* Load avfl.ko module
+	* Load avflt.ko module
 		# modprobe avflt
 
 5. Problems & Bugs
