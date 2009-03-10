@@ -1,5 +1,5 @@
 /*
- * AVFlt: Anti-Virus Filter
+ * ROFlt: Anti-Virus Filter
  * Written by Frantisek Hrbata <frantisek.hrbata@redirfs.org>
  *
  * Copyright (C) 2008 Frantisek Hrbata
