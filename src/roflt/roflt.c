@@ -1,5 +1,5 @@
 /*
- * ROFlt: Anti-Virus Filter
+ * ROFlt: Read-Only Filter
  * Written by Frantisek Hrbata <frantisek.hrbata@redirfs.org>
  *
  * Copyright (C) 2008 Frantisek Hrbata
