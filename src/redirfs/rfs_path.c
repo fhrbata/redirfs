@@ -541,7 +541,7 @@ void redirfs_put_path_info(struct redirfs_path_info *info)
 int redirfs_rem_paths(redirfs_filter filter)
 {
 	redirfs_path *paths;
-	int rv;
+	int rv = 0;
 	int i = 0;
 
 	if (!filter)
