@@ -109,6 +109,8 @@ redirfs_filter redirfs_register_filter(struct redirfs_filter_info *info)
 	struct rfs_flt *rflt;
 	int rv;
 
+	might_sleep();
+
 	if (!info)
 		return ERR_PTR(-EINVAL);
 
@@ -142,6 +144,8 @@ redirfs_filter redirfs_register_filter(struct redirfs_filter_info *info)
 int redirfs_unregister_filter(redirfs_filter filter)
 {
 	struct rfs_flt *rflt = (struct rfs_flt *)filter;
+
+	might_sleep();
 
 	if (!rflt)
 		return -EINVAL;
@@ -210,6 +214,8 @@ int redirfs_set_operations(redirfs_filter filter, struct redirfs_op_info ops[])
 	struct rfs_flt *rflt = (struct rfs_flt *)filter;
 	int i = 0;
 	int rv = 0;
+
+	might_sleep();
 
 	if (!rflt)
 		return -EINVAL;

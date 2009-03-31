@@ -326,6 +326,8 @@ redirfs_path redirfs_add_path(redirfs_filter filter,
 	struct rfs_path *rpath;
 	int rv;
 
+	might_sleep();
+
 	if (!filter || !info)
 		return ERR_PTR(-EINVAL);
 
@@ -365,6 +367,8 @@ int redirfs_rem_path(redirfs_filter filter, redirfs_path path)
 	struct rfs_path *rpath = (struct rfs_path *)path;
 	int rv;
 
+	might_sleep();
+
 	if (!filter || !path)
 		return -EINVAL;
 
@@ -400,7 +404,15 @@ int redirfs_get_id_path(redirfs_path path)
 
 redirfs_path redirfs_get_path_id(int id)
 {
-	return rfs_path_find_id(id);
+	struct rfs_path *rpath;
+
+	might_sleep();
+
+	mutex_lock(&rfs_path_mutex);
+	rpath = rfs_path_find_id(id);
+	mutex_unlock(&rfs_path_mutex);
+
+	return rpath;
 }
 
 redirfs_path redirfs_get_path(redirfs_path path)
@@ -453,6 +465,8 @@ redirfs_path* redirfs_get_paths(redirfs_filter filter)
 	redirfs_path *paths;
 	int i = 0;
 
+	might_sleep();
+
 	if (!filter)
 		return ERR_PTR(-EINVAL);
 
@@ -499,6 +513,8 @@ struct redirfs_path_info *redirfs_get_path_info(redirfs_filter filter,
 {
 	struct rfs_path *rpath = path;
 	struct redirfs_path_info *info;
+
+	might_sleep();
 
 	if (!filter || !path)
 		return ERR_PTR(-EINVAL);

@@ -3,6 +3,8 @@ version 0.7
 	- used dget_locked instead of direct increase of d_count
           it allows redirfs to run at kernel with openvz patches
 	- added REDIRFS_DIR_IOP_UNLINK and REDIRFS_DIR_IOP_RMDIR callbacks
+	- added might_sleep() macro into functions which can sleep
+	- fixed locking in redirfs_get_path_id()
 
 version 0.6
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
