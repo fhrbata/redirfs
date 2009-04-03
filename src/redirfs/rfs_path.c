@@ -328,7 +328,7 @@ redirfs_path redirfs_add_path(redirfs_filter filter,
 
 	might_sleep();
 
-	if (!filter || !info)
+	if (!filter || IS_ERR(filter) || !info)
 		return ERR_PTR(-EINVAL);
 
 	if (!info->mnt || !info->dentry || !info->flags)
@@ -369,7 +369,7 @@ int redirfs_rem_path(redirfs_filter filter, redirfs_path path)
 
 	might_sleep();
 
-	if (!filter || !path)
+	if (!filter || IS_ERR(filter) || !path)
 		return -EINVAL;
 
 	mutex_lock(&rpath->dentry->d_inode->i_sb->s_vfs_rename_mutex);
@@ -432,7 +432,7 @@ redirfs_path* redirfs_get_paths_root(redirfs_filter filter, redirfs_root root)
 	redirfs_path *paths;
 	int i = 0;
 
-	if (!filter || !root)
+	if (!filter || IS_ERR(filter) || !root)
 		return ERR_PTR(-EINVAL);
 
 	spin_lock(&rroot->lock);
@@ -467,7 +467,7 @@ redirfs_path* redirfs_get_paths(redirfs_filter filter)
 
 	might_sleep();
 
-	if (!filter)
+	if (!filter || IS_ERR(filter))
 		return ERR_PTR(-EINVAL);
 
 	mutex_lock(&rfs_path_mutex);
@@ -516,7 +516,7 @@ struct redirfs_path_info *redirfs_get_path_info(redirfs_filter filter,
 
 	might_sleep();
 
-	if (!filter || !path)
+	if (!filter || IS_ERR(filter) || !path)
 		return ERR_PTR(-EINVAL);
 
 	info = kzalloc(sizeof(struct redirfs_path_info), GFP_KERNEL);
@@ -560,7 +560,7 @@ int redirfs_rem_paths(redirfs_filter filter)
 	int rv = 0;
 	int i = 0;
 
-	if (!filter)
+	if (!filter || IS_ERR(filter))
 		return -EINVAL;
 
 	paths = redirfs_get_paths(filter);

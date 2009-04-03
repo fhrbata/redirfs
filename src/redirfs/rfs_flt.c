@@ -147,7 +147,7 @@ int redirfs_unregister_filter(redirfs_filter filter)
 
 	might_sleep();
 
-	if (!rflt)
+	if (!rflt || IS_ERR(rflt))
 		return -EINVAL;
 
 	spin_lock(&rflt->lock);
@@ -175,6 +175,9 @@ int redirfs_unregister_filter(redirfs_filter filter)
 void redirfs_delete_filter(redirfs_filter filter)
 {
 	struct rfs_flt *rflt = (struct rfs_flt *)filter;
+
+	if (!rflt || IS_ERR(rflt))
+		return;
 
 	BUG_ON(atomic_read(&rflt->kobj.kref.refcount) != 1);
 
@@ -217,7 +220,7 @@ int redirfs_set_operations(redirfs_filter filter, struct redirfs_op_info ops[])
 
 	might_sleep();
 
-	if (!rflt)
+	if (!rflt || IS_ERR(rflt))
 		return -EINVAL;
 
 	while (ops[i].op_id != REDIRFS_OP_END) {

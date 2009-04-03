@@ -457,7 +457,7 @@ redirfs_root redirfs_get_root_file(redirfs_filter filter, struct file *file)
 	struct rfs_file *rfile;
 	struct rfs_info *rinfo;
 
-	if (!filter || !file)
+	if (!filter || IS_ERR(filter) || !file)
 		return NULL;
 
 	rfile = rfs_file_find(file);
@@ -480,7 +480,7 @@ redirfs_root redirfs_get_root_dentry(redirfs_filter filter,
 	struct rfs_dentry *rdentry;
 	struct rfs_info *rinfo;
 
-	if (!filter || !dentry)
+	if (!filter || IS_ERR(filter) || !dentry)
 		return NULL;
 
 	rdentry = rfs_dentry_find(dentry);
@@ -502,7 +502,7 @@ redirfs_root redirfs_get_root_inode(redirfs_filter filter, struct inode *inode)
 	struct rfs_inode *rinode;
 	struct rfs_info *rinfo;
 
-	if (!filter || !inode)
+	if (!filter || IS_ERR(filter) || !inode)
 		return NULL;
 
 	rinode = rfs_inode_find(inode);
