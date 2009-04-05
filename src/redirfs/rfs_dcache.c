@@ -89,7 +89,8 @@ static void rfs_dcache_entry_free(struct rfs_dcache_entry *entry)
 	kfree(entry);
 }
 
-int rfs_dcache_get_subs(struct dentry *dir, struct list_head *sibs)
+static int rfs_dcache_get_subs_atomic(struct dentry *dir,
+		struct list_head *sibs)
 {
 	struct rfs_dcache_entry *sib;
 	struct dentry *dentry;
@@ -107,6 +108,68 @@ int rfs_dcache_get_subs(struct dentry *dir, struct list_head *sibs)
 	}
 
 	spin_unlock(&dcache_lock);
+
+	return rv;
+}
+
+static int rfs_dcache_get_subs_kernel(struct dentry *dir,
+		struct list_head *sibs)
+{
+	LIST_HEAD(pool);
+	int pool_size = 32;
+	int pool_small;
+	struct rfs_dcache_entry *sib;
+	struct dentry *dentry;
+	int i;
+
+again:
+	pool_small = 0;
+
+	for (i = 0; i < pool_size; i++) {
+		sib = rfs_dcache_entry_alloc(NULL, &pool);
+		if (IS_ERR(sib)) {
+			rfs_dcache_entry_free_list(&pool);
+			return PTR_ERR(sib);
+		}
+	}
+
+	spin_lock(&dcache_lock);
+
+	list_for_each_entry(dentry, &dir->d_subdirs, d_u.d_child) {
+		if (list_empty(&pool)) {
+			pool_small = 1;
+			break;
+		}
+		
+		sib = list_entry(pool.next, struct rfs_dcache_entry, list);
+		sib->dentry = dget_locked(dentry);
+		list_move(&sib->list, sibs);
+	}
+
+	spin_unlock(&dcache_lock);
+
+	rfs_dcache_entry_free_list(&pool);
+
+	if (pool_small) {
+		rfs_dcache_entry_free_list(sibs);
+		pool_size *= 2;
+		goto again;
+	}
+
+	return 0;
+}
+
+int rfs_dcache_get_subs(struct dentry *dir, struct list_head *sibs)
+{
+	int rv;
+
+	rv = rfs_dcache_get_subs_atomic(dir, sibs);
+	if (!rv)
+		return rv;
+
+	rfs_dcache_entry_free_list(sibs);
+	
+	rv = rfs_dcache_get_subs_kernel(dir, sibs);
 
 	return rv;
 }

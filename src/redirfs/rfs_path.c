@@ -435,11 +435,11 @@ redirfs_path* redirfs_get_paths_root(redirfs_filter filter, redirfs_root root)
 	if (!filter || IS_ERR(filter) || !root)
 		return ERR_PTR(-EINVAL);
 
-	spin_lock(&rroot->lock);
+	mutex_lock(&rfs_path_mutex);
 	paths = kzalloc(sizeof(redirfs_path) * (rroot->paths_nr + 1),
-			GFP_ATOMIC);
+			GFP_KERNEL);
 	if (!paths) {
-		spin_unlock(&rroot->lock);
+		mutex_unlock(&rfs_path_mutex);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -452,7 +452,7 @@ redirfs_path* redirfs_get_paths_root(redirfs_filter filter, redirfs_root root)
 
 	}
 
-	spin_unlock(&rroot->lock);
+	mutex_unlock(&rfs_path_mutex);
 	paths[i] = NULL;
 
 	return paths;

@@ -102,28 +102,22 @@ static void rfs_root_list_rem(struct rfs_root *rroot)
 
 void rfs_root_add_rpath(struct rfs_root *rroot, struct rfs_path *rpath)
 {
-	spin_lock(&rroot->lock);
 	rroot->paths_nr++;
 	list_add_tail(&rpath->rroot_list, &rroot->rpaths);
-	spin_unlock(&rroot->lock);
 	rfs_path_get(rpath);
 }
 
 void rfs_root_rem_rpath(struct rfs_root *rroot, struct rfs_path *rpath)
 {
-	spin_lock(&rroot->lock);
 	rroot->paths_nr--;
 	list_del_init(&rpath->rroot_list);
 
 	if (!list_empty(&rroot->rpaths)) {
-		spin_unlock(&rroot->lock);
 		rfs_path_put(rpath);
 		return;
 	}
 
-	spin_unlock(&rroot->lock);
 	rfs_path_put(rpath);
-
 	rfs_root_list_rem(rroot);
 }
 

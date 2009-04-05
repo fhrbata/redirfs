@@ -214,7 +214,7 @@ struct rfs_chain *rfs_chain_join(struct rfs_chain *rch1, struct rfs_chain *rch2)
 			size++;
 	}
 
-	rch = rfs_chain_alloc(size, GFP_ATOMIC);
+	rch = rfs_chain_alloc(size, GFP_KERNEL);
 	if (IS_ERR(rch))
 		return rch;
 

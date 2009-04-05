@@ -255,7 +255,7 @@ int rfs_dentry_move(struct dentry *dentry, struct rfs_flt *rflt,
 		struct rfs_root *src, struct rfs_root *dst);
 
 struct rfs_inode {
-	struct list_head rdentries;
+	struct list_head rdentries; /* mutex */
 	struct list_head data;
 	struct inode *inode;
 	const struct inode_operations *op_old;
@@ -265,9 +265,10 @@ struct rfs_inode {
 	struct address_space_operations aop_new;
 	struct rfs_info *rinfo;
 	spinlock_t lock;
+	struct mutex mutex;
 	atomic_t count;
 	atomic_t nlink;
-	int rdentries_nr;
+	int rdentries_nr; /* mutex */
 };
 
 #define rfs_inode_find(inode) \
