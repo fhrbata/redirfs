@@ -44,6 +44,7 @@ static struct rfs_path *rfs_path_alloc(struct vfsmount *mnt,
 	return rpath;
 }
 
+/* increases rpath reference count */
 struct rfs_path *rfs_path_get(struct rfs_path *rpath)
 {
 	if (!rpath || IS_ERR(rpath))
@@ -55,6 +56,7 @@ struct rfs_path *rfs_path_get(struct rfs_path *rpath)
 	return rpath;
 }
 
+/* decreases rpath reference count */
 void rfs_path_put(struct rfs_path *rpath)
 {
 	if (!rpath || IS_ERR(rpath))
@@ -69,6 +71,7 @@ void rfs_path_put(struct rfs_path *rpath)
 	kfree(rpath);
 }
 
+/* searches for a rfs_path object in rfs_path_list */
 static struct rfs_path *rfs_path_find(struct vfsmount *mnt,
 		struct dentry *dentry)
 {

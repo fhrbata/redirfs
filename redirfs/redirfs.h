@@ -211,8 +211,8 @@ enum redirfs_op_id {
 
 	REDIRFS_REG_AOP_READPAGE,
 	REDIRFS_REG_AOP_WRITEPAGE,
-	/* REDIRFS_REG_AOP_READPAGES, */
-	/* REDIRFS_REG_AOP_WRITEPAGES, */
+	REDIRFS_REG_AOP_READPAGES,
+	REDIRFS_REG_AOP_WRITEPAGES,
 	/* REDIRFS_REG_AOP_SYNC_PAGE, */
 	/* REDIRFS_REG_AOP_SET_PAGE_DIRTY, */
 	/* REDIRFS_REG_AOP_PREPARE_WRITE, */
@@ -477,21 +477,17 @@ union redirfs_op_args {
 		struct writeback_control *wbc;
 	} a_writepage;
 
-	/*
 	struct {
 		struct file *file;
 		struct address_space *mapping;
 		struct list_head *pages;
 		unsigned nr_pages;
 	} a_readpages;
-	*/
 
-	/*
 	struct {
 		struct address_space *mapping;
 		struct writeback_control *wbc;
 	} a_writepages;
-	*/
 
 	/*
 	struct {

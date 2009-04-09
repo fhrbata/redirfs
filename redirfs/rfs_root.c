@@ -26,6 +26,7 @@
 LIST_HEAD(rfs_root_list);
 LIST_HEAD(rfs_root_walk_list);
 
+/* creates a new rfs_root object */
 static struct rfs_root *rfs_root_alloc(struct dentry *dentry)
 {
 	struct rfs_root *rroot;
@@ -127,6 +128,7 @@ void rfs_root_rem_rpath(struct rfs_root *rroot, struct rfs_path *rpath)
 	rfs_root_list_rem(rroot);
 }
 
+/* returns a new or already existing root object in rfs_root_list */
 struct rfs_root *rfs_root_add(struct dentry *dentry)
 {
 	struct rfs_root *rroot;

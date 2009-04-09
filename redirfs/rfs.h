@@ -312,10 +312,6 @@ struct rfs_file {
 	 
 extern struct file_operations rfs_file_ops;
 
-ssize_t rfs_read(struct file *file, char __user *buf, size_t count,
-		loff_t *offset);
-ssize_t rfs_write(struct file *file, const char __user *buf, size_t count,
-		loff_t *offset);
 int rfs_open(struct inode *inode, struct file *file);
 struct rfs_file *rfs_file_get(struct rfs_file *rfile);
 void rfs_file_put(struct rfs_file *rfile);
