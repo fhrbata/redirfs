@@ -277,9 +277,8 @@ int rfs_inode_set_rinfo(struct rfs_inode *rinode)
 
 int rfs_inode_cache_create(void)
 {
-	rfs_inode_cache = kmem_cache_create("rfs_inode_cache",
-			sizeof(struct rfs_inode), 0,
-			SLAB_RECLAIM_ACCOUNT, NULL);
+	rfs_inode_cache = rfs_kmem_cache_create("rfs_inode_cache",
+			sizeof(struct rfs_inode));
 
 	if (!rfs_inode_cache)
 		return -ENOMEM;

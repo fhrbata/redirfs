@@ -209,9 +209,8 @@ void rfs_dentry_rem_rfile(struct rfs_file *rfile)
 
 int rfs_dentry_cache_create(void)
 {
-	rfs_dentry_cache = kmem_cache_create("rfs_dentry_cache",
-			sizeof(struct rfs_dentry), 0,
-			SLAB_RECLAIM_ACCOUNT, NULL);
+	rfs_dentry_cache = rfs_kmem_cache_create("rfs_dentry_cache",
+			sizeof(struct rfs_dentry));
 
 	if (!rfs_dentry_cache)
 		return -ENOMEM;

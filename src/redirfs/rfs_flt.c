@@ -58,7 +58,7 @@ struct rfs_flt *rfs_flt_alloc(struct redirfs_filter_info *flt_info)
 	else
 		atomic_set(&rflt->active, 0);
 
-	kobject_init(&rflt->kobj, &rfs_flt_ktype);
+	rfs_kobject_init(&rflt->kobj, &rfs_flt_ktype);
 
 	return rflt;
 }

@@ -109,9 +109,8 @@ static void rfs_file_del(struct rfs_file *rfile)
 
 int rfs_file_cache_create(void)
 {
-	rfs_file_cache = kmem_cache_create("rfs_file_cache",
-			sizeof(struct rfs_file), 0,
-			SLAB_RECLAIM_ACCOUNT, NULL);
+	rfs_file_cache = rfs_kmem_cache_create("rfs_file_cache",
+			sizeof(struct rfs_file));
 
 	if (!rfs_file_cache)
 		return -ENOMEM;

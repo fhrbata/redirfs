@@ -258,9 +258,15 @@ struct rfs_inode {
 	struct list_head rdentries; /* mutex */
 	struct list_head data;
 	struct inode *inode;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,17))
 	const struct inode_operations *op_old;
-	const struct address_space_operations *aop_old;
 	const struct file_operations *fop_old;
+	const struct address_space_operations *aop_old;
+#else
+	struct inode_operations *op_old;
+	struct file_operations *fop_old;
+	struct address_space_operations *aop_old;
+#endif
 	struct inode_operations op_new;
 	struct address_space_operations aop_new;
 	struct rfs_info *rinfo;
@@ -297,7 +303,11 @@ struct rfs_file {
 	struct list_head data;
 	struct file *file;
 	struct rfs_dentry *rdentry;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,17))
 	const struct file_operations *op_old;
+#else
+	struct file_operations *op_old;
+#endif
 	struct file_operations op_new;
 	spinlock_t lock;
 	atomic_t count;
@@ -367,6 +377,98 @@ int rfs_sysfs_create(void);
 void rfs_sysfs_destroy(void);
 
 void rfs_data_remove(struct list_head *head);
+
+
+
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,16))
+
+#define rfs_rename_lock(sb) down(&sb->s_vfs_rename_sem)
+#define rfs_rename_unlock(sb) up(&sb->s_vfs_rename_sem)
+
+static inline void *kmem_cache_zalloc(struct kmem_cache *cache, gfp_t flags)
+{
+	void *obj;
+
+	obj = kmem_cache_alloc(cache, flags);
+	if (!obj)
+		return NULL;
+
+	memset(obj, 0, kmem_cache_size(cache));
+
+	return obj;
+}       
+
+#else
+
+#define rfs_rename_lock(sb) mutex_lock(&sb->s_vfs_rename_mutex)
+#define rfs_rename_unlock(sb) mutex_unlock(&sb->s_vfs_rename_mutex)
+
+#endif
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24))
+
+static inline struct kmem_cache *rfs_kmem_cache_create(const char *n, size_t s)
+{
+	return kmem_cache_create(n, s, 0, SLAB_RECLAIM_ACCOUNT, NULL);
+}
+
+#else
+
+static inline struct kmem_cache *rfs_kmem_cache_create(const char *n, size_t s)
+{
+	return kmem_cache_create(n, s, 0, SLAB_RECLAIM_ACCOUNT, NULL, NULL);
+}
+
+#endif
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
+
+static inline void rfs_kobject_init(struct kobject *kobj,
+		struct kobj_type *ktype)
+{
+	kobj->ktype = ktype;
+	kobject_init(kobj);
+}
+
+static inline void rfs_nameidata_put(struct nameidata *nd)
+{
+	path_release(nd);
+}
+
+static inline struct dentry *rfs_nameidata_dentry(struct nameidata *nd)
+{
+	return nd->dentry;
+}
+
+static inline struct vfsmount *rfs_nameidata_mnt(struct nameidata *nd)
+{
+	return nd->mnt;
+}
+
+#else
+
+static inline void rfs_kobject_init(struct kobject *kobj,
+		struct kobj_type *ktype)
+{
+	kobject_init(kobj, ktype);
+}
+
+static inline void rfs_nameidata_put(struct nameidata *nd)
+{
+	path_put(&nd->path);
+}
+
+static inline struct dentry *rfs_nameidata_dentry(struct nameidata *nd)
+{
+	return nd->path.dentry;
+}
+
+static inline struct vfsmount *rfs_nameidata_mnt(struct nameidata *nd)
+{
+	return nd->path.mnt;
+}
+
+#endif
 
 #endif
 

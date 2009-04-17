@@ -334,7 +334,7 @@ redirfs_path redirfs_add_path(redirfs_filter filter,
 	if (!info->mnt || !info->dentry || !info->flags)
 		return ERR_PTR(-EINVAL);
 
-	mutex_lock(&info->dentry->d_inode->i_sb->s_vfs_rename_mutex);
+	rfs_rename_lock(info->dentry->d_inode->i_sb);
 	mutex_lock(&rfs_path_mutex);
 
 	rpath = rfs_path_add(info->mnt, info->dentry);
@@ -358,7 +358,7 @@ redirfs_path redirfs_add_path(redirfs_filter filter,
 	}
 exit:
 	mutex_unlock(&rfs_path_mutex);
-	mutex_unlock(&info->dentry->d_inode->i_sb->s_vfs_rename_mutex);
+	rfs_rename_unlock(info->dentry->d_inode->i_sb);
 	return rpath;
 }
 
@@ -372,7 +372,7 @@ int redirfs_rem_path(redirfs_filter filter, redirfs_path path)
 	if (!filter || IS_ERR(filter) || !path)
 		return -EINVAL;
 
-	mutex_lock(&rpath->dentry->d_inode->i_sb->s_vfs_rename_mutex);
+	rfs_rename_lock(rpath->dentry->d_inode->i_sb);
 	mutex_lock(&rfs_path_mutex);
 
 	if (rfs_chain_find(rpath->rinch, filter) != -1)
@@ -387,7 +387,7 @@ int redirfs_rem_path(redirfs_filter filter, redirfs_path path)
 	rfs_path_rem(rpath);
 
 	mutex_unlock(&rfs_path_mutex);
-	mutex_unlock(&rpath->dentry->d_inode->i_sb->s_vfs_rename_mutex);
+	rfs_rename_unlock(rpath->dentry->d_inode->i_sb);
 
 	return rv;
 }
