@@ -449,7 +449,7 @@ struct kobject *redirfs_filter_kobject(redirfs_filter filter)
 	return &rflt->kobj;
 }
 
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,23))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
 int rfs_flt_sysfs_init(struct rfs_flt *rflt)
 {
 	int rv;
