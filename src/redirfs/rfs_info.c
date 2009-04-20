@@ -344,7 +344,9 @@ int rfs_info_rem_include(struct rfs_root *rroot, struct rfs_flt *rflt)
 		else
 			rv = rfs_info_rem(rroot->dentry, rinfo, rflt);
 
-		rfs_root_set_rinfo(rroot, NULL);
+		if (!rv)
+			rfs_root_set_rinfo(rroot, NULL);
+
 		goto exit;
 	}
 
@@ -384,7 +386,9 @@ int rfs_info_rem_exclude(struct rfs_root *rroot, struct rfs_flt *rflt)
 		else  
 			rfs_info_rdentry_rem(rroot->dentry);
 
-		rfs_root_set_rinfo(rroot, NULL);
+		if (!rv)
+			rfs_root_set_rinfo(rroot, NULL);
+
 		goto exit;
 	}
 

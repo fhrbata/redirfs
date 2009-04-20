@@ -8,6 +8,7 @@ version 0.7
 	- removed GFP_ATOMIC allocations where possible and added GFP_KERNEL
 	  allocation fallbacks otherwise, BUG 14
 	- better filter handle check in redirfs API, added IS_ERR check
+	- fixed bind mount paths - two paths one root
 
 version 0.6
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>

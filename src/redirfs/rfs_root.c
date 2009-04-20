@@ -151,7 +151,7 @@ static int rfs_root_flt_num(struct rfs_root *rroot, struct rfs_flt *rflt,
 		else
 			rchain = rpath->rexch;
 
-		if (rfs_chain_find(rchain, rflt))
+		if (rfs_chain_find(rchain, rflt) != -1)
 			num++;
 	}
 
