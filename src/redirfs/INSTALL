@@ -31,7 +31,10 @@
 		$ su
 
 	* Install module
-		$ make -C /lib/modules/`uname -r`/build M=`pwd` modules_install
+		# make -C /lib/modules/`uname -r`/build M=`pwd` modules_install
+
+	* Update module dependencies
+		# depmod -a
 
 	* Load redirfs.ko module
 		# modprobe redirfs

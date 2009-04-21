@@ -38,9 +38,12 @@
 		$ su
 
 	* Install modules 
-		$ make -C /lib/modules/`uname -r`/build M=`pwd` \
+		# make -C /lib/modules/`uname -r`/build M=`pwd` \
 			EXTRA_CFLAGS=-I<full path to the redirfs dir> \
 			modules_install
+
+	* Update module dependencies
+		# depmod -a
 
 	* Load avflt.ko module
 		# modprobe avflt
