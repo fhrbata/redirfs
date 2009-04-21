@@ -151,12 +151,12 @@ int redirfs_unregister_filter(redirfs_filter filter)
 		return -EINVAL;
 
 	spin_lock(&rflt->lock);
-	if (atomic_read(&rflt->kobj.kref.refcount) < 2) {
+	if (atomic_read(&rflt->kobj.kref.refcount) < RFS_FLT_UNREG_CNT) {
 		spin_unlock(&rflt->lock);
 		return 0;
 	}
 
-	if (atomic_read(&rflt->kobj.kref.refcount) != 2) {
+	if (atomic_read(&rflt->kobj.kref.refcount) != RFS_FLT_UNREG_CNT) {
 		spin_unlock(&rflt->lock);
 		return -EBUSY;
 	}
@@ -179,7 +179,7 @@ void redirfs_delete_filter(redirfs_filter filter)
 	if (!rflt || IS_ERR(rflt))
 		return;
 
-	BUG_ON(atomic_read(&rflt->kobj.kref.refcount) != 1);
+	BUG_ON(atomic_read(&rflt->kobj.kref.refcount) != RFS_FLT_UNREG_CNT - 1);
 
 	rfs_flt_sysfs_exit(rflt);
 	rfs_flt_put(rflt);

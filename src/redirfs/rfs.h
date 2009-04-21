@@ -423,6 +423,8 @@ static inline struct kmem_cache *rfs_kmem_cache_create(const char *n, size_t s)
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
 
+#define RFS_FLT_UNREG_CNT	3
+
 static inline void rfs_kobject_init(struct kobject *kobj,
 		struct kobj_type *ktype)
 {
@@ -446,6 +448,8 @@ static inline struct vfsmount *rfs_nameidata_mnt(struct nameidata *nd)
 }
 
 #else
+
+#define RFS_FLT_UNREG_CNT	2
 
 static inline void rfs_kobject_init(struct kobject *kobj,
 		struct kobj_type *ktype)
