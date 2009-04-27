@@ -9,6 +9,7 @@ version 0.7
 	  allocation fallbacks otherwise, BUG 14
 	- better filter handle check in redirfs API, added IS_ERR check
 	- fixed bind mount paths - two paths one root
+	- added support for older kernels >= 2.6.16, thanks to Sergey Ivanov
 
 version 0.6
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
