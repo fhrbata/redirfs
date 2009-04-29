@@ -10,6 +10,8 @@ version 0.7
 	- better filter handle check in redirfs API, added IS_ERR check
 	- fixed bind mount paths - two paths one root
 	- added support for older kernels >= 2.6.16, thanks to Sergey Ivanov
+	- cifs is not supported
+	  the -EPERM error is returned when path is to be added within cifs
 
 version 0.6
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>

@@ -210,6 +210,18 @@ static int rfs_path_add_dirs(struct dentry *dentry)
 	return rfs_dcache_walk(dentry, rfs_dcache_add_dir, NULL);
 }
 
+static int rfs_patch_check_fs(struct file_system_type *type)
+{
+	if (!strcmp("cifs", type->name))
+		goto notsup;
+
+	return 0;
+notsup:
+	printk(KERN_ERR "redirfs does not support '%s' file system\n",
+			type->name);
+	return -1;
+}
+
 static int rfs_path_add_include(struct rfs_path *rpath, struct rfs_flt *rflt)
 {
 	struct rfs_chain *rinch;
@@ -333,6 +345,9 @@ redirfs_path redirfs_add_path(redirfs_filter filter,
 
 	if (!info->mnt || !info->dentry || !info->flags)
 		return ERR_PTR(-EINVAL);
+
+	if (rfs_patch_check_fs(info->dentry->d_inode->i_sb->s_type))
+		return ERR_PTR(-EPERM);
 
 	rfs_rename_lock(info->dentry->d_inode->i_sb);
 	mutex_lock(&rfs_path_mutex);
