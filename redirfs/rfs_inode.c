@@ -859,6 +859,104 @@ static int rfs_writepages(struct address_space *mapping,
 	return rargs.rv.rv_int;
 }
 
+static int rfs_write_begin(struct file *file, struct address_space *mapping,
+		loff_t pos, unsigned len, unsigned flags, struct page **pagep,
+		void **fsdata)
+{
+	struct rfs_inode *rinode;
+	struct rfs_info *rinfo;
+	struct rfs_context rcont;
+	struct redirfs_args rargs;
+
+	printk(KERN_INFO "rfs_write_begin\n");
+
+	rinode = rfs_inode_find(mapping->host);
+	rinfo = rfs_inode_get_rinfo(rinode);
+	rfs_context_init(&rcont, 0);
+
+	rargs.type.id = REDIRFS_REG_AOP_WRITE_BEGIN;
+	rargs.args.a_write_begin.file = file;
+	rargs.args.a_write_begin.mapping = mapping;
+	rargs.args.a_write_begin.pos = pos;
+	rargs.args.a_write_begin.len = len;
+	rargs.args.a_write_begin.flags = flags;
+	rargs.args.a_write_begin.pagep = pagep;
+	rargs.args.a_write_begin.fsdata = fsdata;
+
+	if (!rfs_precall_flts(rinfo->rchain, &rcont, &rargs)) {
+		if (rinode->aop_old && rinode->aop_old->write_begin)
+			rargs.rv.rv_int = rinode->aop_old->write_begin(
+					rargs.args.a_write_begin.file,
+					rargs.args.a_write_begin.mapping,
+					rargs.args.a_write_begin.pos,
+					rargs.args.a_write_begin.len,
+					rargs.args.a_write_begin.flags,
+					rargs.args.a_write_begin.pagep,
+					rargs.args.a_write_begin.fsdata);
+		else
+			/* FIXME: this should probably never happen,
+			 *        isn't there a generic function?
+			 */
+			rargs.rv.rv_int = -ENOSYS;
+	}
+
+	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
+	rfs_context_deinit(&rcont);
+
+	rfs_inode_put(rinode);
+	rfs_info_put(rinfo);
+	return rargs.rv.rv_int;
+}
+
+static int rfs_write_end(struct file *file, struct address_space *mapping,
+		loff_t pos, unsigned len, unsigned copied, struct page *page,
+		void *fsdata)
+{
+	struct rfs_inode *rinode;
+	struct rfs_info *rinfo;
+	struct rfs_context rcont;
+	struct redirfs_args rargs;
+
+	printk(KERN_INFO "rfs_write_end\n");
+
+	rinode = rfs_inode_find(mapping->host);
+	rinfo = rfs_inode_get_rinfo(rinode);
+	rfs_context_init(&rcont, 0);
+
+	rargs.type.id = REDIRFS_REG_AOP_WRITE_END;
+	rargs.args.a_write_end.file = file;
+	rargs.args.a_write_end.mapping = mapping;
+	rargs.args.a_write_end.pos = pos;
+	rargs.args.a_write_end.len = len;
+	rargs.args.a_write_end.copied = copied;
+	rargs.args.a_write_end.page = page;
+	rargs.args.a_write_end.fsdata = fsdata;
+
+	if (!rfs_precall_flts(rinfo->rchain, &rcont, &rargs)) {
+		if (rinode->aop_old && rinode->aop_old->write_end)
+			rargs.rv.rv_int = rinode->aop_old->write_end(
+					rargs.args.a_write_end.file,
+					rargs.args.a_write_end.mapping,
+					rargs.args.a_write_end.pos,
+					rargs.args.a_write_end.len,
+					rargs.args.a_write_end.copied,
+					rargs.args.a_write_end.page,
+					rargs.args.a_write_end.fsdata);
+		else
+			/* FIXME: this should probably never happen,
+			 *        isn't there a generic function?
+			 */
+			rargs.rv.rv_int = -ENOSYS;
+	}
+
+	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
+	rfs_context_deinit(&rcont);
+
+	rfs_inode_put(rinode);
+	rfs_info_put(rinfo);
+	return rargs.rv.rv_int;
+}
+
 static void rfs_inode_set_ops_reg(struct rfs_inode *rinode)
 {
 	RFS_SET_IOP(rinode, REDIRFS_REG_IOP_PERMISSION, permission);
@@ -908,6 +1006,8 @@ static void rfs_inode_set_aops_reg(struct rfs_inode *rinode)
 	RFS_SET_AOP(rinode, REDIRFS_REG_AOP_WRITEPAGE, writepage);
 	RFS_SET_AOP(rinode, REDIRFS_REG_AOP_READPAGES, readpages);
 	RFS_SET_AOP(rinode, REDIRFS_REG_AOP_WRITEPAGES, writepages);
+	RFS_SET_AOP(rinode, REDIRFS_REG_AOP_WRITE_BEGIN, write_begin);
+	RFS_SET_AOP(rinode, REDIRFS_REG_AOP_WRITE_END, write_end);
 }
 
 void rfs_inode_set_ops(struct rfs_inode *rinode)

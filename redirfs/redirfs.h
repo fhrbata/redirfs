@@ -217,6 +217,8 @@ enum redirfs_op_id {
 	/* REDIRFS_REG_AOP_SET_PAGE_DIRTY, */
 	/* REDIRFS_REG_AOP_PREPARE_WRITE, */
 	/* REDIRFS_REG_AOP_COMMIT_WRITE, */
+	REDIRFS_REG_AOP_WRITE_BEGIN,
+	REDIRFS_REG_AOP_WRITE_END,
 	/* REDIRFS_REG_AOP_BMAP, */
 	/* REDIRFS_REG_AOP_INVALIDATEPAGE, */
 	/* REDIRFS_REG_AOP_RELEASEPAGE, */
@@ -500,6 +502,26 @@ union redirfs_op_args {
 		struct page *page;
 	} a_set_page_dirty;
 	*/
+
+	struct {
+		struct file *file;
+		struct address_space *mapping;
+		loff_t pos;
+		unsigned len;
+		unsigned flags;
+		struct page **pagep;
+		void **fsdata;
+	} a_write_begin;
+
+	struct {
+		struct file *file;
+		struct address_space *mapping;
+		loff_t pos;
+		unsigned len;
+		unsigned copied;
+		struct page *page;
+		void *fsdata;
+	} a_write_end;
 
 	/*
 	struct {
