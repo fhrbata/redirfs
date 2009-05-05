@@ -13,8 +13,7 @@ spinlock_t cipherflt_inode_list_lock;
 
 int cipherflt_inode_data_cache_init(void)
 {
-	printk(KERN_INFO FILTER_NAME
-		": cipherflt_inode_data_cache_init\n");
+	printk(INFO "cipherflt_inode_data_cache_init\n");
 
 	cipherflt_inode_data_cache =
 		kmem_cache_create("cipherflt_inode_data_cache",
@@ -34,8 +33,7 @@ struct cipherflt_inode_data *cipherflt_inode_data_alloc(void)
 	struct cipherflt_inode_data *data;
 	int err;
 
-	printk(KERN_INFO FILTER_NAME
-		": cipherflt_inode_data_alloc\n");
+	printk(INFO "cipherflt_inode_data_alloc\n");
 
 	data = kmem_cache_alloc(cipherflt_inode_data_cache, GFP_KERNEL);
 	if (data == NULL)
@@ -64,8 +62,7 @@ struct cipherflt_inode_data *cipherflt_inode_data_alloc(void)
 void cipherflt_inode_data_attach(struct inode *inode,
 		struct cipherflt_inode_data *data)
 {
-	printk(KERN_INFO FILTER_NAME
-		": cipherflt_inode_data_attach\n");
+	printk(INFO "cipherflt_inode_data_attach\n");
 
 	BUG_ON(inode == NULL);
 	BUG_ON((data == NULL) || (IS_ERR(data)));
@@ -80,8 +77,7 @@ struct cipherflt_inode_data *cipherflt_inode_data_get(struct inode *inode)
 {
 	struct redirfs_data *rfs_data;
 
-	printk(KERN_INFO FILTER_NAME
-		": cipherflt_inode_data_get\n");
+	printk(INFO "cipherflt_inode_data_get\n");
 
 	rfs_data = redirfs_get_data_inode(cipherflt, inode);
 	if (rfs_data == NULL)
@@ -94,8 +90,7 @@ void cipherflt_inode_data_detach(struct inode *inode)
 {
 	struct redirfs_data *rfs_data;
 
-	printk(KERN_INFO FILTER_NAME
-		": cipherflt_inode_data_detach\n");
+	printk(INFO "cipherflt_inode_data_detach\n");
 
 	BUG_ON(inode == NULL);
 
@@ -108,8 +103,7 @@ void cipherflt_inode_data_free(struct redirfs_data *rfs_data)
 {
 	struct cipherflt_inode_data *data = rfs_to_inode_data(rfs_data);
 
-	printk(KERN_INFO FILTER_NAME
-		": cipherflt_inode_data_free\n");
+	printk(INFO "cipherflt_inode_data_free\n");
 
 	spin_lock(&cipherflt_inode_list_lock);
 	list_del(&data->inodes);
@@ -125,8 +119,7 @@ void cipherflt_inode_data_cache_free(void)
 	struct cipherflt_inode_data *data;
 	struct cipherflt_inode_data *tmp;
 
-	printk(KERN_INFO FILTER_NAME
-		": cipherflt_inode_data_cache_free\n");
+	printk(INFO "cipherflt_inode_data_cache_free\n");
 
 	if (cipherflt_inode_data_cache == NULL)
 		return;

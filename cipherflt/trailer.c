@@ -9,8 +9,7 @@
 
 void cipherflt_trailer_init(struct cipherflt_trailer *trailer)
 {
-	printk(KERN_INFO FILTER_NAME
-		": cipherflt_trailer_init\n");
+	printk(INFO "cipherflt_trailer_init\n");
 
 	BUG_ON(trailer == NULL);
 
@@ -32,8 +31,7 @@ int cipherflt_trailer_read(struct file *file,
 
 	char buffer[TRAILER_SIZE];
 
-	printk(KERN_INFO FILTER_NAME
-		": cipherflt_trailer_read\n");
+	printk(INFO "cipherflt_trailer_read\n");
 
 	BUG_ON(file == NULL);
 	BUG_ON(trailer == NULL);
@@ -70,6 +68,9 @@ int cipherflt_trailer_read(struct file *file,
 	buffer_offset += sizeof (u16);
 	memcpy(trailer->key, buffer + buffer_offset, trailer->key_size);
 
+	printk(INFO "block size: %u; key size: %u\n",
+			trailer->block_size, trailer->key_size);
+
 	rv = cipherflt_cipher_decrypt_master(trailer->key,
 			trailer->key_size);
 	if (rv) {
@@ -91,8 +92,7 @@ int cipherflt_trailer_write(struct file *file,
 
 	char buffer[TRAILER_SIZE];
 
-	printk(KERN_INFO FILTER_NAME
-		": cipherflt_trailer_write\n");
+	printk(INFO "cipherflt_trailer_write\n");
 
 	BUG_ON(file == NULL);
 	BUG_ON(trailer == NULL);
@@ -108,7 +108,7 @@ int cipherflt_trailer_write(struct file *file,
 	buffer_offset += sizeof (u8);
 	memcpy(buffer + buffer_offset, &trailer->iv_size, sizeof (u8));
 	buffer_offset += sizeof (u8);
-	memcpy(buffer + buffer_offset, &trailer->block_size, sizeof (u8));
+	memcpy(buffer + buffer_offset, &trailer->block_size, sizeof (u16));
 	buffer_offset += sizeof (u16);
 	memcpy(buffer + buffer_offset, trailer->key, trailer->key_size);
 
@@ -132,8 +132,7 @@ int cipherflt_trailer_write(struct file *file,
 
 int cipherflt_trailer_generate_key(struct cipherflt_trailer *trailer)
 {
-	printk(KERN_INFO FILTER_NAME
-		": cipherflt_trailer_generate_key\n");
+	printk(INFO "cipherflt_trailer_generate_key\n");
 
 	BUG_ON(trailer == NULL);
 
@@ -150,8 +149,7 @@ int cipherflt_trailer_generate_key(struct cipherflt_trailer *trailer)
 
 void cipherflt_trailer_free(struct cipherflt_trailer *trailer)
 {
-	printk(KERN_INFO FILTER_NAME
-		": cipherflt_trailer_free\n");
+	printk(INFO "cipherflt_trailer_free\n");
 
 	BUG_ON(trailer == NULL);
 
