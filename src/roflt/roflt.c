@@ -64,6 +64,13 @@ static struct redirfs_op_info roflt_op_info[] = {
 	{REDIRFS_DIR_IOP_RMDIR, roflt_rofs, NULL},
 	{REDIRFS_DIR_IOP_MKNOD, roflt_rofs, NULL},
 	{REDIRFS_DIR_IOP_RENAME, roflt_rofs, NULL},
+	{REDIRFS_REG_IOP_SETATTR, roflt_rofs, NULL},
+	{REDIRFS_DIR_IOP_SETATTR, roflt_rofs, NULL},
+	{REDIRFS_LNK_IOP_SETATTR, roflt_rofs, NULL},
+	{REDIRFS_CHR_IOP_SETATTR, roflt_rofs, NULL},
+	{REDIRFS_BLK_IOP_SETATTR, roflt_rofs, NULL},
+	{REDIRFS_FIFO_IOP_SETATTR, roflt_rofs, NULL},
+	{REDIRFS_SOCK_IOP_SETATTR, roflt_rofs, NULL},
 	{REDIRFS_OP_END, NULL, NULL}
 };
 
