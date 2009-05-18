@@ -2,7 +2,16 @@ version 0.7
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- used dget_locked instead of direct increase of d_count
           it allows redirfs to run at kernel with openvz patches
-	- added REDIRFS_DIR_IOP_UNLINK and REDIRFS_DIR_IOP_RMDIR callbacks
+	- added callbacks
+		REDIRFS_DIR_IOP_UNLINK
+		REDIRFS_DIR_IOP_RMDIR
+		REDIRFS_REG_IOP_SETATTR
+		REDIRFS_DIR_IOP_SETATTR
+		REDIRFS_LNK_IOP_SETATTR
+		REDIRFS_CHR_IOP_SETATTR
+		REDIRFS_BLK_IOP_SETATTR
+		REDIRFS_FIFO_IOP_SETATTR
+		REDIRFS_SOCK_IOP_SETATTR
 	- added might_sleep() macro into functions which can sleep
 	- fixed locking in redirfs_get_path_id()
 	- removed GFP_ATOMIC allocations where possible and added GFP_KERNEL

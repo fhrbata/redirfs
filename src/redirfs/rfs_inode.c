@@ -741,6 +741,68 @@ static int rfs_permission(struct inode *inode, int mask)
 
 #endif
 
+static int rfs_setattr_default(struct dentry *dentry, struct iattr *iattr)
+{
+	struct inode *inode = dentry->d_inode;
+	int rv;
+
+	rv = inode_change_ok(inode, iattr);
+	if (rv)
+		return rv;
+
+	if ((iattr->ia_valid & ATTR_UID && iattr->ia_uid != inode->i_uid) ||
+	    (iattr->ia_valid & ATTR_GID && iattr->ia_gid != inode->i_gid))
+		return DQUOT_TRANSFER(inode, iattr) ? -EDQUOT : 0;
+
+	return inode_setattr(inode, iattr);
+}
+
+static int rfs_setattr(struct dentry *dentry, struct iattr *iattr)
+{
+	struct rfs_inode *rinode;
+	struct rfs_info *rinfo;
+	struct rfs_context rcont;
+	struct redirfs_args rargs;
+
+	rinode = rfs_inode_find(dentry->d_inode);
+	rinfo = rfs_inode_get_rinfo(rinode);
+	rfs_context_init(&rcont, 0);
+
+	if (S_ISREG(dentry->d_inode->i_mode))
+		rargs.type.id = REDIRFS_REG_IOP_SETATTR;
+	else if (S_ISDIR(dentry->d_inode->i_mode))
+		rargs.type.id = REDIRFS_DIR_IOP_SETATTR;
+	else if (S_ISLNK(dentry->d_inode->i_mode))
+		rargs.type.id = REDIRFS_LNK_IOP_SETATTR;
+	else if (S_ISCHR(dentry->d_inode->i_mode))
+		rargs.type.id = REDIRFS_CHR_IOP_SETATTR;
+	else if (S_ISBLK(dentry->d_inode->i_mode))
+		rargs.type.id = REDIRFS_BLK_IOP_SETATTR;
+	else if (S_ISFIFO(dentry->d_inode->i_mode))
+		rargs.type.id = REDIRFS_FIFO_IOP_SETATTR;
+	else 
+		rargs.type.id = REDIRFS_SOCK_IOP_SETATTR;
+
+	rargs.args.i_setattr.dentry = dentry;
+	rargs.args.i_setattr.iattr = iattr;
+
+	if (!rfs_precall_flts(rinfo->rchain, &rcont, &rargs)) {
+		if (rinode->op_old && rinode->op_old->setattr)
+			rargs.rv.rv_int = rinode->op_old->setattr(
+					rargs.args.i_setattr.dentry,
+					rargs.args.i_setattr.iattr);
+		else 
+			rargs.rv.rv_int = rfs_setattr_default(dentry, iattr);
+	}
+
+	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
+	rfs_context_deinit(&rcont);
+
+	rfs_inode_put(rinode);
+	rfs_info_put(rinfo);
+	return rargs.rv.rv_int;
+}
+
 static int rfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		struct inode *new_dir, struct dentry *new_dentry)
 {
@@ -793,6 +855,7 @@ static int rfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 static void rfs_inode_set_ops_reg(struct rfs_inode *rinode)
 {
 	RFS_SET_IOP(rinode, REDIRFS_REG_IOP_PERMISSION, permission);
+	RFS_SET_IOP(rinode, REDIRFS_REG_IOP_SETATTR, setattr);
 }
 
 static void rfs_inode_set_ops_dir(struct rfs_inode *rinode)
@@ -800,6 +863,7 @@ static void rfs_inode_set_ops_dir(struct rfs_inode *rinode)
 	RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_UNLINK, unlink);
 	RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_RMDIR, rmdir);
 	RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_PERMISSION, permission);
+	RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_SETATTR, setattr);
 
 	RFS_SET_IOP_MGT(rinode, create);
 	RFS_SET_IOP_MGT(rinode, link);
@@ -813,26 +877,31 @@ static void rfs_inode_set_ops_dir(struct rfs_inode *rinode)
 static void rfs_inode_set_ops_lnk(struct rfs_inode *rinode)
 {
 	RFS_SET_IOP(rinode, REDIRFS_LNK_IOP_PERMISSION, permission);
+	RFS_SET_IOP(rinode, REDIRFS_LNK_IOP_SETATTR, setattr);
 }
 
 static void rfs_inode_set_ops_chr(struct rfs_inode *rinode)
 {
 	RFS_SET_IOP(rinode, REDIRFS_CHR_IOP_PERMISSION, permission);
+	RFS_SET_IOP(rinode, REDIRFS_CHR_IOP_SETATTR, setattr);
 }
 
 static void rfs_inode_set_ops_blk(struct rfs_inode *rinode)
 {
 	RFS_SET_IOP(rinode, REDIRFS_BLK_IOP_PERMISSION, permission);
+	RFS_SET_IOP(rinode, REDIRFS_BLK_IOP_SETATTR, setattr);
 }
 
 static void rfs_inode_set_ops_fifo(struct rfs_inode *rinode)
 {
 	RFS_SET_IOP(rinode, REDIRFS_FIFO_IOP_PERMISSION, permission);
+	RFS_SET_IOP(rinode, REDIRFS_FIFO_IOP_SETATTR, setattr);
 }
 
 static void rfs_inode_set_ops_sock(struct rfs_inode *rinode)
 {
 	RFS_SET_IOP(rinode, REDIRFS_SOCK_IOP_PERMISSION, permission);
+	RFS_SET_IOP(rinode, REDIRFS_SOCK_IOP_SETATTR, setattr);
 }
 
 static void rfs_inode_set_aops_reg(struct rfs_inode *rinode)
