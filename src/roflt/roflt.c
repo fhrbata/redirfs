@@ -88,7 +88,7 @@ static int __init roflt_init(void)
 
 	rv = redirfs_set_operations(roflt, roflt_op_info);
 	if (rv) {
-		printk(KERN_ERR "dummyflt: set operations failed(%d)\n", rv);
+		printk(KERN_ERR "roflt: set operations failed(%d)\n", rv);
 		goto error;
 	}
 
