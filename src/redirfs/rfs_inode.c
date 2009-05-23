@@ -864,13 +864,13 @@ static void rfs_inode_set_ops_dir(struct rfs_inode *rinode)
 	RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_RMDIR, rmdir);
 	RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_PERMISSION, permission);
 	RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_SETATTR, setattr);
-	RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_LOOKUP, lookup);
 
 	RFS_SET_IOP_MGT(rinode, create);
 	RFS_SET_IOP_MGT(rinode, link);
 	RFS_SET_IOP_MGT(rinode, mknod);
 	RFS_SET_IOP_MGT(rinode, symlink);
 
+	rinode->op_new.lookup = rfs_lookup;
 	rinode->op_new.mkdir = rfs_mkdir;
 }
 
