@@ -279,12 +279,12 @@ struct rfs_inode {
 };
 
 #define rfs_inode_find(inode) \
-	(inode && inode->i_op && inode->i_op->lookup == rfs_lookup ? \
+	(inode && inode->i_op && inode->i_op->rename == rfs_rename ? \
 	 rfs_inode_get(container_of(inode->i_op, struct rfs_inode, op_new)) : \
 	 NULL)
 
-struct dentry *rfs_lookup(struct inode *dir,struct dentry *dentry,
-		struct nameidata *nd);
+int rfs_rename(struct inode *old_dir, struct dentry *old_dentry,
+		struct inode *new_dir, struct dentry *new_dentry);
 struct rfs_inode *rfs_inode_get(struct rfs_inode *rinode);
 void rfs_inode_put(struct rfs_inode *rinode);
 struct rfs_inode *rfs_inode_add(struct inode *inode, struct rfs_info *rinfo);

@@ -53,7 +53,7 @@ static struct rfs_inode *rfs_inode_alloc(struct inode *inode)
 		memcpy(&rinode->aop_new, inode->i_mapping->a_ops,
 				sizeof(struct address_space_operations));
 
-	rinode->op_new.lookup = rfs_lookup;
+	rinode->op_new.rename = rfs_rename;
 
 	return rinode;
 }
@@ -291,7 +291,7 @@ void rfs_inode_cache_destroy(void)
 	kmem_cache_destroy(rfs_inode_cache);
 }
 
-struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry,
+static struct dentry *rfs_lookup(struct inode *dir, struct dentry *dentry,
 		struct nameidata *nd)
 {
 	struct rfs_inode *rinode;
@@ -803,7 +803,7 @@ static int rfs_setattr(struct dentry *dentry, struct iattr *iattr)
 	return rargs.rv.rv_int;
 }
 
-static int rfs_rename(struct inode *old_dir, struct dentry *old_dentry,
+int rfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		struct inode *new_dir, struct dentry *new_dentry)
 {
 	struct rfs_inode *rinode;
@@ -864,6 +864,7 @@ static void rfs_inode_set_ops_dir(struct rfs_inode *rinode)
 	RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_RMDIR, rmdir);
 	RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_PERMISSION, permission);
 	RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_SETATTR, setattr);
+	RFS_SET_IOP(rinode, REDIRFS_DIR_IOP_LOOKUP, lookup);
 
 	RFS_SET_IOP_MGT(rinode, create);
 	RFS_SET_IOP_MGT(rinode, link);
@@ -871,7 +872,6 @@ static void rfs_inode_set_ops_dir(struct rfs_inode *rinode)
 	RFS_SET_IOP_MGT(rinode, symlink);
 
 	rinode->op_new.mkdir = rfs_mkdir;
-	rinode->op_new.rename = rfs_rename;
 }
 
 static void rfs_inode_set_ops_lnk(struct rfs_inode *rinode)
