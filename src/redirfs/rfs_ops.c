@@ -68,6 +68,9 @@ void rfs_ops_put(struct rfs_ops *rops)
 
 static int rfs_ops_is_none(struct rfs_ops *rops)
 {
+	if (rops->arr[REDIRFS_NONE_DOP_D_REVALIDATE])
+		return 1;
+
 	if (rops->arr[REDIRFS_NONE_DOP_D_COMPARE])
 		return 1;
 
@@ -82,6 +85,9 @@ static int rfs_ops_is_none(struct rfs_ops *rops)
 
 static int rfs_ops_is_reg(struct rfs_ops *rops)
 {
+	if (rops->arr[REDIRFS_REG_DOP_D_REVALIDATE])
+		return 1;
+
 	if (rops->arr[REDIRFS_REG_DOP_D_COMPARE])
 		return 1;
 
@@ -89,6 +95,9 @@ static int rfs_ops_is_reg(struct rfs_ops *rops)
 		return 1;
 
 	if (rops->arr[REDIRFS_REG_DOP_D_IPUT])
+		return 1;
+
+	if (rops->arr[REDIRFS_REG_IOP_SETATTR])
 		return 1;
 
 	if (rops->arr[REDIRFS_REG_IOP_PERMISSION])
@@ -105,6 +114,9 @@ static int rfs_ops_is_reg(struct rfs_ops *rops)
 
 static int rfs_ops_is_chr(struct rfs_ops *rops)
 {
+	if (rops->arr[REDIRFS_CHR_DOP_D_REVALIDATE])
+		return 1;
+
 	if (rops->arr[REDIRFS_CHR_DOP_D_COMPARE])
 		return 1;
 
@@ -112,6 +124,9 @@ static int rfs_ops_is_chr(struct rfs_ops *rops)
 		return 1;
 
 	if (rops->arr[REDIRFS_CHR_DOP_D_IPUT])
+		return 1;
+
+	if (rops->arr[REDIRFS_CHR_IOP_SETATTR])
 		return 1;
 
 	if (rops->arr[REDIRFS_CHR_IOP_PERMISSION])
@@ -128,6 +143,9 @@ static int rfs_ops_is_chr(struct rfs_ops *rops)
 
 static int rfs_ops_is_blk(struct rfs_ops *rops)
 {
+	if (rops->arr[REDIRFS_BLK_DOP_D_REVALIDATE])
+		return 1;
+
 	if (rops->arr[REDIRFS_BLK_DOP_D_COMPARE])
 		return 1;
 
@@ -135,6 +153,9 @@ static int rfs_ops_is_blk(struct rfs_ops *rops)
 		return 1;
 
 	if (rops->arr[REDIRFS_BLK_DOP_D_IPUT])
+		return 1;
+
+	if (rops->arr[REDIRFS_BLK_IOP_SETATTR])
 		return 1;
 
 	if (rops->arr[REDIRFS_BLK_IOP_PERMISSION])
@@ -151,6 +172,9 @@ static int rfs_ops_is_blk(struct rfs_ops *rops)
 
 static int rfs_ops_is_fifo(struct rfs_ops *rops)
 {
+	if (rops->arr[REDIRFS_FIFO_DOP_D_REVALIDATE])
+		return 1;
+
 	if (rops->arr[REDIRFS_FIFO_DOP_D_COMPARE])
 		return 1;
 
@@ -158,6 +182,9 @@ static int rfs_ops_is_fifo(struct rfs_ops *rops)
 		return 1;
 
 	if (rops->arr[REDIRFS_FIFO_DOP_D_IPUT])
+		return 1;
+
+	if (rops->arr[REDIRFS_FIFO_IOP_SETATTR])
 		return 1;
 
 	if (rops->arr[REDIRFS_FIFO_IOP_PERMISSION])
@@ -174,6 +201,9 @@ static int rfs_ops_is_fifo(struct rfs_ops *rops)
 
 static int rfs_ops_is_lnk(struct rfs_ops *rops)
 {
+	if (rops->arr[REDIRFS_LNK_DOP_D_REVALIDATE])
+		return 1;
+
 	if (rops->arr[REDIRFS_LNK_DOP_D_COMPARE])
 		return 1;
 
@@ -181,6 +211,9 @@ static int rfs_ops_is_lnk(struct rfs_ops *rops)
 		return 1;
 
 	if (rops->arr[REDIRFS_LNK_DOP_D_IPUT])
+		return 1;
+
+	if (rops->arr[REDIRFS_LNK_IOP_SETATTR])
 		return 1;
 
 	if (rops->arr[REDIRFS_LNK_IOP_PERMISSION])
@@ -197,6 +230,9 @@ static int rfs_ops_is_lnk(struct rfs_ops *rops)
 
 static int rfs_ops_is_sock(struct rfs_ops *rops)
 {
+	if (rops->arr[REDIRFS_LNK_DOP_D_REVALIDATE])
+		return 1;
+
 	if (rops->arr[REDIRFS_LNK_DOP_D_COMPARE])
 		return 1;
 
@@ -204,6 +240,9 @@ static int rfs_ops_is_sock(struct rfs_ops *rops)
 		return 1;
 
 	if (rops->arr[REDIRFS_LNK_DOP_D_IPUT])
+		return 1;
+
+	if (rops->arr[REDIRFS_LNK_IOP_SETATTR])
 		return 1;
 
 	if (rops->arr[REDIRFS_LNK_IOP_PERMISSION])
