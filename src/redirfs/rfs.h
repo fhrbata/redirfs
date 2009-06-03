@@ -222,7 +222,11 @@ struct rfs_dentry {
 	struct list_head rfiles;
 	struct list_head data;
 	struct dentry *dentry;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,30))
+	const struct dentry_operations *op_old;
+#else
 	struct dentry_operations *op_old;
+#endif
 	struct dentry_operations op_new;
 	struct rfs_inode *rinode;
 	struct rfs_info *rinfo;
@@ -473,6 +477,12 @@ static inline struct vfsmount *rfs_nameidata_mnt(struct nameidata *nd)
 	return nd->path.mnt;
 }
 
+#endif
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,30))
+#define rfs_dq_transfer vfs_dq_transfer
+#else
+#define rfs_dq_transfer DQUOT_TRANSFER
 #endif
 
 #endif

@@ -752,7 +752,7 @@ static int rfs_setattr_default(struct dentry *dentry, struct iattr *iattr)
 
 	if ((iattr->ia_valid & ATTR_UID && iattr->ia_uid != inode->i_uid) ||
 	    (iattr->ia_valid & ATTR_GID && iattr->ia_gid != inode->i_gid))
-		return DQUOT_TRANSFER(inode, iattr) ? -EDQUOT : 0;
+		return rfs_dq_transfer(inode, iattr) ? -EDQUOT : 0;
 
 	return inode_setattr(inode, iattr);
 }
