@@ -4,7 +4,7 @@
 
 1. Requirements
 	
-	* Running Linux kernel version 2.6.25 and higher
+	* Running Linux kernel version 2.6.16 and higher
 	* Source code and configuration for running Linux kernel
 	  - at least make scripts and make prepare
 	* Linux kernel compiled with modules support
