@@ -3,6 +3,5 @@
 			      TODO 
 		================================
 
-* allow filters to attach their private data to VFS objects - file, dentry, inode
 * support for address space operations
 * allow redirect all operations in VFS objects
