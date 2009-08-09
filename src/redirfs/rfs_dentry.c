@@ -101,7 +101,7 @@ struct rfs_dentry *rfs_dentry_add(struct dentry *dentry, struct rfs_info *rinfo)
 	 *
 	 * isofs_lookup: dentry->d_op = dir->i_sb->s_root->d_op;
 	 */
-	if (rd && rd->dentry != dentry) {
+	if (rd && (rd->dentry != dentry)) {
 		rd_new->op_old = rd->op_old;
 		rfs_dentry_put(rd);
 		rd = NULL;
