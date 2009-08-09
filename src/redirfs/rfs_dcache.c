@@ -303,6 +303,14 @@ static int rfs_dcache_rdentry_add_check(struct dentry *dentry,
 	mode_t mode;
 	int rv = 0;
 
+	/*
+	 * For isofs dentry this check has to be skipped, becase of the
+	 * workaround in the rfs_dentry_add function, where the pointer to the
+	 * dentry operations is fixed.
+	 */
+	if (!strcmp("iso9660", dentry->d_sb->s_type->name))
+		return 1;
+
 	if (!dentry->d_inode) {
 		if (!rinfo->rchain)
 			return 0;

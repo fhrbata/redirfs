@@ -1,3 +1,7 @@
+version 0.8
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- fixed rfs dentry addition for isofs, thanks to Vasiliy Novikov
+	
 version 0.7
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- used dget_locked instead of direct increase of d_count
