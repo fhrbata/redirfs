@@ -485,5 +485,32 @@ static inline struct vfsmount *rfs_nameidata_mnt(struct nameidata *nd)
 #define rfs_dq_transfer DQUOT_TRANSFER
 #endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
+
+static inline int rfs_follow_up(struct vfsmount **mnt, struct dentry **dentry)
+{
+	struct path path;
+	int rv;
+
+	path.mnt = *mnt;
+	path.dentry = *dentry;
+
+	rv = follow_up(&path);
+
+	*mnt = path.mnt;
+	*dentry = path.dentry;
+
+	return rv;
+}
+
+#else
+
+static inline int rfs_follow_up(struct vfsmount **mnt, struct dentry **dentry)
+{
+	return follow_up(mnt, dentry);
+}
+
+#endif
+
 #endif
 

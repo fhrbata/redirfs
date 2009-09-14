@@ -684,7 +684,7 @@ again:
 	dput(dtmp);
 	mntput(mtmp);
 
-	if (follow_up(&mmnt, &dmnt)) {
+	if (rfs_follow_up(&mmnt, &dmnt)) {
 		dentry = dmnt;
 		mnt = mmnt;
 		goto again;

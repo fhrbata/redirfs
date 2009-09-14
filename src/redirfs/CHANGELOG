@@ -1,6 +1,7 @@
 version 0.8
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- fixed rfs dentry addition for isofs, thanks to Vasiliy Novikov
+	- reflected changes in the follow_up function interface in 2.6.31
 	
 version 0.7
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
