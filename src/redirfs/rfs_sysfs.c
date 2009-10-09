@@ -401,20 +401,6 @@ int rfs_sysfs_create(void)
 }
 #endif
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
-void rfs_sysfs_destroy(void)
-{
-	kfree(rfs_kobj);
-	kfree(rfs_flt_kset);
-}
-#else
-void rfs_sysfs_destroy(void)
-{
-	kset_unregister(rfs_flt_kset);
-	kobject_put(rfs_kobj);
-}
-#endif
-
 int redirfs_create_attribute(redirfs_filter filter,
 		struct redirfs_filter_attribute *attr)
 {

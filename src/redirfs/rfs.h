@@ -379,7 +379,6 @@ void rfs_flt_sysfs_exit(struct rfs_flt *rflt);
 extern struct kobj_type rfs_flt_ktype;
 
 int rfs_sysfs_create(void);
-void rfs_sysfs_destroy(void);
 
 void rfs_data_remove(struct list_head *head);
 
