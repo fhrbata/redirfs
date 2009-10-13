@@ -1,3 +1,7 @@
+version 0.5
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- fixed memory leak in avflt_proc_add(), thanks to Robert Minsk
+
 version 0.4
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- dentry_open adapted to new 2.6.29 security context - struct cred

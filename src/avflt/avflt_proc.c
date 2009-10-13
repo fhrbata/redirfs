@@ -209,6 +209,7 @@ struct avflt_proc *avflt_proc_add(pid_t tgid)
 	if (found) {
 		found->open++;
 		spin_unlock(&avflt_proc_lock);
+		avflt_proc_put(proc);
 		return found;
 	}
 
