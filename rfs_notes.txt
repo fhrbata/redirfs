@@ -1,0 +1,152 @@
+What is RedirFS actually doing ?
+--------------------------------
+
+This section should provide a simple insight about what is redirfs really doing
+through its lifetime. Lifetime is ment to be list of operations (and afillated
+functions) which are performed through the redirfs life in system (from load to
+unload module).
+
+It is good to have list like this because we can easily find point (function) of
+interest in redirfs code, when we are focusing on some operation.
+
+1. Redirfs module registration
+	* create dentry, inode and file cache
+		- rfs_dentry_cache_create() 
+		- rfs_inode_cache_create()
+		- rfs_file_cache_create()
+	* create sysfs interface
+		- rfs_sysfs_create()
+
+2. Do nothing until filter module is registered
+
+3. Filter module registration
+	* register filter in redirfs
+		- redirfs_register_filter()
+			* check if filter is unique in rfs_flt_list
+			* alloc mem for rflt kobject
+			* create sysfs files for filter
+			* add filter to rfs_flt_list
+			* get frlt kobject
+	* register filter operations
+		- redirfs_set_operations()
+	* create sysfs files (optional)
+		- redirfs_create_attribute()
+	* another operations is also possible
+
+4. Still doing nothing until path for filter is registered
+
+5. Fiter path registration (added through sysfs interface)
+	* register filter paths
+		- rfs_flt_paths_store()
+			* rfs_flt_paths_add()
+				- parse input
+				- path_lookup on given path 
+				- get dentry and mnt point for given path
+				- all of this comprises walking through dcache, changing
+				  default operations (rfs_dcache_walk) and creating rfs objects
+				  rdentry and rinode.
+
+6. Opening a file
+	* open file operation is one of operations that is registered by deafult.
+	  It's set to point to rfs_open when path is added
+	  	- rfs_open() 
+			* get old file_operations
+			* check if there is rdentry for a file. If not perform old open file 
+			  operation and return result
+			* determine whatever the file is regular file, directory, link, char
+			  device, block device, or fifo and set apropriate type.id
+			* call pre-callback functions registered by filters. If any filter
+			  STOP this operation skip all oncoming filters and call
+			  post-callback
+			* if pre_callback functions was successfully completed for all
+			  registered active filters, or filter chain for this object does
+			  not even exist, old open operation os performed on file.
+			* post-callbacks are called.
+
+7. Another operation (on file, dentry, or inode)
+	* this is pretty the same as opening a file except pre and post callback
+	  functions for this operation (if there is any registered by a filter) is 
+	  performed.
+	* there is only limited list of supported operations.
+	  (supported_operations.txt)
+
+8. Change, or add path (either exclude, or include)
+	* this is also pretty the same as in 5, except particular function is called
+	  to include, exclude or remove path
+
+9. Filter deactiovation
+	* activation/deactivation is done through sysfs interface
+		- rfs_flt_active_store()
+			* input value is checked
+			* if (val) and if operation to activate filter is registered
+			  (ops->activate) then this function is called in order to activate
+			  filter.
+			* if there is not ops->activate set redirfs_activate_filter() is
+			  called
+			* else alike activation, except functions is ops->deactivate and
+			  redirfs_deactivate_filter()
+
+10. Filter removal
+	* cleanup - drop any object created by filter, free allocated mem etc.
+	* redirfs_delete_filter()
+		- check if there is any reference to kobject registered by filter
+		- drop all default filter related sysfs files rfs_flt_sysfs_exit()
+		- put last filter kobject
+
+
+
+
+What does RedirFS need from kernel ?
+------------------------------------
+
+Except really obvious implementation things like locks, lists, memory
+allocations etc., there is only one major need from redirfs. 
+
+Kernel must have implemented VFS layer which is supposed to provide layer
+between filesystem and kernel internals. VFS should be implemented in UNIX-like
+philosophy which in general comprises dentry, inode and file objects.
+
+The VFS layer is the only area of contact between kenrel and redirfs framework
+(except obvious module registration etc.). Operations like file_operations,
+dentry_operations and file_operations are fundamental for redirfs to work. Any
+os whereon redirfs should be ported to must offer these operations and there
+must be way to changig those operations in VFS objects.
+
+On what files (and functions) should we focus ?
+----------------------------------------------
+
+From very simple point of view it looks like there is one fundamental function
+in redirfs which is doing all the communication between redirfs module and VFS
+layer. It is frs_dcache_walk (and its affilated functions) in rfs_dcache.c
+[224]. 
+
+In larger scale there are more functions which are providing access with VFS
+objects:
+
+	rfs_dcache.c
+	rfs_dentry.c
+	rfs_file.c
+	rfs_inode.c
+	rfs_root.c
+
+some of theese source files contain functins which are used as replacement for
+old (filesystem or VFS) functions when filter register a path. Theese functions
+(and its affilated rfs operations) are:
+
+	*_DOP_D_COMPARE		static int rfs_d_compare(struct dentry *, struct qstr *,struct qstr *)
+	*_DOP_D_RELEASE		static void rfs_d_release(struct dentry *)
+	*_DOP_D_IPUT		void rfs_d_iput(struct dentry *, struct inode *)
+	
+	*_IOP_PERMISSION	static int rfs_permission(struct inode *, int, struct nameidata *)
+	*_IOP_CREATE		static int rfs_create(struct inode *, struct dentry *, int,struct nameidata *)
+	*_IOP_LOOKUP		static struct dentry *rfs_lookup(struct inode *, struct dentry *,struct nameidata *)
+	*_IOP_LINK			static int rfs_link(struct dentry *, struct inode *,struct dentry *)
+	*_IOP_SYMLINK		static int rfs_symlink(struct inode *, struct dentry *,const char *)
+	*_IOP_MKDIR			static int rfs_mkdir(struct inode *, struct dentry *, int)
+	*_IOP_MKNOD			static int rfs_mknod(struct inode *, struct dentry *, int, dev_t)
+	*_IOP_RENAME		int rfs_rename(struct inode *, struct dentry *,struct inode *, struct dentry *)
+
+	*_FOP_OPEN			int rfs_open(struct inode *, struct file *)
+	*_FOP_RELEASE		static int rfs_release(struct inode *, struct file *)
+	*_FOP_READDIR		static int rfs_readdir(struct file *, void *, filldir_t)
+
