@@ -465,7 +465,7 @@ static inline void *kmem_cache_zalloc(kmem_cache_t *cache, gfp_t flags)
 
 #endif
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,23))
 
 static inline rfs_kmem_cache_t *rfs_kmem_cache_create(const char *n, size_t s)
 {
