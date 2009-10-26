@@ -23,7 +23,7 @@
 
 #include <redirfs.h>
 
-#define DUMMYFLT_VERSION "0.3"
+#define DUMMYFLT_VERSION "0.4"
 
 static redirfs_filter dummyflt;
 
