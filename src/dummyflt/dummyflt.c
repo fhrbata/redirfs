@@ -106,8 +106,13 @@ enum redirfs_rv dummyflt_permission(redirfs_context context,
 	if (!path)
 		return REDIRFS_CONTINUE;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
+	rv = redirfs_get_filename(args->args.i_permission.nd->mnt,
+			args->args.i_permission.nd->dentry, path, PAGE_SIZE);
+#else
 	rv = redirfs_get_filename(args->args.i_permission.nd->path.mnt,
 			args->args.i_permission.nd->path.dentry, path, PAGE_SIZE);
+#endif
 
 	if (rv) {
 		printk(KERN_ERR "dummyflt: rfs_get_filename failed(%d)\n", rv);
@@ -139,8 +144,14 @@ enum redirfs_rv dummyflt_lookup(redirfs_context context,
 	if (!path)
 		return REDIRFS_CONTINUE;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
+	rv = redirfs_get_filename(args->args.i_lookup.nd->mnt,
+			args->args.i_lookup.nd->dentry, path, PAGE_SIZE);
+#else
 	rv = redirfs_get_filename(args->args.i_lookup.nd->path.mnt,
 			args->args.i_lookup.nd->path.dentry, path, PAGE_SIZE);
+
+#endif
 
 	if (rv) {
 		printk(KERN_ERR "dummyflt: rfs_get_filename failed(%d)\n", rv);
