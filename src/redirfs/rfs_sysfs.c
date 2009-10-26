@@ -333,6 +333,13 @@ struct kobj_type rfs_flt_ktype = {
 static struct kobject *rfs_fs_kobj;
 static struct kobject *rfs_kobj;
 
+inline void rfs_kobject_init(struct kobject *kobj)
+{
+	kobj->ktype = &rfs_flt_ktype;
+	kobj->kset = rfs_flt_kset;
+	kobject_init(kobj);
+}
+
 static inline void rfs_kobj_release(struct kobject *kobj)
 {
 	kfree(kobj);
@@ -413,6 +420,13 @@ err_fs_kobj:
 #elif (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22))
 static struct kobject *rfs_kobj;
 
+inline void rfs_kobject_init(struct kobject *kobj)
+{
+	kobj->ktype = &rfs_flt_ktype;
+	kobj->kset = rfs_flt_kset;
+	kobject_init(kobj);
+}
+
 static inline void rfs_kobj_release(struct kobject *kobj)
 {
 	kfree(kobj);
@@ -471,6 +485,13 @@ err_kobj:
 }
 #elif (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
 static struct kobject *rfs_kobj;
+
+inline void rfs_kobject_init(struct kobject *kobj)
+{
+	kobj->ktype = &rfs_flt_ktype;
+	kobj->kset = rfs_flt_kset;
+	kobject_init(kobj);
+}
 
 static inline void rfs_kobj_release(struct kobject *kobj)
 {
@@ -531,6 +552,12 @@ err_kobj:
 #else
 static struct kobject *rfs_kobj;
 
+inline void rfs_kobject_init(struct kobject *kobj)
+{
+	kobj->kset = rfs_flt_kset;
+	kobject_init(kobj, &rfs_flt_ktype);
+}
+
 int rfs_sysfs_create(void)
 {
 	rfs_kobj = kobject_create_and_add("redirfs", fs_kobj);
@@ -586,9 +613,7 @@ int rfs_flt_sysfs_init(struct rfs_flt *rflt)
 {
 	int rv;
 
-	rflt->kobj.kset = rfs_flt_kset;
-
-	rv = kobject_set_name(&rflt->kobj,rflt->name);
+	rv = kobject_set_name(&rflt->kobj, rflt->name);
 	if (rv)
 		return rv;
 
@@ -605,9 +630,7 @@ int rfs_flt_sysfs_init(struct rfs_flt *rflt)
 {
 	int rv;
 
-	rflt->kobj.kset = rfs_flt_kset;
-
-	rv = kobject_set_name(&rflt->kobj,rflt->name);
+	rv = kobject_set_name(&rflt->kobj, rflt->name);
 	if (rv)
 		return rv;
 
@@ -624,7 +647,6 @@ int rfs_flt_sysfs_init(struct rfs_flt *rflt)
 {
 	int rv;
 
-	rflt->kobj.kset = rfs_flt_kset;
 	rv = kobject_add(&rflt->kobj, NULL, "%s", rflt->name);
 	if (rv)
 		return rv;

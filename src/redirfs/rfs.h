@@ -414,7 +414,7 @@ void rfs_postcall_flts(struct rfs_chain *rchain, struct rfs_context *rcont,
 #define rfs_kobj_to_rflt(__kobj) container_of(__kobj, struct rfs_flt, kobj)
 int rfs_flt_sysfs_init(struct rfs_flt *rflt);
 void rfs_flt_sysfs_exit(struct rfs_flt *rflt);
-extern struct kobj_type rfs_flt_ktype;
+inline void rfs_kobject_init(struct kobject *kobj);
 
 int rfs_sysfs_create(void);
 
@@ -485,13 +485,6 @@ static inline rfs_kmem_cache_t *rfs_kmem_cache_create(const char *n, size_t s)
 
 #define RFS_FLT_UNREG_CNT	3
 
-static inline void rfs_kobject_init(struct kobject *kobj,
-		struct kobj_type *ktype)
-{
-	kobj->ktype = ktype;
-	kobject_init(kobj);
-}
-
 static inline void rfs_nameidata_put(struct nameidata *nd)
 {
 	path_release(nd);
@@ -510,12 +503,6 @@ static inline struct vfsmount *rfs_nameidata_mnt(struct nameidata *nd)
 #else
 
 #define RFS_FLT_UNREG_CNT	2
-
-static inline void rfs_kobject_init(struct kobject *kobj,
-		struct kobj_type *ktype)
-{
-	kobject_init(kobj, ktype);
-}
 
 static inline void rfs_nameidata_put(struct nameidata *nd)
 {
