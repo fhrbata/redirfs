@@ -389,7 +389,7 @@ int rfs_sysfs_create(void)
 	if (!rfs_flt_kset)
 		goto err_rfs_kobj;
 
-	kset_init(rfs_flt_kset);
+	kobject_init(&rfs_flt_kset->kobj);
 	rfs_flt_kset->kobj.ktype = &rfs_kobj_ktype;
 	rfs_flt_kset->kobj.parent = rfs_kobj;
 	rv = kobject_set_name(&rfs_flt_kset->kobj, "%s", "filters");
@@ -450,7 +450,7 @@ int rfs_sysfs_create(void)
 	if (!rfs_flt_kset)
 		goto err_kobj;
 
-	kset_init(rfs_flt_kset);
+	kobject_init(&rfs_flt_kset->kobj);
 	rfs_flt_kset->kobj.ktype = &rfs_kobj_ktype;
 	rfs_flt_kset->kobj.parent = rfs_kobj;
 	rv = kobject_set_name(&rfs_flt_kset->kobj, "%s", "filters");
@@ -509,7 +509,7 @@ int rfs_sysfs_create(void)
 	if (!rfs_flt_kset)
 		goto err_kobj;
 
-	kset_init(rfs_flt_kset);
+	kobject_init(&rfs_flt_kset->kobj);
 	rfs_flt_kset->kobj.ktype = &rfs_kobj_ktype;
 	rfs_flt_kset->kobj.parent = rfs_kobj;
 	rv = kobject_set_name(&rfs_flt_kset->kobj, "%s", "filters");
