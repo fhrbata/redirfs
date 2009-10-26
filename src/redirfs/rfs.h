@@ -86,6 +86,44 @@
 
 struct rfs_file;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16))
+#define rfs_mutex_t semaphore
+#define RFS_DEFINE_MUTEX(mutex) DECLARE_MUTEX(mutex)
+#define rfs_mutex_init(mutex) init_MUTEX(mutex)
+#define rfs_mutex_lock(mutex) down(mutex)
+#define rfs_mutex_unlock(mutex) up(mutex)
+#define rfs_for_each_d_child(pos, head) list_for_each_entry(pos, head, d_child)
+inline static void rfs_inode_mutex_lock(struct inode *inode)
+{
+	down(&inode->i_sem);
+}
+inline static void rfs_inode_mutex_unlock(struct inode *inode)
+{
+	up(&inode->i_sem);
+}
+#else
+#define rfs_mutex_t mutex
+#define RFS_DEFINE_MUTEX(mutex) DEFINE_MUTEX(mutex)
+#define rfs_mutex_init(mutex) mutex_init(mutex)
+#define rfs_mutex_lock(mutex) mutex_lock(mutex)
+#define rfs_mutex_unlock(mutex) mutex_unlock(mutex)
+#define rfs_for_each_d_child(pos, head) list_for_each_entry(pos, head, d_u.d_child)
+inline static void rfs_inode_mutex_lock(struct inode *inode)
+{
+	mutex_lock(&inode->i_mutex);
+}
+inline static void rfs_inode_mutex_unlock(struct inode *inode)
+{
+	mutex_unlock(&inode->i_mutex);
+}
+#endif
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,15))
+#define rfs_kmem_cache_t kmem_cache_t
+#else
+#define rfs_kmem_cache_t struct kmem_cache
+#endif
+
 struct rfs_op_info {
 	enum redirfs_rv (*pre_cb)(redirfs_context, struct redirfs_args *);
 	enum redirfs_rv (*post_cb)(redirfs_context, struct redirfs_args *);
@@ -121,7 +159,7 @@ struct rfs_path {
 	int id;
 };
 
-extern struct mutex rfs_path_mutex;
+extern struct rfs_mutex_t rfs_path_mutex;
 
 struct rfs_path *rfs_path_get(struct rfs_path *rpath);
 void rfs_path_put(struct rfs_path *rpath);
@@ -275,8 +313,8 @@ struct rfs_inode {
 	struct inode_operations op_new;
 	struct address_space_operations aop_new;
 	struct rfs_info *rinfo;
+	struct rfs_mutex_t mutex;
 	spinlock_t lock;
-	struct mutex mutex;
 	atomic_t count;
 	atomic_t nlink;
 	int rdentries_nr; /* mutex */
@@ -389,7 +427,25 @@ void rfs_data_remove(struct list_head *head);
 #define rfs_rename_lock(sb) down(&sb->s_vfs_rename_sem)
 #define rfs_rename_unlock(sb) up(&sb->s_vfs_rename_sem)
 
-static inline void *kmem_cache_zalloc(struct kmem_cache *cache, gfp_t flags)
+#  if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,14))
+typedef unsigned gfp_t;
+
+static inline void *kzalloc(size_t size, gfp_t flags)
+{
+	void *p;
+	
+	p = kmalloc(size, flags);
+	if (!p)
+		return NULL;
+
+	memset(p, 0, size);
+
+	return p;
+}
+
+#  endif
+
+static inline void *kmem_cache_zalloc(kmem_cache_t *cache, gfp_t flags)
 {
 	void *obj;
 
@@ -411,14 +467,14 @@ static inline void *kmem_cache_zalloc(struct kmem_cache *cache, gfp_t flags)
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24))
 
-static inline struct kmem_cache *rfs_kmem_cache_create(const char *n, size_t s)
+static inline rfs_kmem_cache_t *rfs_kmem_cache_create(const char *n, size_t s)
 {
 	return kmem_cache_create(n, s, 0, SLAB_RECLAIM_ACCOUNT, NULL);
 }
 
 #else
 
-static inline struct kmem_cache *rfs_kmem_cache_create(const char *n, size_t s)
+static inline rfs_kmem_cache_t *rfs_kmem_cache_create(const char *n, size_t s)
 {
 	return kmem_cache_create(n, s, 0, SLAB_RECLAIM_ACCOUNT, NULL, NULL);
 }

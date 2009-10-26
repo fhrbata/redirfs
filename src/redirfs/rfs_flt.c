@@ -24,7 +24,7 @@
 #include "rfs.h"
 
 static LIST_HEAD(rfs_flt_list);
-DEFINE_MUTEX(rfs_flt_list_mutex);
+RFS_DEFINE_MUTEX(rfs_flt_list_mutex);
 
 struct rfs_flt *rfs_flt_alloc(struct redirfs_filter_info *flt_info)
 {
@@ -114,16 +114,16 @@ redirfs_filter redirfs_register_filter(struct redirfs_filter_info *info)
 	if (!info)
 		return ERR_PTR(-EINVAL);
 
-	mutex_lock(&rfs_flt_list_mutex);
+	rfs_mutex_lock(&rfs_flt_list_mutex);
 
 	if (rfs_flt_exist(info->name, info->priority)) {
-		mutex_unlock(&rfs_flt_list_mutex);
+		rfs_mutex_unlock(&rfs_flt_list_mutex);
 		return ERR_PTR(-EEXIST);
 	}
 
 	rflt = rfs_flt_alloc(info);
 	if (IS_ERR(rflt)) {
-		mutex_unlock(&rfs_flt_list_mutex);
+		rfs_mutex_unlock(&rfs_flt_list_mutex);
 		return (redirfs_filter)rflt;
 	}
 
@@ -136,7 +136,7 @@ redirfs_filter redirfs_register_filter(struct redirfs_filter_info *info)
 	list_add_tail(&rflt->list, &rfs_flt_list);
 	rfs_flt_get(rflt);
 
-	mutex_unlock(&rfs_flt_list_mutex);
+	rfs_mutex_unlock(&rfs_flt_list_mutex);
 
 	return (redirfs_filter)rflt;
 }
@@ -163,9 +163,9 @@ int redirfs_unregister_filter(redirfs_filter filter)
 	rfs_flt_put(rflt);
 	spin_unlock(&rflt->lock);
 
-	mutex_lock(&rfs_flt_list_mutex);
+	rfs_mutex_lock(&rfs_flt_list_mutex);
 	list_del_init(&rflt->list);
-	mutex_unlock(&rfs_flt_list_mutex);
+	rfs_mutex_unlock(&rfs_flt_list_mutex);
 
 	module_put(rflt->owner);
 
@@ -229,9 +229,9 @@ int redirfs_set_operations(redirfs_filter filter, struct redirfs_op_info ops[])
 		i++;
 	}
 
-	mutex_lock(&rfs_path_mutex);
+	rfs_mutex_lock(&rfs_path_mutex);
 	rv = rfs_flt_set_ops(rflt);
-	mutex_unlock(&rfs_path_mutex);
+	rfs_mutex_unlock(&rfs_path_mutex);
 
 	return rv;
 }

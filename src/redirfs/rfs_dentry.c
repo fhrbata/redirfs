@@ -23,7 +23,7 @@
 
 #include "rfs.h"
 
-static struct kmem_cache *rfs_dentry_cache = NULL;
+static rfs_kmem_cache_t *rfs_dentry_cache = NULL;
 
 static struct rfs_dentry *rfs_dentry_alloc(struct dentry *dentry)
 {

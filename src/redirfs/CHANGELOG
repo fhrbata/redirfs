@@ -1,6 +1,9 @@
 version 0.8
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
-	- fixed rfs dentry addition for isofs, thanks to Vasiliy Novikov
+	- fixed rfs dentry addition for isofs
+		thanks to Vasiliy Novikov <vasiliy.novikov@gmail.com>
+	- support for kernels >= 2.6.12
+		thanks to Vasiliy Novikov <vasiliy.novikov@gmail.com>
 	- reflected changes in the follow_up function interface in 2.6.31
 	
 version 0.7

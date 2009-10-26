@@ -98,7 +98,7 @@ static int rfs_dcache_get_subs_atomic(struct dentry *dir,
 
 	spin_lock(&dcache_lock);
 
-	list_for_each_entry(dentry, &dir->d_subdirs, d_u.d_child) {
+	rfs_for_each_d_child(dentry, &dir->d_subdirs) {
 
 		sib = rfs_dcache_entry_alloc_locked(dentry, sibs);
 		if (IS_ERR(sib)) {
@@ -135,7 +135,7 @@ again:
 
 	spin_lock(&dcache_lock);
 
-	list_for_each_entry(dentry, &dir->d_subdirs, d_u.d_child) {
+	rfs_for_each_d_child(dentry, &dir->d_subdirs) {
 		if (list_empty(&pool)) {
 			pool_small = 1;
 			break;
@@ -191,9 +191,9 @@ static int rfs_dcache_get_subs_mutex(struct dentry *dir, struct list_head *sibs)
 	if (!dir || !dir->d_inode)
 		return 0;
 
-	mutex_lock(&dir->d_inode->i_mutex);
+	rfs_inode_mutex_lock(dir->d_inode);
 	rv = rfs_dcache_get_subs(dir, sibs);
-	mutex_unlock(&dir->d_inode->i_mutex);
+	rfs_inode_mutex_unlock(dir->d_inode);
 
 	return rv;
 }

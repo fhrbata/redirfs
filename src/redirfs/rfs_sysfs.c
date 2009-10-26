@@ -202,13 +202,13 @@ static int rfs_flt_paths_rem(redirfs_filter filter, const char *buf,
 	if (sscanf(buf, "r:%d", &id) != 1)
 		return -EINVAL;
 
-	mutex_lock(&rfs_path_mutex);
+	rfs_mutex_lock(&rfs_path_mutex);
 	rpath = rfs_path_find_id(id);
 	if (!rpath) {
-		mutex_unlock(&rfs_path_mutex);
+		rfs_mutex_unlock(&rfs_path_mutex);
 		return -ENOENT;
 	}
-	mutex_unlock(&rfs_path_mutex);
+	rfs_mutex_unlock(&rfs_path_mutex);
 	
 	if (rflt->ops && rflt->ops->rem_path)
 		rv = rflt->ops->rem_path(rpath);
@@ -316,7 +316,6 @@ static struct attribute *rfs_flt_attrs[] = {
 	NULL
 };
 
-static struct kobject *rfs_kobj;
 static struct kset *rfs_flt_kset;
 
 static struct sysfs_ops rfs_sysfs_ops = {
@@ -330,61 +329,208 @@ struct kobj_type rfs_flt_ktype = {
 	.default_attrs = rfs_flt_attrs
 };
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16))
+static struct kobject *rfs_fs_kobj;
+static struct kobject *rfs_kobj;
+
+static inline void rfs_kobj_release(struct kobject *kobj)
+{
+	kfree(kobj);
+}
+
+static struct kobj_type rfs_kobj_ktype = {
+	.release = rfs_kobj_release
+};
+
 int rfs_sysfs_create(void)
 {
+	int rv;
+
+	rfs_fs_kobj = kzalloc(sizeof(struct kobject), GFP_KERNEL);
+	if (!rfs_fs_kobj)
+		return -ENOMEM;
+
+	kobject_init(rfs_fs_kobj);
+	rfs_fs_kobj->ktype = &rfs_kobj_ktype;
+	rv = kobject_set_name(rfs_fs_kobj, "%s", "fs");
+	if (rv) {
+		kobject_put(rfs_fs_kobj);
+		return rv;
+	}
+
+	rv = kobject_register(rfs_fs_kobj);
+	if (rv) {
+		kobject_put(rfs_fs_kobj);
+		return rv;
+	}
+
+	rv = -ENOMEM;
 	rfs_kobj = kzalloc(sizeof(struct kobject), GFP_KERNEL);
+	if (!rfs_kobj) 
+		goto err_fs_kobj;
+
 	kobject_init(rfs_kobj);
+	rfs_kobj->ktype = &rfs_kobj_ktype;
+	rfs_kobj->parent = rfs_fs_kobj;
+	rv = kobject_set_name(rfs_kobj, "%s", "redirfs");
+	if (rv) {
+		kobject_put(rfs_kobj);
+		goto err_fs_kobj;
+	}
+
+	rv = kobject_register(rfs_kobj);
+	if (rv) {
+		kobject_put(rfs_kobj);
+		goto err_fs_kobj;
+	}
+
+	rv = -ENOMEM;
+	rfs_flt_kset = kzalloc(sizeof(struct kset), GFP_KERNEL);
+	if (!rfs_flt_kset)
+		goto err_rfs_kobj;
+
+	kset_init(rfs_flt_kset);
+	rfs_flt_kset->kobj.ktype = &rfs_kobj_ktype;
+	rfs_flt_kset->kobj.parent = rfs_kobj;
+	rv = kobject_set_name(&rfs_flt_kset->kobj, "%s", "filters");
+	if (rv) 
+		goto err_kset;
+
+	rv = kset_register(rfs_flt_kset);
+	if (rv)
+		goto err_kset;
+
+	return 0;
+
+err_kset:
+	kset_put(rfs_flt_kset);
+err_rfs_kobj:
+	kobject_unregister(rfs_kobj);
+err_fs_kobj:
+	kobject_unregister(rfs_fs_kobj);
+	return rv;
+}
+#elif (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22))
+static struct kobject *rfs_kobj;
+
+static inline void rfs_kobj_release(struct kobject *kobj)
+{
+	kfree(kobj);
+}
+
+static struct kobj_type rfs_kobj_ktype = {
+	.release = rfs_kobj_release
+};
+
+int rfs_sysfs_create(void)
+{
+	int rv;
+
+	rfs_kobj = kzalloc(sizeof(struct kobject), GFP_KERNEL);
 	if (!rfs_kobj)
 		return -ENOMEM;
 
-	if (kobject_set_name(rfs_kobj,"%s","redirfs")) {
-		kobject_put(rfs_kobj);
-		return  -ENOMEM;
-	}
-
+	kobject_init(rfs_kobj);
+	rfs_kobj->ktype = &rfs_kobj_ktype;
 	rfs_kobj->parent = &fs_subsys.kset.kobj;
-
-	if (kobject_add(rfs_kobj)) {
+	rv = kobject_set_name(rfs_kobj, "%s", "redirfs");
+	if (rv) {
 		kobject_put(rfs_kobj);
-		return  -ENOMEM;
+		return rv;
 	}
 
+	rv = kobject_register(rfs_kobj);
+	if (rv) {
+		kobject_put(rfs_kobj);
+		return rv;
+	}
+
+	rv = -ENOMEM;
 	rfs_flt_kset = kzalloc(sizeof(struct kset), GFP_KERNEL);
+	if (!rfs_flt_kset)
+		goto err_kobj;
+
+	kset_init(rfs_flt_kset);
+	rfs_flt_kset->kobj.ktype = &rfs_kobj_ktype;
 	rfs_flt_kset->kobj.parent = rfs_kobj;
-	kobject_set_name(&rfs_flt_kset->kobj, "%s", "filters");
-	kset_register(rfs_flt_kset);
- 
+	rv = kobject_set_name(&rfs_flt_kset->kobj, "%s", "filters");
+	if (rv) 
+		goto err_kset;
+
+	rv = kset_register(rfs_flt_kset);
+	if (rv)
+		goto err_kset;
+
 	return 0;
+
+err_kset:
+	kset_put(rfs_flt_kset);
+err_kobj:
+	kobject_unregister(rfs_kobj);
+	return rv;
 }
 #elif (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
+static struct kobject *rfs_kobj;
+
+static inline void rfs_kobj_release(struct kobject *kobj)
+{
+	kfree(kobj);
+}
+
+static struct kobj_type rfs_kobj_ktype = {
+	.release = rfs_kobj_release
+};
+
 int rfs_sysfs_create(void)
 {
+	int rv;
+
 	rfs_kobj = kzalloc(sizeof(struct kobject), GFP_KERNEL);
-	kobject_init(rfs_kobj);
 	if (!rfs_kobj)
 		return -ENOMEM;
 
-	if (kobject_set_name(rfs_kobj,"%s","redirfs")) {
-		kobject_put(rfs_kobj);
-		return  -ENOMEM;
-	}
-
+	kobject_init(rfs_kobj);
+	rfs_kobj->ktype = &rfs_kobj_ktype;
 	rfs_kobj->parent = &fs_subsys.kobj;
-
-	if (kobject_add(rfs_kobj)) {
+	rv = kobject_set_name(rfs_kobj, "%s", "redirfs");
+	if (rv) {
 		kobject_put(rfs_kobj);
-		return  -ENOMEM;
+		return rv;
 	}
 
+	rv = kobject_register(rfs_kobj);
+	if (rv) {
+		kobject_put(rfs_kobj);
+		return rv;
+	}
+
+	rv = -ENOMEM;
 	rfs_flt_kset = kzalloc(sizeof(struct kset), GFP_KERNEL);
+	if (!rfs_flt_kset)
+		goto err_kobj;
+
+	kset_init(rfs_flt_kset);
+	rfs_flt_kset->kobj.ktype = &rfs_kobj_ktype;
 	rfs_flt_kset->kobj.parent = rfs_kobj;
-	kobject_set_name(&rfs_flt_kset->kobj, "%s", "filters");
-	kset_register(rfs_flt_kset);
- 
+	rv = kobject_set_name(&rfs_flt_kset->kobj, "%s", "filters");
+	if (rv) 
+		goto err_kset;
+
+	rv = kset_register(rfs_flt_kset);
+	if (rv)
+		goto err_kset;
+
 	return 0;
+
+err_kset:
+	kset_put(rfs_flt_kset);
+err_kobj:
+	kobject_unregister(rfs_kobj);
+	return rv;
 }
 #else
+static struct kobject *rfs_kobj;
+
 int rfs_sysfs_create(void)
 {
 	rfs_kobj = kobject_create_and_add("redirfs", fs_kobj);
@@ -435,7 +581,26 @@ struct kobject *redirfs_filter_kobject(redirfs_filter filter)
 	return &rflt->kobj;
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16))
+int rfs_flt_sysfs_init(struct rfs_flt *rflt)
+{
+	int rv;
+
+	rflt->kobj.kset = rfs_flt_kset;
+
+	rv = kobject_set_name(&rflt->kobj,rflt->name);
+	if (rv)
+		return rv;
+
+	rv = kobject_add(&rflt->kobj);
+	if (rv)
+		return rv;
+
+	kobject_uevent(&rflt->kobj, KOBJ_ADD, NULL);
+
+	return 0;
+}
+#elif (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
 int rfs_flt_sysfs_init(struct rfs_flt *rflt)
 {
 	int rv;

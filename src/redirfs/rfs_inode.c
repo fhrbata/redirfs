@@ -23,7 +23,7 @@
 
 #include "rfs.h"
 
-static struct kmem_cache *rfs_inode_cache = NULL;
+static rfs_kmem_cache_t *rfs_inode_cache = NULL;
 
 static struct rfs_inode *rfs_inode_alloc(struct inode *inode)
 {
@@ -40,7 +40,7 @@ static struct rfs_inode *rfs_inode_alloc(struct inode *inode)
 	rinode->fop_old = inode->i_fop;
 	rinode->aop_old = inode->i_mapping->a_ops;
 	spin_lock_init(&rinode->lock);
-	mutex_init(&rinode->mutex);
+	rfs_mutex_init(&rinode->mutex);
 	atomic_set(&rinode->count, 1);
 	atomic_set(&rinode->nlink, 1);
 	rinode->rdentries_nr = 0;
@@ -136,23 +136,23 @@ void rfs_inode_del(struct rfs_inode *rinode)
 
 void rfs_inode_add_rdentry(struct rfs_inode *rinode, struct rfs_dentry *rdentry)
 {
-	mutex_lock(&rinode->mutex);
+	rfs_mutex_lock(&rinode->mutex);
 	rinode->rdentries_nr++;
 	list_add_tail(&rdentry->rinode_list, &rinode->rdentries);
-	mutex_unlock(&rinode->mutex);
+	rfs_mutex_unlock(&rinode->mutex);
 	rfs_dentry_get(rdentry);
 }
 
 void rfs_inode_rem_rdentry(struct rfs_inode *rinode, struct rfs_dentry *rdentry)
 {
-	mutex_lock(&rinode->mutex);
+	rfs_mutex_lock(&rinode->mutex);
 	if (list_empty(&rdentry->rinode_list)) {
-		mutex_unlock(&rinode->mutex);
+		rfs_mutex_unlock(&rinode->mutex);
 		return;
 	}
 	rinode->rdentries_nr--;
 	list_del_init(&rdentry->rinode_list);
-	mutex_unlock(&rinode->mutex);
+	rfs_mutex_unlock(&rinode->mutex);
 	rfs_dentry_put(rdentry);
 }
 
@@ -225,9 +225,9 @@ int rfs_inode_set_rinfo(struct rfs_inode *rinode)
 	if (!rinode)
 		return 0;
 
-	mutex_lock(&rinode->mutex);
+	rfs_mutex_lock(&rinode->mutex);
 	rv = rfs_inode_set_rinfo_fast(rinode);
-	mutex_unlock(&rinode->mutex);
+	rfs_mutex_unlock(&rinode->mutex);
 	if (!rv)
 		return 0;
 
@@ -243,17 +243,17 @@ int rfs_inode_set_rinfo(struct rfs_inode *rinode)
 
 	rinfo->rops = rops;
 
-	mutex_lock(&rinode->mutex);
+	rfs_mutex_lock(&rinode->mutex);
 	rv = rfs_inode_set_rinfo_fast(rinode);
 	if (!rv) {
-		mutex_unlock(&rinode->mutex);
+		rfs_mutex_unlock(&rinode->mutex);
 		rfs_info_put(rinfo);
 		return 0;
 	}
 
 	rchain = rfs_inode_join_rchains(rinode);
 	if (IS_ERR(rchain)) {
-		mutex_unlock(&rinode->mutex);
+		rfs_mutex_unlock(&rinode->mutex);
 		rfs_info_put(rinfo);
 		return PTR_ERR(rchain);
 	}
@@ -270,7 +270,7 @@ int rfs_inode_set_rinfo(struct rfs_inode *rinode)
 	rfs_info_put(rinode->rinfo);
 	rinode->rinfo = rinfo;
 	spin_unlock(&rinode->lock);
-	mutex_unlock(&rinode->mutex);
+	rfs_mutex_unlock(&rinode->mutex);
 
 	return 0;
 }

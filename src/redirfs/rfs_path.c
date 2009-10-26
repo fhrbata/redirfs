@@ -24,7 +24,7 @@
 #include "rfs.h"
 
 static LIST_HEAD(rfs_path_list);
-DEFINE_MUTEX(rfs_path_mutex);
+RFS_DEFINE_MUTEX(rfs_path_mutex);
 
 static struct rfs_path *rfs_path_alloc(struct vfsmount *mnt,
 		struct dentry *dentry)
@@ -350,7 +350,7 @@ redirfs_path redirfs_add_path(redirfs_filter filter,
 		return ERR_PTR(-EPERM);
 
 	rfs_rename_lock(info->dentry->d_inode->i_sb);
-	mutex_lock(&rfs_path_mutex);
+	rfs_mutex_lock(&rfs_path_mutex);
 
 	rpath = rfs_path_add(info->mnt, info->dentry);
 	if (IS_ERR(rpath))
@@ -372,7 +372,7 @@ redirfs_path redirfs_add_path(redirfs_filter filter,
 		rpath = ERR_PTR(rv);
 	}
 exit:
-	mutex_unlock(&rfs_path_mutex);
+	rfs_mutex_unlock(&rfs_path_mutex);
 	rfs_rename_unlock(info->dentry->d_inode->i_sb);
 	return rpath;
 }
@@ -388,7 +388,7 @@ int redirfs_rem_path(redirfs_filter filter, redirfs_path path)
 		return -EINVAL;
 
 	rfs_rename_lock(rpath->dentry->d_inode->i_sb);
-	mutex_lock(&rfs_path_mutex);
+	rfs_mutex_lock(&rfs_path_mutex);
 
 	if (rfs_chain_find(rpath->rinch, filter) != -1)
 		rv = rfs_path_rem_include(path, filter);
@@ -401,7 +401,7 @@ int redirfs_rem_path(redirfs_filter filter, redirfs_path path)
 
 	rfs_path_rem(rpath);
 
-	mutex_unlock(&rfs_path_mutex);
+	rfs_mutex_unlock(&rfs_path_mutex);
 	rfs_rename_unlock(rpath->dentry->d_inode->i_sb);
 
 	return rv;
@@ -423,9 +423,9 @@ redirfs_path redirfs_get_path_id(int id)
 
 	might_sleep();
 
-	mutex_lock(&rfs_path_mutex);
+	rfs_mutex_lock(&rfs_path_mutex);
 	rpath = rfs_path_find_id(id);
-	mutex_unlock(&rfs_path_mutex);
+	rfs_mutex_unlock(&rfs_path_mutex);
 
 	return rpath;
 }
@@ -450,11 +450,11 @@ redirfs_path* redirfs_get_paths_root(redirfs_filter filter, redirfs_root root)
 	if (!filter || IS_ERR(filter) || !root)
 		return ERR_PTR(-EINVAL);
 
-	mutex_lock(&rfs_path_mutex);
+	rfs_mutex_lock(&rfs_path_mutex);
 	paths = kzalloc(sizeof(redirfs_path) * (rroot->paths_nr + 1),
 			GFP_KERNEL);
 	if (!paths) {
-		mutex_unlock(&rfs_path_mutex);
+		rfs_mutex_unlock(&rfs_path_mutex);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -467,7 +467,7 @@ redirfs_path* redirfs_get_paths_root(redirfs_filter filter, redirfs_root root)
 
 	}
 
-	mutex_unlock(&rfs_path_mutex);
+	rfs_mutex_unlock(&rfs_path_mutex);
 	paths[i] = NULL;
 
 	return paths;
@@ -485,12 +485,12 @@ redirfs_path* redirfs_get_paths(redirfs_filter filter)
 	if (!filter || IS_ERR(filter))
 		return ERR_PTR(-EINVAL);
 
-	mutex_lock(&rfs_path_mutex);
+	rfs_mutex_lock(&rfs_path_mutex);
 
 	paths = kzalloc(sizeof(redirfs_path) * (rflt->paths_nr + 1),
 			GFP_KERNEL);
 	if (!paths) {
-		mutex_unlock(&rfs_path_mutex);
+		rfs_mutex_unlock(&rfs_path_mutex);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -502,7 +502,7 @@ redirfs_path* redirfs_get_paths(redirfs_filter filter)
 			paths[i++] = rfs_path_get(rpath);
 	}
 
-	mutex_unlock(&rfs_path_mutex);
+	rfs_mutex_unlock(&rfs_path_mutex);
 	paths[i] = NULL;
 
 	return paths;
@@ -538,7 +538,7 @@ struct redirfs_path_info *redirfs_get_path_info(redirfs_filter filter,
 	if (!info)
 		return ERR_PTR(-ENOMEM);
 
-	mutex_lock(&rfs_path_mutex);
+	rfs_mutex_lock(&rfs_path_mutex);
 
 	if (rfs_chain_find(rpath->rinch, filter) != -1)
 		info->flags = REDIRFS_PATH_INCLUDE;
@@ -546,7 +546,7 @@ struct redirfs_path_info *redirfs_get_path_info(redirfs_filter filter,
 	else if (rfs_chain_find(rpath->rexch, filter) != -1)
 		info->flags = REDIRFS_PATH_EXCLUDE;
 
-	mutex_unlock(&rfs_path_mutex);
+	rfs_mutex_unlock(&rfs_path_mutex);
 
 	if (!info->flags) {
 		kfree(info);
@@ -606,7 +606,7 @@ int rfs_path_get_info(struct rfs_flt *rflt, char *buf, int size)
 	if (!path)
 		return -ENOMEM;
 
-	mutex_lock(&rfs_path_mutex);
+	rfs_mutex_lock(&rfs_path_mutex);
 
 	list_for_each_entry(rpath, &rfs_path_list, list) {
 		if (rfs_chain_find(rpath->rinch, rflt) != -1)
@@ -622,7 +622,7 @@ int rfs_path_get_info(struct rfs_flt *rflt, char *buf, int size)
 				PAGE_SIZE);
 
 		if (rv) {
-			mutex_unlock(&rfs_path_mutex);
+			rfs_mutex_unlock(&rfs_path_mutex);
 			kfree(path);
 			return rv;
 		}
@@ -636,7 +636,7 @@ int rfs_path_get_info(struct rfs_flt *rflt, char *buf, int size)
 		}
 	}
 
-	mutex_unlock(&rfs_path_mutex);
+	rfs_mutex_unlock(&rfs_path_mutex);
 	kfree(path);
 
 	return len;
@@ -939,7 +939,7 @@ int rfs_fsrename(struct inode *old_dir, struct dentry *old_dentry,
 	if (old_dir == new_dir)
 		return 0;
 
-	mutex_lock(&rfs_path_mutex);
+	rfs_mutex_lock(&rfs_path_mutex);
 
 	rinode = rfs_inode_find(new_dir);
 	rdentry = rfs_dentry_find(old_dentry);
@@ -963,7 +963,7 @@ int rfs_fsrename(struct inode *old_dir, struct dentry *old_dentry,
 
 	rv = rfs_fsrename_add(rroot_src, rroot_dst, old_dentry);
 exit:
-	mutex_unlock(&rfs_path_mutex);
+	rfs_mutex_unlock(&rfs_path_mutex);
 	rfs_root_put(rroot_src);
 	rfs_root_put(rroot_dst);
 	rfs_inode_put(rinode);

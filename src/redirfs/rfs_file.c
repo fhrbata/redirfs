@@ -23,7 +23,7 @@
 
 #include "rfs.h"
 
-static struct kmem_cache *rfs_file_cache = NULL;
+static rfs_kmem_cache_t *rfs_file_cache = NULL;
 
 struct file_operations rfs_file_ops = {
 	.open = rfs_open
