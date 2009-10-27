@@ -414,7 +414,7 @@ void rfs_postcall_flts(struct rfs_chain *rchain, struct rfs_context *rcont,
 #define rfs_kobj_to_rflt(__kobj) container_of(__kobj, struct rfs_flt, kobj)
 int rfs_flt_sysfs_init(struct rfs_flt *rflt);
 void rfs_flt_sysfs_exit(struct rfs_flt *rflt);
-inline void rfs_kobject_init(struct kobject *kobj);
+void rfs_kobject_init(struct kobject *kobj);
 
 int rfs_sysfs_create(void);
 

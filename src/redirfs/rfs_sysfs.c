@@ -333,7 +333,7 @@ struct kobj_type rfs_flt_ktype = {
 static struct kobject *rfs_fs_kobj;
 static struct kobject *rfs_kobj;
 
-inline void rfs_kobject_init(struct kobject *kobj)
+void rfs_kobject_init(struct kobject *kobj)
 {
 	kobj->ktype = &rfs_flt_ktype;
 	kobj->kset = rfs_flt_kset;
@@ -420,7 +420,7 @@ err_fs_kobj:
 #elif (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22))
 static struct kobject *rfs_kobj;
 
-inline void rfs_kobject_init(struct kobject *kobj)
+void rfs_kobject_init(struct kobject *kobj)
 {
 	kobj->ktype = &rfs_flt_ktype;
 	kobj->kset = rfs_flt_kset;
@@ -486,7 +486,7 @@ err_kobj:
 #elif (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
 static struct kobject *rfs_kobj;
 
-inline void rfs_kobject_init(struct kobject *kobj)
+void rfs_kobject_init(struct kobject *kobj)
 {
 	kobj->ktype = &rfs_flt_ktype;
 	kobj->kset = rfs_flt_kset;
@@ -552,7 +552,7 @@ err_kobj:
 #else
 static struct kobject *rfs_kobj;
 
-inline void rfs_kobject_init(struct kobject *kobj)
+void rfs_kobject_init(struct kobject *kobj)
 {
 	kobj->kset = rfs_flt_kset;
 	kobject_init(kobj, &rfs_flt_ktype);
