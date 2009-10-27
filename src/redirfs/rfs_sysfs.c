@@ -30,7 +30,7 @@ static struct rfs_flt *rfs_sysfs_flt_get(struct rfs_flt *rflt)
 {
 	spin_lock(&rflt->lock);
 
-	if (atomic_read(&rflt->kobj.kref.refcount) < 2) {
+	if (atomic_read(&rflt->kobj.kref.refcount) < RFS_FLT_UNREG_CNT) {
 		spin_unlock(&rflt->lock);
 		return ERR_PTR(-ENOENT);
 	}
