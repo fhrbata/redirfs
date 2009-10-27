@@ -34,6 +34,19 @@ static struct redirfs_filter_info dummyflt_info = {
 	.active = 1
 };
 
+static void *dummyflt_alloc(size_t size)
+{
+	void *p;
+	
+	p = kmalloc(size, GFP_KERNEL);
+	if (!p)
+		return NULL;
+
+	memset(p, 0, size);
+
+	return p;
+}
+
 enum redirfs_rv dummyflt_open(redirfs_context context,
 		struct redirfs_args *args)
 {
@@ -41,7 +54,7 @@ enum redirfs_rv dummyflt_open(redirfs_context context,
 	char *call;
 	int rv;
 
-	path = kzalloc(sizeof(char) * PAGE_SIZE, GFP_KERNEL);
+	path = dummyflt_alloc(sizeof(char) * PAGE_SIZE);
 	if (!path)
 		return REDIRFS_CONTINUE;
 
@@ -69,7 +82,7 @@ enum redirfs_rv dummyflt_release(redirfs_context context,
 	char *call;
 	int rv;
 
-	path = kzalloc(sizeof(char) * PAGE_SIZE, GFP_KERNEL);
+	path = dummyflt_alloc(sizeof(char) * PAGE_SIZE);
 	if (!path)
 		return REDIRFS_CONTINUE;
 
@@ -102,7 +115,7 @@ enum redirfs_rv dummyflt_permission(redirfs_context context,
 	if (!args->args.i_permission.nd)
 		return REDIRFS_CONTINUE;
 
-	path = kzalloc(sizeof(char) * PAGE_SIZE, GFP_KERNEL);
+	path = dummyflt_alloc(sizeof(char) * PAGE_SIZE);
 	if (!path)
 		return REDIRFS_CONTINUE;
 
@@ -140,7 +153,7 @@ enum redirfs_rv dummyflt_lookup(redirfs_context context,
 	if (!args->args.i_lookup.nd)
 		return REDIRFS_CONTINUE;
 
-	path = kzalloc(sizeof(char) * PAGE_SIZE, GFP_KERNEL);
+	path = dummyflt_alloc(sizeof(char) * PAGE_SIZE);
 	if (!path)
 		return REDIRFS_CONTINUE;
 
