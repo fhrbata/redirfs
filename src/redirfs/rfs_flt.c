@@ -50,6 +50,7 @@ struct rfs_flt *rfs_flt_alloc(struct redirfs_filter_info *flt_info)
 	rflt->priority = flt_info->priority;
 	rflt->owner = flt_info->owner;
 	rflt->ops = flt_info->ops;
+	atomic_set(&rflt->count, 1);
 	spin_lock_init(&rflt->lock);
 	try_module_get(rflt->owner);
 
@@ -57,8 +58,6 @@ struct rfs_flt *rfs_flt_alloc(struct redirfs_filter_info *flt_info)
 		atomic_set(&rflt->active, 1);
 	else
 		atomic_set(&rflt->active, 0);
-
-	rfs_kobject_init(&rflt->kobj);
 
 	return rflt;
 }
@@ -68,7 +67,8 @@ struct rfs_flt *rfs_flt_get(struct rfs_flt *rflt)
 	if (!rflt || IS_ERR(rflt))
 		return NULL;
 
-	kobject_get(&rflt->kobj);
+	BUG_ON(!atomic_read(&rflt->count));
+	atomic_inc(&rflt->count);
 
 	return rflt;
 }
@@ -78,15 +78,19 @@ void rfs_flt_put(struct rfs_flt *rflt)
 	if (!rflt || IS_ERR(rflt))
 		return;
 
-	kobject_put(&rflt->kobj);
+	BUG_ON(!atomic_read(&rflt->count));
+	if (!atomic_dec_and_test(&rflt->count))
+		return;
+
+	kfree(rflt->name);
+	kfree(rflt);
 }
 
 void rfs_flt_release(struct kobject *kobj)
 {
 	struct rfs_flt *rflt = rfs_kobj_to_rflt(kobj);
 
-	kfree(rflt->name);
-	kfree(rflt);
+	rfs_flt_put(rflt);
 }
 
 static int rfs_flt_exist(const char *name, int priority)
@@ -151,15 +155,28 @@ int redirfs_unregister_filter(redirfs_filter filter)
 		return -EINVAL;
 
 	spin_lock(&rflt->lock);
-	if (atomic_read(&rflt->kobj.kref.refcount) < RFS_FLT_UNREG_CNT) {
+
+	/*
+	 * Check if the unregistration is already in progress.
+	 */
+	if (atomic_read(&rflt->count) < 3) {
 		spin_unlock(&rflt->lock);
 		return 0;
 	}
 
-	if (atomic_read(&rflt->kobj.kref.refcount) != RFS_FLT_UNREG_CNT) {
+	/*
+	 * Filter can be unregistered only if the reference counter is equal to
+	 * three. This means no one else is using it except the following.
+	 *
+	 *    - sysfs interface
+	 *    - internal filter list
+	 *    - handler returned to filter after registration
+	 */
+	if (atomic_read(&rflt->count) != 3) {
 		spin_unlock(&rflt->lock);
 		return -EBUSY;
 	}
+
 	rfs_flt_put(rflt);
 	spin_unlock(&rflt->lock);
 
@@ -178,6 +195,8 @@ void redirfs_delete_filter(redirfs_filter filter)
 
 	if (!rflt || IS_ERR(rflt))
 		return;
+
+	BUG_ON(atomic_read(&rflt->count) != 2);
 
 	rfs_flt_sysfs_exit(rflt);
 	rfs_flt_put(rflt);

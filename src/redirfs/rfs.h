@@ -139,6 +139,7 @@ struct rfs_flt {
 	int paths_nr;
 	spinlock_t lock;
 	atomic_t active;
+	atomic_t count;
 	struct redirfs_filter_operations *ops;
 };
 
@@ -478,20 +479,6 @@ static inline rfs_kmem_cache_t *rfs_kmem_cache_create(const char *n, size_t s)
 {
 	return kmem_cache_create(n, s, 0, SLAB_RECLAIM_ACCOUNT, NULL, NULL);
 }
-
-#endif
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23))
-
-#define RFS_FLT_UNREG_CNT	4
-
-#elif (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
-
-#define RFS_FLT_UNREG_CNT	3
-
-#else
-
-#define RFS_FLT_UNREG_CNT	2
 
 #endif
 
