@@ -2,7 +2,7 @@
  * RedirFS: Redirecting File System
  * Written by Frantisek Hrbata <frantisek.hrbata@redirfs.org>
  *
- * Copyright (C) 2008 Frantisek Hrbata
+ * Copyright 2008 - 2010 Frantisek Hrbata
  * All rights reserved.
  *
  * This file is part of RedirFS.
