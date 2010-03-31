@@ -3,6 +3,8 @@
 			  README
 		=========================
 
+This software is distributed under the GNU General Public License Version 3.
+
 1. Introduction
 
 	AVFlt or Anti-Virus Filter is a filter for the RedirFS Framework. It is

@@ -3,6 +3,8 @@
 			README
 		=======================
 
+This software is distributed under the GNU General Public License Version 3.
+
 1. Introduction
 
 	DummyFlt or Dummy Filter is a filter for the RedirFS Framework. It
