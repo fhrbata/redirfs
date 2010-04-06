@@ -69,13 +69,6 @@
 	 	RFS_REM_OP(ri->op_new, ri->op_old, op) \
 	)
 
-#define RFS_SET_AOP(ri, id, op) \
-	(ri->rinfo->rops ? \
-	 	RFS_SET_OP(ri->rinfo->rops->arr, id, ri->aop_new, \
-			ri->aop_old, op) : \
-	 	RFS_REM_OP(ri->aop_new, ri->aop_old, op) \
-	)
-
 struct rfs_file;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16))
@@ -296,14 +289,11 @@ struct rfs_inode {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,17))
 	const struct inode_operations *op_old;
 	const struct file_operations *fop_old;
-	const struct address_space_operations *aop_old;
 #else
 	struct inode_operations *op_old;
 	struct file_operations *fop_old;
-	struct address_space_operations *aop_old;
 #endif
 	struct inode_operations op_new;
-	struct address_space_operations aop_new;
 	struct rfs_info *rinfo;
 	struct rfs_mutex_t mutex;
 	spinlock_t lock;
