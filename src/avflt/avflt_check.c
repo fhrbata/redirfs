@@ -424,10 +424,9 @@ struct avflt_event *avflt_get_reply(const char __user *buf, size_t size)
 		return ERR_PTR(-ENOENT);
 
 	event = avflt_proc_get_event(proc, id);
-	if (!event) {
-		avflt_proc_put(proc);
+	avflt_proc_put(proc);
+	if (!event)
 		return ERR_PTR(-ENOENT);
-	}
 
 	event->result = result;
 	return event;

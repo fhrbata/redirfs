@@ -1,6 +1,10 @@
 version 0.5
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
-	- fixed memory leak in avflt_proc_add(), thanks to Robert Minsk
+	- fixed memory leak in avflt_proc_add()
+	  thanks to Robert Minsk <robertminsk@yahoo.com>
+	- proper canceling of pending requests when application is unregistered
+	  form avflt
+	  thanks to Timo Metsala <timo.metsala@f-secure.com>
 
 version 0.4
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
