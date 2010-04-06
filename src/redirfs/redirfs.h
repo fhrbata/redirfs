@@ -34,7 +34,7 @@
 #include <linux/aio.h>
 #include <linux/version.h>
 
-#define REDIRFS_VERSION "0.8"
+#define REDIRFS_VERSION "0.9"
 
 #define REDIRFS_PATH_INCLUDE		1
 #define REDIRFS_PATH_EXCLUDE		2
