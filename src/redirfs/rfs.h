@@ -76,14 +76,6 @@
 	 	RFS_REM_OP(ri->aop_new, ri->aop_old, op) \
 	)
 
-#define RFS_NONE_OPS	1
-#define RFS_REG_OPS	2
-#define RFS_CHR_OPS	4
-#define RFS_BLK_OPS	8
-#define RFS_FIFO_OPS	16
-#define RFS_LNK_OPS	32
-#define RFS_SOCK_OPS	64
-
 struct rfs_file;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16))
@@ -210,7 +202,6 @@ struct rfs_ops {
 struct rfs_ops *rfs_ops_alloc(void);
 struct rfs_ops *rfs_ops_get(struct rfs_ops *rops);
 void rfs_ops_put(struct rfs_ops *rops);
-void rfs_ops_set_types(struct rfs_ops *rops);
 
 struct rfs_chain {
 	struct rfs_flt **rflts;

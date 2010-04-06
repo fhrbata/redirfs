@@ -164,8 +164,6 @@ void rfs_chain_ops(struct rfs_chain *rchain, struct rfs_ops *rops)
 				rops->arr[j]++;
 		}
 	}
-
-	rfs_ops_set_types(rops);
 }
 
 int rfs_chain_cmp(struct rfs_chain *rch1, struct rfs_chain *rch2)

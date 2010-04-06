@@ -297,86 +297,10 @@ exit:
 	return rv;
 }
 
-static int rfs_dcache_rdentry_add_check(struct dentry *dentry,
-		struct rfs_info *rinfo)
-{
-	mode_t mode;
-	int rv = 0;
-
-	/*
-	 * For isofs dentry this check has to be skipped, becase of the
-	 * workaround in the rfs_dentry_add function, where the pointer to the
-	 * dentry operations is fixed.
-	 */
-	if (!strcmp("iso9660", dentry->d_sb->s_type->name))
-		return 1;
-
-	if (!dentry->d_inode) {
-		if (!rinfo->rchain)
-			return 0;
-
-		if (rinfo->rops->flags & RFS_NONE_OPS)
-			return 1;
-		else
-			return 0;
-	}
-
-	mode = dentry->d_inode->i_mode;
-
-	if (S_ISDIR(mode))
-		return 1;
-
-	if (!rinfo->rchain)
-		return 0;
-
-	if (S_ISREG(mode))
-		rv = rinfo->rops->flags & RFS_REG_OPS;
-
-	else if (S_ISLNK(mode))
-		rv = rinfo->rops->flags & RFS_LNK_OPS;
-
-	else if (S_ISCHR(mode))
-		rv = rinfo->rops->flags & RFS_CHR_OPS;
-
-	else if (S_ISBLK(mode))
-		rv = rinfo->rops->flags & RFS_BLK_OPS;
-
-	else if (S_ISFIFO(mode))
-		rv = rinfo->rops->flags & RFS_FIFO_OPS;
-
-	else if (S_ISSOCK(mode))
-		rv = rinfo->rops->flags & RFS_SOCK_OPS;
-
-	return rv;
-}
-
-static int rfs_dcache_rdentry_set(struct dentry *dentry, struct rfs_info *rinfo)
-{
-	struct rfs_dentry *rdentry;
-	int rv;
-
-	rdentry = rfs_dentry_find(dentry);
-	if (!rdentry)
-		return 0;
-
-	rfs_dentry_set_rinfo(rdentry, rinfo);
-	rv = rfs_inode_set_rinfo(rdentry->rinode);
-	if (rv)
-		goto exit;
-
-	rfs_dentry_set_ops(rdentry);
-exit:
-	rfs_dentry_put(rdentry);
-	return rv;
-}
-
 int rfs_dcache_rdentry_add(struct dentry *dentry, struct rfs_info *rinfo)
 {
 	struct rfs_dentry *rdentry = NULL;
 	int rv = 0;
-
-	if (!rfs_dcache_rdentry_add_check(dentry, rinfo))
-		return rfs_dcache_rdentry_set(dentry, rinfo);
 
 	rdentry = rfs_dentry_add(dentry, rinfo);
 	if (IS_ERR(rdentry))
