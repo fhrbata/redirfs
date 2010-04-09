@@ -1,4 +1,4 @@
-version 0.5
+version 0.5 2010-04-09
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- fixed memory leak in avflt_proc_add()
 	  thanks to Robert Minsk <robertminsk@yahoo.com>
