@@ -53,6 +53,7 @@ static struct avflt_event *avflt_event_alloc(struct file *file, int type)
 	event->fd = -1;
 	event->pid = current->pid;
 	event->tgid = current->tgid;
+	event->cache = 1;
 
 	root_data = avflt_get_root_data_inode(file->f_dentry->d_inode);
 	inode_data = avflt_get_inode_data_inode(file->f_dentry->d_inode);
@@ -192,6 +193,9 @@ static void avflt_update_cache(struct avflt_event *event)
 {
 	struct avflt_inode_data *inode_data;
 	struct avflt_root_data *root_data;
+
+	if (!event->cache)
+		return;
 
 	if (!atomic_read(&avflt_cache_enabled))
 		return;
@@ -409,6 +413,8 @@ struct avflt_event *avflt_get_reply(const char __user *buf, size_t size)
 	char cmd[256];
 	int id;
 	int result;
+	int cache;
+	int rv;
 
 	if (size > 256)
 		return ERR_PTR(-EINVAL);
@@ -416,7 +422,13 @@ struct avflt_event *avflt_get_reply(const char __user *buf, size_t size)
 	if (copy_from_user(cmd, buf, size))
 		return ERR_PTR(-EFAULT);
 
-	if (sscanf(buf, "id:%d,res:%d", &id, &result) != 2)
+	cache = -1;
+	/*
+	 * v0: id:%d,res:%d
+	 * v1: id:%d,res:%d,cache:%d
+	 */
+	rv = sscanf(buf, "id:%d,res:%d,cache:%d", &id, &result, &cache);
+	if (rv != 2 && rv != 3)
 		return ERR_PTR(-EINVAL);
 
 	proc = avflt_proc_find(current->tgid);
@@ -429,6 +441,10 @@ struct avflt_event *avflt_get_reply(const char __user *buf, size_t size)
 		return ERR_PTR(-ENOENT);
 
 	event->result = result;
+	
+	if (cache != -1)
+		event->cache = cache;
+
 	return event;
 }
 
