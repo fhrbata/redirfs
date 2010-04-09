@@ -6,7 +6,7 @@ CFLAGS += -g -O0
 endif
 
 VMAR := 0
-VMIN := 1
+VMIN := 2
 VREL := 0
 LIB_NAME := libav
 LIB_OBJS := av.o

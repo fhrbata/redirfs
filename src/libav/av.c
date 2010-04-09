@@ -97,6 +97,7 @@ int av_request(struct av_connection *conn, struct av_event *event, int timeout)
 		return -1;
 
 	event->res = 0;
+	event->cache = AV_CACHE_ENABLE;
 
 	return 0;
 }
@@ -110,7 +111,8 @@ int av_reply(struct av_connection *conn, struct av_event *event)
 		return -1;
 	}
 
-	snprintf(buf, 256, "id:%d,res:%d", event->id, event->res);
+	snprintf(buf, 256, "id:%d,res:%d,cache:%d", event->id, event->res,
+			event->cache);
 
 	if (write(conn->fd, buf, strlen(buf) + 1) == -1)
 		return -1;
@@ -128,9 +130,29 @@ int av_set_result(struct av_event *event, int res)
 		return -1;
 	}
 
-	if (res != AV_ACCESS_ALLOW || res != AV_ACCESS_DENY) {
-		event->res = res;
+	if (res != AV_ACCESS_ALLOW && res != AV_ACCESS_DENY) {
+		errno = EINVAL;
+		return -1;
 	}
+
+	event->res = res;
+
+	return 0;
+}
+
+int av_set_cache(struct av_event *event, int cache)
+{
+	if (!event) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	if (cache != AV_CACHE_ENABLE && cache != AV_CACHE_DISABLE) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	event->cache = cache;
 
 	return 0;
 }
@@ -138,6 +160,11 @@ int av_set_result(struct av_event *event, int res)
 int av_get_filename(struct av_event *event, char *buf, int size)
 {
 	char fn[256];
+
+	if (!event || !buf) {
+		errno = EINVAL;
+		return -1;
+	}
 
 	memset(fn, 0, 256);
 	memset(buf, 0, size);
