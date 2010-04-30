@@ -29,7 +29,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <sys/ioctl.h>
-#include <fs/larefs/lrfs_ioctl.h>
+#include <fs/larefs/larefs.h>
 
 #define MAX_COMMAND_NAME	10
 
@@ -48,6 +48,7 @@ void print_help(char *);
 enum command_list {
 	ATTACH,
 	DETACH,
+	TOGGLE,
 	COMM_COUNT
 };
 
@@ -59,10 +60,15 @@ struct commands {
 struct commands comm[] = {
 	{ATTACH, "attach"},
 	{DETACH, "detach"},
+	{TOGGLE, "toggle"}
 };
 
 void print_help(char *func) {
-	fprintf(stderr, "usage: %s [attach | detach] <filter> <directory>\n", func);
+	fprintf(stderr, "usage: %s [command] <filter> <directory>\n", func);
+	fprintf(stderr, "Supported commands are:\n");
+	for (int i = 0; i < COMM_COUNT; i++) {
+		fprintf(stderr,"\t%s\n",comm[i].string);
+	}
 	return;
 }
 
@@ -151,6 +157,18 @@ int main(int argc, char **argv)
 				fprintf(stderr, "LRFS_DETACH not supported\n");
 			else
 				perror("LRFS_DETACH");
+			return 1;
+		}
+		break;
+
+	case TOGGLE:
+		strncpy(name, fltname, MAXFILTERNAME);
+
+		if (ioctl(fd, LRFS_TGLACT, &name)) {
+			if (errno == EOPNOTSUPP)
+				fprintf(stderr, "LRFS_TOGGLE not supported\n");
+			else
+				perror("LRFS_TOGGLE");
 			return 1;
 		}
 		break;

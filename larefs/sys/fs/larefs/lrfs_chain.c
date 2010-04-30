@@ -12,11 +12,9 @@ static MALLOC_DEFINE(M_LRFSCHAIN, "lrfs_filter_chain", "LRFS filter chain struct
 static MALLOC_DEFINE(M_LRFSFLTINFO, "lrfs_filter_info", "LRFS filter info structure");
 
 static int
-lrfs_filter_compare(struct lrfs_filter_info *fa,
-	struct lrfs_filter_info *fb);
+lrfs_filter_compare(struct lrfs_filter_info *, struct lrfs_filter_info *);
 int
-create_fltoper_vector(struct larefs_vop_vector *, 
-	struct larefs_vop_vector *);
+create_fltoper_vector(struct larefs_vop_vector *, struct larefs_vop_vector *);
 
 int
 init_filter_chain(struct lrfs_filter_chain **chain) {
@@ -161,15 +159,55 @@ detach_filter(const char *name, struct vnode *vn)
 	return (0);
 }
 
+int
+toggle_filter_active(const char *name, struct vnode *vn) {
+	struct lrfs_filter_info *node = NULL, *filter;
+	struct lrfs_mount *mntdata;
+	struct lrfs_filter_chain *chain;
+	int len;
+
+	if ((!name) || (!vn))
+		return (EINVAL);
+	mntdata = MOUNTTOLRFSMOUNT(vn->v_mount);
+	chain = mntdata->filter_chain;
+	
+	/* Use strnlen instead !! - this includes setting filter max namelen */
+	len = strlen(name);
+
+	RB_FOREACH(filter, lrfs_filtertree , &chain->head) {
+
+		if ((strncmp(filter->name, name, len) == 0) &&
+			filter->name[len] == '\0')
+		{
+			node = filter;
+			break;
+		}
+	}
+
+	if (!node) {
+		printf("Not such a filter in the chain\n");
+		return (EINVAL);
+	}
+
+	/* lock the node */
+	if (node->active) {
+		node->active = 0;
+	} else
+		node->active = 1;
+	/* unlock the node */
+
+	return (0);
+}
+
 
 static int
 lrfs_filter_compare(struct lrfs_filter_info *fa,
 	struct lrfs_filter_info *fb) 
 {
 
-	if (fa->order > fb->order)
+	if (fa->priority > fb->priority)
 		return (1);
-	else if (fa->order < fb->order)
+	else if (fa->priority < fb->priority)
 		return (-1);
 	return (0);	
 }

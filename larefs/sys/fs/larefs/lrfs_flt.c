@@ -68,7 +68,7 @@ larefs_register_filter(struct larefs_filter_t *filter)
 	
 	SLIST_INSERT_HEAD(&registered_filters->head, filter, entry);
 
-	uprintf("registering filter: %s\norder: %d\n", filter->name, filter->order);
+	uprintf("registering filter: %s\npriority: %d\n", filter->name, filter->priority);
 	return 0;
 }
 

@@ -46,7 +46,7 @@
 #include <sys/vnode.h>
 
 #include <fs/larefs/lrfs.h>
-#include <fs/larefs/lrfs_ioctl.h>
+#include <fs/larefs/larefs.h>
 
 #include <vm/vm.h>
 #include <vm/vm_extern.h>
@@ -734,6 +734,20 @@ lrfs_ioctl(struct vop_ioctl_args *ap)
 		break;
 	}
 
+	case LRFS_TGLACT: {
+		char *buffer;
+		
+		if (vp->v_type != VDIR)
+			return (ENOTDIR);
+
+		buffer = (char *)ap->a_data;
+
+		uprintf("Toggle active filer : %s\n", buffer);
+
+		retval = toggle_filter_active(buffer, vp);
+
+		break;
+	}
 
 	default:
 		retval = lrfs_proceed_oper(&ap->a_gen, LAREFS_IOCTL);

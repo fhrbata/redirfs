@@ -89,6 +89,7 @@ int init_filter_chain(struct lrfs_filter_chain **chain);
 int free_filter_chain(struct lrfs_filter_chain *chain);
 int attach_filter(const char *, struct vnode *);
 int detach_filter(const char *, struct vnode *);
+int toggle_filter_active(const char *, struct vnode *);
 
 int lrfs_precallbacks_chain(struct vop_generic_args *, int);
 int lrfs_postcallbacks_chain(struct vop_generic_args *, int);
