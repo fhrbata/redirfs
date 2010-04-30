@@ -1,0 +1,42 @@
+LRFSDEBUG	lrfs.h	/^#define LRFSDEBUG(format, args...) printf(format ,/
+LRFSTOV	lrfs.h	/^#define	LRFSTOV(xp) ((xp)->lrfs_vnode)$/
+LRFSVPTOLOWERVP	lrfs.h	/^#define	LRFSVPTOLOWERVP(vp) lrfs_checkvp((vp), __F/
+LRFS_NHASH	lrfs_subr.c	/^#define	LRFS_NHASH(vp) \\$/
+MOUNTTOLRFSMOUNT	lrfs.h	/^#define	MOUNTTOLRFSMOUNT(mp) ((struct lrfs_mount */
+VTOLRFS	lrfs.h	/^#define	VTOLRFS(vp) ((struct lrfs_node *)(vp)->v_d/
+lrfs_access	lrfs_vnops.c	/^lrfs_access(struct vop_access_args *ap)$/
+lrfs_accessx	lrfs_vnops.c	/^lrfs_accessx(struct vop_accessx_args *ap)$/
+lrfs_bypass	lrfs_vnops.c	/^lrfs_bypass(struct vop_generic_args *ap)$/
+lrfs_checkvp	lrfs_subr.c	/^lrfs_checkvp(vp, fil, lno)$/
+lrfs_extattrctl	lrfs_vfsops.c	/^lrfs_extattrctl(mp, cmd, filename_vp, namespace, a/
+lrfs_fhtovp	lrfs_vfsops.c	/^lrfs_fhtovp(mp, fidp, vpp)$/
+lrfs_filter	larefs.h	/^struct lrfs_filter {$/
+lrfs_getattr	lrfs_vnops.c	/^lrfs_getattr(struct vop_getattr_args *ap)$/
+lrfs_getwritemount	lrfs_vnops.c	/^lrfs_getwritemount(struct vop_getwritemount_args */
+lrfs_hashget	lrfs_subr.c	/^lrfs_hashget(mp, lowervp)$/
+lrfs_hashins	lrfs_subr.c	/^lrfs_hashins(mp, xp)$/
+lrfs_hashrem	lrfs_subr.c	/^lrfs_hashrem(xp)$/
+lrfs_inactive	lrfs_vnops.c	/^lrfs_inactive(struct vop_inactive_args *ap)$/
+lrfs_init	lrfs_subr.c	/^lrfs_init(vfsp)$/
+lrfs_insmntque_dtr	lrfs_subr.c	/^lrfs_insmntque_dtr(struct vnode *vp, void *xp)$/
+lrfs_lock	lrfs_vnops.c	/^lrfs_lock(struct vop_lock1_args *ap)$/
+lrfs_lookup	lrfs_vnops.c	/^lrfs_lookup(struct vop_lookup_args *ap)$/
+lrfs_mount	lrfs.h	/^struct lrfs_mount {$/
+lrfs_node	lrfs.h	/^struct lrfs_node {$/
+lrfs_nodeget	lrfs_subr.c	/^lrfs_nodeget(mp, lowervp, vpp)$/
+lrfs_open	lrfs_vnops.c	/^lrfs_open(struct vop_open_args *ap)$/
+lrfs_print	lrfs_vnops.c	/^lrfs_print(struct vop_print_args *ap)$/
+lrfs_quotactl	lrfs_vfsops.c	/^lrfs_quotactl(mp, cmd, uid, arg)$/
+lrfs_reclaim	lrfs_vnops.c	/^lrfs_reclaim(struct vop_reclaim_args *ap)$/
+lrfs_rename	lrfs_vnops.c	/^lrfs_rename(struct vop_rename_args *ap)$/
+lrfs_root	lrfs_vfsops.c	/^lrfs_root(mp, flags, vpp)$/
+lrfs_setattr	lrfs_vnops.c	/^lrfs_setattr(struct vop_setattr_args *ap)$/
+lrfs_statfs	lrfs_vfsops.c	/^lrfs_statfs(mp, sbp)$/
+lrfs_sync	lrfs_vfsops.c	/^lrfs_sync(mp, waitfor)$/
+lrfs_uninit	lrfs_subr.c	/^lrfs_uninit(vfsp)$/
+lrfs_unlock	lrfs_vnops.c	/^lrfs_unlock(struct vop_unlock_args *ap)$/
+lrfs_unmount	lrfs_vfsops.c	/^lrfs_unmount(mp, mntflags)$/
+lrfs_vget	lrfs_vfsops.c	/^lrfs_vget(mp, ino, flags, vpp)$/
+lrfs_vptocnp	lrfs_vnops.c	/^lrfs_vptocnp(struct vop_vptocnp_args *ap)$/
+lrfs_vptofh	lrfs_vnops.c	/^lrfs_vptofh(struct vop_vptofh_args *ap)$/
+subdir	lrfs_vfsops.c	/^subdir(const char *p, const char *dir)$/

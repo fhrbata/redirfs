@@ -1,0 +1,134 @@
+LAYERED REDIRECTING FILE SYSTEM MODULE
+======================================
+Author: Czerner Lukas <czerner.lukas@gmail.com>
+Date: Apr 30, 2010
+
+This module provides a functionality similar to LKM RedirFS (www.redirfs.org).
+It provides ability to use filters to improve underlying file systems, add some
+missing features to them, or create on-access file scanning etc.
+
+Larefs is the new layer derived from nullfs with special interface for
+communication with filters. It is just a new layer above existing file system,
+it means, that any vnode operation going through that layer may be redirected 
+to any filter attached to it.
+
+Filters are also just a kernel module with special inerface, which allows to
+register itself and its operations to the larefs layer. Filters can be 
+attached/detached with the ioctl calls, example application for 
+attaching/detaching filters is included.
+
+
+FEATURES IMPLEMENTED
+--------------------
+ * Register new filter
+ * Register filter's pre/post operations
+ * Attach filter to larefs mountpoint
+ * Redirect registered pre/post operations to the filers
+ * Detach filter from larefs mountpoint
+
+
+FEATURES MISSING
+----------------
+ * Activate/deactivate filters
+ * Change filters priority
+ * Attach filter to the specified directory under mountpoint
+ * Compatibility with RedirFS filter interface
+ * Exclude subtree from the filter
+ * Library to control Larefs
+ * Any usefull filter
+ * Possibly some others
+
+
+FILTERS
+-------
+ * Dummyflt - filer to demonstrate functionality
+
+
+BUGS
+----
+ * Probably a LOT !
+ * Locking missing !!
+ * There is a lot of debugging code and it may be annoying.
+
+
+SUPPORTED VNODE OPERATIONS
+--------------------------
+ LAREFS_ACCESS
+ LAREFS_ACCESSX
+ LAREFS_GETATTR
+ LAREFS_GETWRITEMOUNT
+ LAREFS_INACTIVE
+ LAREFS_LOCK
+ LAREFS_LOOKUP
+ LAREFS_OPEN
+ LAREFS_PRINT
+ LAREFS_RECLAIM
+ LAREFS_RENAME
+ LAREFS_SETATTR
+ LAREFS_UNLOCK
+ LAREFS_VPTOCNP
+ LAREFS_VPTOFH
+
+
+USAGE
+-----
+
+1. Build it :
+
+	> make
+
+2. Load larefs module :
+
+	> kldload sys/modules/larefs/larefs.ko
+
+3. Mount it somewhere :
+
+	> mount -t larefs mydirectory newdirecotry
+
+4. Load some filter module
+
+	> kldload sys/modules/dummyflt/dummyflt.ko 
+
+5. Attach filter to the larefs
+	
+	> sbin/larefs/larefs attach Dummyflt newdirectory
+
+6. Go ahead and try it, theres is A LOT OF DEBUGGING CODE !!!
+
+7. Detach filter from the larefs
+
+	> sbin/larefs/larefs detach Dummyflt newdirectory
+
+8. Umount && unload
+
+
+
+LICENCE
+-------
+
+Copyright (c) 2010
+Czerner Lukas <czerner.lukas@gmail.com>. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+4. Neither the name of the University nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.
