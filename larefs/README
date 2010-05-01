@@ -25,13 +25,15 @@ FEATURES IMPLEMENTED
  * Attach filter to larefs mountpoint
  * Redirect registered pre/post operations to the filers
  * Detach filter from larefs mountpoint
+ * Activate/deactivate filters
+ * Change filters priority
 
 
 FEATURES MISSING
 ----------------
- * Activate/deactivate filters
- * Change filters priority
+ * LOCKING !
  * Attach filter to the specified directory under mountpoint
+ * Ioctl to get informations about attached/available filters
  * Compatibility with RedirFS filter interface
  * Exclude subtree from the filter
  * Library to control Larefs
@@ -83,7 +85,7 @@ USAGE
 
 3. Mount it somewhere :
 
-	> mount -t larefs mydirectory newdirecotry
+	> mount -t larefs dir dir
 
 4. Load some filter module
 
@@ -91,16 +93,25 @@ USAGE
 
 5. Attach filter to the larefs
 	
-	> sbin/larefs/larefs attach Dummyflt newdirectory
+	> sbin/larefs/larefs attach Dummyflt 10 dir
 
-6. Go ahead and try it, theres is A LOT OF DEBUGGING CODE !!!
+6. Go ahead and try it, there is A LOT OF DEBUGGING CODE !!!
 
-7. Detach filter from the larefs
+7. Toggle active/inactive filter
 
-	> sbin/larefs/larefs detach Dummyflt newdirectory
+	> sbin/larefs/larefs toggle Dummyflt dir
 
-8. Umount && unload
+8. Change filter's priority
+	
+	> sbin/larefs/larefs priority Dummyflt 5000 dir
 
+8. Detach filter from the larefs
+
+	> sbin/larefs/larefs detach Dummyflt dir
+
+9. Umount && unload
+	
+	> umount dir && kldunload dummyflt larefs
 
 
 LICENCE

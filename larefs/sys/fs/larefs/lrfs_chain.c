@@ -31,7 +31,7 @@ init_filter_chain(struct lrfs_filter_chain **chain) {
 	fchain->count = 0;
 	fchain->active = 0;
 	RB_INIT(&fchain->head);
-	*chain =fchain;
+	*chain = fchain;
 	
 	return 0;
 }
@@ -39,14 +39,19 @@ init_filter_chain(struct lrfs_filter_chain **chain) {
 int
 free_filter_chain(struct lrfs_filter_chain *chain) 
 {
-	struct lrfs_filter_info *node, *next;
+	struct lrfs_filter_info *finfo, *next;
 	
-	for (node = RB_MIN(lrfs_filtertree, &chain->head);
-		node; node = next) 
+	for (finfo = RB_MIN(lrfs_filtertree, &chain->head);
+		finfo; finfo = next) 
 	{
-		next = RB_NEXT(lrfs_filtertree, &chain->head, node);
-		RB_REMOVE(lrfs_filtertree, &chain->head, node);
-		free(node, M_LRFSFLTINFO);
+		next = RB_NEXT(lrfs_filtertree, &chain->head, finfo);
+
+		/* 
+		 * Remove finfo from per-filter used list, per-mount
+		 * rb tree, and free it.
+		 */
+		detach_filter(finfo, chain);
+		KASSERT(finfo, ("Filter found in the used list , but not in the chain!!\n"));
 	}
 
 	free(chain, M_LRFSCHAIN);
@@ -57,13 +62,14 @@ int
 create_fltoper_vector(struct larefs_vop_vector *old_v, 
 	struct larefs_vop_vector *new_v)
 {
-	/* Is this necessatry ?? */
+	/* Set every operation to VOP_NULL */
 	for (int i = 0; i < LAREFS_BOTTOM; i++) {
 		new_v[i].op_id = i; 
 		new_v[i].pre_cb = VOP_NULL; 
 		new_v[i].post_cb = VOP_NULL; 
 	}
-	
+
+	/* Set registered operations */	
 	for (int i = 0; (old_v[i].op_id != LAREFS_BOTTOM); i++) {
 		new_v[old_v[i].op_id].pre_cb = old_v[i].pre_cb;
 		new_v[old_v[i].op_id].post_cb = old_v[i].post_cb;
@@ -73,130 +79,189 @@ create_fltoper_vector(struct larefs_vop_vector *old_v,
 
 }
 
-int
-attach_filter(const char *name, struct vnode *vn)
+struct lrfs_filter_info *
+find_filter_inchain(const char *name, struct vnode *vn,
+	struct lrfs_filter_chain **ch)
 {
-	struct larefs_filter_t *filter;
+	struct lrfs_mount *mntdata;
+	struct lrfs_filter_info *finfo;
+	struct lrfs_filter_chain *chain;
+	int len;
+
+	mntdata = MOUNTTOLRFSMOUNT(vn->v_mount);
+	chain = mntdata->filter_chain;
+	*ch = chain;
+
+	/* Use strnlen instead !! - this includes setting filter max namelen */
+	len = strlen(name);
+
+	RB_FOREACH(finfo, lrfs_filtertree, &chain->head) {
+		if ((strncmp(finfo->name, name, len) == 0) &&
+		     finfo->name[len] == '\0')
+			return finfo;
+	}
+
+	return NULL;	
+}
+
+int
+attach_filter(struct larefs_filter_t *filter, struct vnode *vn, int prio)
+{
 	struct lrfs_filter_info *new_info, *node;
 	struct lrfs_mount *mntdata;
 	struct lrfs_filter_chain *chain;
 
-	if ((!name) || (!vn))
+	if ((!filter) || (!vn))
 		return (EINVAL);
+
+	LRFSDEBUG("Attaching filter %s to vnode %p with priority %d\n", 
+		filter->name, (void *)vn, prio);
+
 	mntdata = MOUNTTOLRFSMOUNT(vn->v_mount);
 	chain = mntdata->filter_chain;
-
-	filter = find_filter_byname(name);
-	if (!filter)
-		return (EINVAL);
 
 	new_info = (struct lrfs_filter_info *)
 		malloc(sizeof(struct lrfs_filter_info),
 		M_LRFSFLTINFO, M_WAITOK);
 
-	new_info->name = filter->name;
+	new_info->filter = filter;
 	new_info->active = 1;
+	new_info->priority = prio;
+	new_info->name = filter->name;
+	new_info->avn = vn;
 	create_fltoper_vector(filter->reg_ops, new_info->reg_ops);
 
-	/* Just debugging - REMOVE ME */
-	for (int i = 0; i < LAREFS_BOTTOM; i++) {
-		if (new_info->reg_ops[i].pre_cb != VOP_NULL) {
-			uprintf("%d op. registered\n",i);
-		}
-	}
+	/* Lock ! */
+		
 	/*	
 	 * If there is a filter with the same priority, it returns pointer
 	 * to that filter.
 	 */
 	node = RB_INSERT(lrfs_filtertree, &chain->head, new_info);
 	if (node) {
-		printf("Filter with the wame priority already exists in the chain\n");
-		free(node, M_LRFSFLTINFO);
+		LRFSDEBUG("Filter with the same priority is here : %s\n",
+			node->name);
+		free(new_info, M_LRFSFLTINFO);
 		return (EINVAL);
 	}
+
+	/* Keep track of used info for the filter */
+	SLIST_INSERT_HEAD(&filter->used, new_info, entry);
+	
+	/* Just debugging - REMOVE ME */
+	for (int i = 0; i < LAREFS_BOTTOM; i++) {
+		if (new_info->reg_ops[i].pre_cb != VOP_NULL) {
+			uprintf("%d op. registered\n",i);
+		}
+	}
+
 
 	return (0);
 }
 
 int
-detach_filter(const char *name, struct vnode *vn)
+detach_filter(struct lrfs_filter_info *finfo, struct lrfs_filter_chain *chain)
 {
-	struct lrfs_filter_info *node = NULL, *filter;
-	struct lrfs_mount *mntdata;
-	struct lrfs_filter_chain *chain;
-	int len;
+	struct larefs_filter_t *filter;
 
-	if ((!name) || (!vn))
+	if ((!finfo) || (!chain)) {
 		return (EINVAL);
-	mntdata = MOUNTTOLRFSMOUNT(vn->v_mount);
-	chain = mntdata->filter_chain;
+	}
+
+	LRFSDEBUG("Detaching filter %s\n", finfo->name);
+
+	/* Remove info from filter used list */
+	filter = finfo->filter;
+	SLIST_REMOVE(&filter->used, finfo, lrfs_filter_info, entry);
 	
-	/* Use strnlen instead !! - this includes setting filter max namelen */
-	len = strlen(name);
-
-	RB_FOREACH(filter, lrfs_filtertree , &chain->head) {
-		if ((strncmp(filter->name, name, len) == 0) &&
-			filter->name[len] == '\0')
-		{
-			node = filter;
-			break;
-		}
-	}
-
-	if (!node) {
-		printf("Not such a filter in the chain\n");
+	/* Remove info from chain */
+	if (!RB_REMOVE(lrfs_filtertree, &chain->head, finfo)) {
+		printf("Removing filter %s FAILS! This is a BUG!\n",
+			finfo->name);
 		return (EINVAL);
 	}
 
-	filter = RB_REMOVE(lrfs_filtertree, &chain->head, node);
-	if (!filter) {
-		printf("Filter removal FAILS!\n");
-		return (EINVAL);
-	}
-
-	free(node, M_LRFSFLTINFO);
+	free(finfo, M_LRFSFLTINFO);
 
 	return (0);
 }
 
 int
 toggle_filter_active(const char *name, struct vnode *vn) {
-	struct lrfs_filter_info *node = NULL, *filter;
-	struct lrfs_mount *mntdata;
+	struct lrfs_filter_info *finfo;
 	struct lrfs_filter_chain *chain;
-	int len;
 
 	if ((!name) || (!vn))
 		return (EINVAL);
-	mntdata = MOUNTTOLRFSMOUNT(vn->v_mount);
-	chain = mntdata->filter_chain;
-	
-	/* Use strnlen instead !! - this includes setting filter max namelen */
-	len = strlen(name);
 
-	RB_FOREACH(filter, lrfs_filtertree , &chain->head) {
+	LRFSDEBUG("Toggle activity of filter %s\n", name);
 
-		if ((strncmp(filter->name, name, len) == 0) &&
-			filter->name[len] == '\0')
-		{
-			node = filter;
-			break;
-		}
-	}
-
-	if (!node) {
-		printf("Not such a filter in the chain\n");
+	finfo = find_filter_inchain(name, vn, &chain);
+	if (!finfo) {
+		LRFSDEBUG("There is no such a filter: %s\n", name);
 		return (EINVAL);
 	}
 
 	/* lock the node */
-	if (node->active) {
-		node->active = 0;
-	} else
-		node->active = 1;
+	if (finfo->active) {
+		finfo->active = 0;
+		LRFSDEBUG("Filter %s is now inactive\n", finfo->name);
+	} else {
+		finfo->active = 1;
+		LRFSDEBUG("Filter %s is now active\n", finfo->name);
+	}
 	/* unlock the node */
 
 	return (0);
+}
+
+int
+change_flt_priority(struct lrfs_filter_info *finfo, 
+	struct lrfs_filter_chain *chain, int prio)
+{
+	struct lrfs_filter_info *node;
+	int old_prio;
+
+	if ((!finfo) || (!chain)) {
+		return (EINVAL);
+	}
+
+	LRFSDEBUG("Change priority of filter %s ant vnode %p from %d to %d\n", 
+		finfo->name, (void *)finfo->avn, finfo->priority, prio);
+
+	if (prio == finfo->priority)
+		return (0);
+
+	/* Locks rbtree */
+
+	if (!RB_REMOVE(lrfs_filtertree, &chain->head, finfo)) {
+		printf("Removing filter %s FAILS! This is a BUG!\n",
+			finfo->name);
+		return (EINVAL);
+	}
+	
+	old_prio = finfo->priority;
+	finfo->priority = prio;
+
+	node = RB_INSERT(lrfs_filtertree, &chain->head, finfo);
+	if (node) {
+		LRFSDEBUG("Filter with the same priority is here : %s\n",
+			node->name);
+		goto REWIND;
+	}
+
+	/* Unlock rbtree */
+
+	return (0);
+REWIND:
+	/* Set old priority and get filter back */
+	finfo->priority = old_prio;
+	node = RB_INSERT(lrfs_filtertree, &chain->head, finfo);
+	if (node) {
+		printf("Can not insert filter back! This should not happend!!\n");
+	}
+	/* Unlock rbtree */
+	return (EINVAL);
 }
 
 
@@ -233,10 +298,6 @@ lrfs_precallbacks_chain(struct vop_generic_args *ap, int op_id)
 
 		lrfs_fop = node->reg_ops[op_id].pre_cb;	
 
-		/* Is this necessary ?? Evetything shloud be set */
-		if (!lrfs_fop)
-			continue;
-
 		ret = lrfs_fop(ap);
 	}
 
@@ -262,10 +323,6 @@ lrfs_postcallbacks_chain(struct vop_generic_args *ap, int op_id)
 			continue;
 
 		lrfs_fop = node->reg_ops[op_id].post_cb;
-
-		/* Is this necessary ?? Evetything shloud be set */
-		if (!lrfs_fop)
-			continue;
 
 		lrfs_fop(ap);
 	}

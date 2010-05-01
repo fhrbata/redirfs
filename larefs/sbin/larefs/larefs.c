@@ -32,6 +32,7 @@
 #include <fs/larefs/larefs.h>
 
 #define MAX_COMMAND_NAME	10
+#define MAX_ARG_NAME		20
 
 /*
 struct lrfs_attach_info {
@@ -39,35 +40,45 @@ struct lrfs_attach_info {
 	int priority;
 };
 */
-
-int __strncmp(char *, char *, int);
-int get_command(char *);
-void print_help(char *);
-
-
 enum command_list {
 	ATTACH,
 	DETACH,
 	TOGGLE,
+	PRIOR,
 	COMM_COUNT
 };
 
 struct commands {
 	enum command_list command;
 	char string[MAX_COMMAND_NAME];
+	char params[MAX_ARG_NAME];
 };
 
 struct commands comm[] = {
-	{ATTACH, "attach"},
-	{DETACH, "detach"},
-	{TOGGLE, "toggle"}
+	{ATTACH, "attach", "Priority [int]"},
+	{DETACH, "detach", "Priority [int]"},
+	{TOGGLE, "toggle", ""},
+	{PRIOR, "priority", "Priority [int]"}
 };
+
+struct arguments {
+	int command;
+	int param;
+	char *fltname;
+	char *directory;
+};
+
+int __strncmp(char *, char *, int);
+int get_command(char *);
+void print_help(char *);
+int get_arguments(int , char **, struct arguments *);
+
 
 void print_help(char *func) {
 	fprintf(stderr, "usage: %s [command] <filter> <directory>\n", func);
 	fprintf(stderr, "Supported commands are:\n");
 	for (int i = 0; i < COMM_COUNT; i++) {
-		fprintf(stderr,"\t%s\n",comm[i].string);
+		fprintf(stderr,"\t%s <%s>\n",comm[i].string, comm[i].params);
 	}
 	return;
 }
@@ -107,39 +118,67 @@ get_command(char *string) {
 	return max[1];
 }
 
+int
+get_arguments(int argc, char **argv, struct arguments *args) {
+	struct arguments am;
+
+	am = *args;
+
+	am.command = get_command(argv[1]);
+
+	switch (am.command) {
+		case TOGGLE:
+		case DETACH:
+			if (argc != 4) {
+				return (1);
+			}
+			am.fltname = argv[2];
+			am.directory = argv[3];
+			break;
+		case ATTACH:
+		case PRIOR:
+			if (argc != 5) {
+				return (1);
+			}
+			am.fltname = argv[2];
+			am.param = atoi(argv[3]);
+			am.directory = argv[4];
+			break;
+		default:
+			return (1);
+	}
+
+	*args = am;
+	return (0);
+}
+
 int main(int argc, char **argv)
 {
-	int fd, command;
-	struct lrfs_attach_info filter;
-	char name[MAXFILTERNAME]; 
-	char *fltname, *directory;
+	int fd, err;
+	struct larefs_attach_info ainfo;
+	struct arguments args;
 
-	if (argc != 4) {
+	err = get_arguments(argc, argv, &args);
+	if (err) {
 		print_help(argv[0]);
 		return 1;
 	}
 
-	command = get_command(argv[1]);
-	if (command == COMM_COUNT) {
-		print_help(argv[0]);
-		return 1;
-	}
-	fltname = argv[2];
-	directory = argv[3];
-
-	fd = open(directory, O_RDONLY);
+	fd = open(args.directory, O_RDONLY);
 	if (fd < 0) {
 		perror("open");
 		return 1;
 	}
 
-	switch (command) {
+	switch (args.command) {
 
 	case ATTACH:
-		strncpy(filter.name, fltname, MAXFILTERNAME);
-		filter.priority = 10;
+		strncpy(ainfo.name, args.fltname, MAXFILTERNAME);
+		ainfo.priority = args.param;
 
-		if (ioctl(fd, LRFS_ATTACH, &filter)) {
+		fprintf(stdout,"Attach filter %s, prio: %d\n",ainfo.name, ainfo.priority);
+
+		if (ioctl(fd, LRFS_ATTACH, &ainfo)) {
 			if (errno == EOPNOTSUPP)
 				fprintf(stderr, "LRFS_ATTACH not supported\n");
 			else
@@ -150,9 +189,9 @@ int main(int argc, char **argv)
 		break;
 
 	case DETACH:
-		strncpy(name, fltname, MAXFILTERNAME);
+		strncpy(ainfo.name, args.fltname, MAXFILTERNAME);
 
-		if (ioctl(fd, LRFS_DETACH, &name)) {
+		if (ioctl(fd, LRFS_DETACH, &ainfo.name)) {
 			if (errno == EOPNOTSUPP)
 				fprintf(stderr, "LRFS_DETACH not supported\n");
 			else
@@ -162,15 +201,29 @@ int main(int argc, char **argv)
 		break;
 
 	case TOGGLE:
-		strncpy(name, fltname, MAXFILTERNAME);
+		strncpy(ainfo.name, args.fltname, MAXFILTERNAME);
 
-		if (ioctl(fd, LRFS_TGLACT, &name)) {
+		if (ioctl(fd, LRFS_TGLACT, &ainfo.name)) {
 			if (errno == EOPNOTSUPP)
 				fprintf(stderr, "LRFS_TOGGLE not supported\n");
 			else
 				perror("LRFS_TOGGLE");
 			return 1;
 		}
+		break;
+
+	case PRIOR:
+		strncpy(ainfo.name, args.fltname, MAXFILTERNAME);
+		ainfo.priority = args.param;
+
+		if (ioctl(fd, LRFS_CHPRIO, &ainfo)) {
+			if (errno == EOPNOTSUPP)
+				fprintf(stderr, "LRFS_CHPRIO not supported\n");
+			else
+				perror("LRFS_CHPRIO");
+			return 1;
+		}
+
 		break;
 
 	default:

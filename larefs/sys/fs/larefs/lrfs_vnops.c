@@ -152,15 +152,6 @@ lrfs_bypass(struct vop_generic_args *ap)
 
 	}
 
-
-
-
-	/* PRE FILTER COMES HERE !!! */
-/*	rlfs_postcallbacks_chain(ap, op_id);*/
-
-
-
-
 	/*
 	 * Call the operation on the lower layer
 	 * with the modified argument structure.
@@ -171,16 +162,6 @@ lrfs_bypass(struct vop_generic_args *ap)
 		printf("lrfs_bypass: no map for %s\n", descp->vdesc_name);
 		error = EINVAL;
 	}
-
-
-
-/*	rlfs_postcallbacks_chain(ap, op_id);*/
-
-
-	/* POST FILTER COMES HERE !!! */
-
-
-
 
 	/*
 	 * Maintain the illusion of call-by-value
@@ -702,35 +683,42 @@ lrfs_ioctl(struct vop_ioctl_args *ap)
 	switch (ap->a_command) {
 
 	case LRFS_ATTACH: {
-		struct lrfs_attach_info *ainfo;
+		struct larefs_attach_info *ainfo;
+		struct larefs_filter_t *filter;
 
 		if (vp->v_type != VDIR)
 			return (ENOTDIR);
 
-		ainfo = (struct lrfs_attach_info *)ap->a_data;
+		ainfo = (struct larefs_attach_info *)ap->a_data;
 		if (!ainfo)
 			return (EINVAL);
 
-		uprintf("Attachng filer : %s\n", ainfo->name);
+		filter = find_filter_inlist(ainfo->name);
+		if (!filter)
+			return (EINVAL);
 
-		retval = attach_filter(ainfo->name, vp);
+		retval = attach_filter(filter, vp, ainfo->priority);
 		if (!retval)
-			uprintf("Filter Attached !!\n");
+			LRFSDEBUG("Filter %s attached\n", filter->name);
 		break;
 	}
 	case LRFS_DETACH: {
-		char *buffer;
+		char *name;
+		struct lrfs_filter_chain *chain;
+		struct lrfs_filter_info *finfo;
 		
 		if (vp->v_type != VDIR)
 			return (ENOTDIR);
 
-		buffer = (char *)ap->a_data;
+		name = (char *)ap->a_data;
 
-		uprintf("Detaching filer : %s\n", buffer);
+		finfo = find_filter_inchain(name, vp, &chain);
+		if (!finfo)
+			return (EINVAL);
 
-		retval = detach_filter(buffer, vp);
+		retval = detach_filter(finfo, chain);
 		if (!retval)
-			uprintf("Filter Detached !!\n");
+			LRFSDEBUG("Filter %s detached\n", name);
 		break;
 	}
 
@@ -741,11 +729,31 @@ lrfs_ioctl(struct vop_ioctl_args *ap)
 			return (ENOTDIR);
 
 		buffer = (char *)ap->a_data;
-
-		uprintf("Toggle active filer : %s\n", buffer);
-
 		retval = toggle_filter_active(buffer, vp);
 
+		break;
+	}
+
+	case LRFS_CHPRIO: {
+		struct larefs_prior_info *pinfo;
+		struct lrfs_filter_info *finfo;
+		struct lrfs_filter_chain *chain;
+
+		if (vp->v_type != VDIR)
+			return (ENOTDIR);
+
+		pinfo = (struct larefs_prior_info *)ap->a_data;
+		if (!pinfo)
+			return (EINVAL);
+
+		finfo = find_filter_inchain(pinfo->name, vp, &chain);
+		if (!finfo)
+			return (EINVAL);
+
+		retval = change_flt_priority(finfo, chain, pinfo->priority);
+		if (!retval)
+			LRFSDEBUG("Priority of filter %s changed to %d\n",
+				finfo->name, finfo->priority);
 		break;
 	}
 

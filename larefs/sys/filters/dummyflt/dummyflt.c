@@ -19,7 +19,6 @@ struct larefs_vop_vector dummyflt_vnodeops[] = {
 
 static struct larefs_filter_t filter_conf = {
 	"Dummyflt",
-	10,
 	dummyflt_vnodeops	
 };
 

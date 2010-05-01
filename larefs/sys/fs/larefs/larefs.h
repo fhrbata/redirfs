@@ -7,6 +7,7 @@
 #include <sys/ioccom.h>
 
 #define MAXFILTERNAME   255
+#define larefs_prior_info	larefs_attach_info
 
 enum filter_op_id {
 	LAREFS_ACCESS,
@@ -34,28 +35,14 @@ struct larefs_vop_vector {
 	int (*post_cb)(struct vop_generic_args *ap);
 };
 
-struct lrfs_filter_chain {
-	int 	count;
-	int	active;
-	RB_HEAD(lrfs_filtertree, lrfs_filter_info) head;
-};
-
-struct lrfs_filter_info {
-	RB_ENTRY(lrfs_filter_info) node;	
-	int 	active;
-	int	priority;
-	char	*name;
-	struct larefs_vop_vector reg_ops[LAREFS_BOTTOM];
-};
-
 struct larefs_filter_t {
 	char 	*name;
-	int	priority;
 	struct larefs_vop_vector *reg_ops;
 	SLIST_ENTRY(larefs_filter_t) entry;
+	SLIST_HEAD(used_filter_list, lrfs_filter_info) used;
 };
 
-struct lrfs_attach_info {
+struct larefs_attach_info {
 	char name[MAXFILTERNAME];
 	int priority;
 };
@@ -63,9 +50,9 @@ struct lrfs_attach_info {
 extern int larefs_register_filter(struct larefs_filter_t *);
 extern int larefs_unregister_filter(struct larefs_filter_t *);
 
-#define LRFS_ATTACH	_IOW('L', 0, struct lrfs_attach_info)	/* Attach filter */
+#define LRFS_ATTACH	_IOW('L', 0, struct larefs_attach_info)	/* Attach filter */
 #define LRFS_DETACH	_IOW('L', 1, char[MAXFILTERNAME])	/* Detach filter */
 #define LRFS_TGLACT	_IOW('L', 2, char[MAXFILTERNAME])	/* Toggle active */
-#define LRFS_AVAILFLT	_IOR('L', 3, struct lrfs_attach_info)	/* Avail. filters */
+#define LRFS_CHPRIO	_IOW('L', 3, struct larefs_prior_info)	/* Change priority */
 
 #endif
