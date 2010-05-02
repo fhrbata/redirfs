@@ -27,11 +27,11 @@ FEATURES IMPLEMENTED
  * Detach filter from larefs mountpoint
  * Activate/deactivate filters
  * Change filters priority
+ * LOCKING !
 
 
 FEATURES MISSING
 ----------------
- * LOCKING !
  * Attach filter to the specified directory under mountpoint
  * Ioctl to get informations about attached/available filters
  * Compatibility with RedirFS filter interface
@@ -49,7 +49,6 @@ FILTERS
 BUGS
 ----
  * Probably a LOT !
- * Locking missing !!
  * There is a lot of debugging code and it may be annoying.
 
 
@@ -63,13 +62,10 @@ SUPPORTED VNODE OPERATIONS
  LAREFS_LOCK
  LAREFS_LOOKUP
  LAREFS_OPEN
- LAREFS_PRINT
  LAREFS_RECLAIM
  LAREFS_RENAME
  LAREFS_SETATTR
  LAREFS_UNLOCK
- LAREFS_VPTOCNP
- LAREFS_VPTOFH
 
 
 USAGE

@@ -15,7 +15,13 @@ static int
 lrfs_filter_compare(struct lrfs_filter_info *, struct lrfs_filter_info *);
 int
 create_fltoper_vector(struct larefs_vop_vector *, struct larefs_vop_vector *);
+int
+change_flt_priority(struct lrfs_filter_info *, struct lrfs_filter_chain *, int);
 
+/*
+ * Initialize filter chain. It is called when mounting larefs
+ * thus no lock needed here.
+ */
 int
 init_filter_chain(struct lrfs_filter_chain **chain) {
 	struct lrfs_filter_chain *fchain;
@@ -30,12 +36,16 @@ init_filter_chain(struct lrfs_filter_chain **chain) {
 
 	fchain->count = 0;
 	fchain->active = 0;
+	sx_init(&fchain->chainlck, "lrfs_chain");
 	RB_INIT(&fchain->head);
 	*chain = fchain;
 	
 	return 0;
 }
 
+/*
+ * Free filter chain. It is called when umounting larefs.
+ */
 int
 free_filter_chain(struct lrfs_filter_chain *chain) 
 {
@@ -50,14 +60,21 @@ free_filter_chain(struct lrfs_filter_chain *chain)
 		 * Remove finfo from per-filter used list, per-mount
 		 * rb tree, and free it.
 		 */
+		sx_slock(&chain->chainlck);
 		detach_filter(finfo, chain);
+		sx_sunlock(&chain->chainlck);
+
 		KASSERT(finfo, ("Filter found in the used list , but not in the chain!!\n"));
 	}
 
+	sx_destroy(&chain->chainlck);
 	free(chain, M_LRFSCHAIN);
 	return (0);
 }
 
+/*
+ * Generate vop_vector of registered operations for finfo.
+ */
 int
 create_fltoper_vector(struct larefs_vop_vector *old_v, 
 	struct larefs_vop_vector *new_v)
@@ -71,39 +88,43 @@ create_fltoper_vector(struct larefs_vop_vector *old_v,
 
 	/* Set registered operations */	
 	for (int i = 0; (old_v[i].op_id != LAREFS_BOTTOM); i++) {
-		new_v[old_v[i].op_id].pre_cb = old_v[i].pre_cb;
-		new_v[old_v[i].op_id].post_cb = old_v[i].post_cb;
+		if (old_v[i].pre_cb) {
+			new_v[old_v[i].op_id].pre_cb = old_v[i].pre_cb;
+		}
+		if (old_v[i].post_cb) {
+			new_v[old_v[i].op_id].post_cb = old_v[i].post_cb;
+		}
 	}
 
 	return (0);
 
 }
 
+/*
+ * Find filter info in the chain. Should be called under shared lock on chain
+ */
 struct lrfs_filter_info *
-find_filter_inchain(const char *name, struct vnode *vn,
-	struct lrfs_filter_chain **ch)
+get_finfo_byname(const char *name, struct lrfs_filter_chain *chain)
 {
-	struct lrfs_mount *mntdata;
 	struct lrfs_filter_info *finfo;
-	struct lrfs_filter_chain *chain;
 	int len;
 
-	mntdata = MOUNTTOLRFSMOUNT(vn->v_mount);
-	chain = mntdata->filter_chain;
-	*ch = chain;
-
-	/* Use strnlen instead !! - this includes setting filter max namelen */
 	len = strlen(name);
 
 	RB_FOREACH(finfo, lrfs_filtertree, &chain->head) {
 		if ((strncmp(finfo->name, name, len) == 0) &&
 		     finfo->name[len] == '\0')
+		{
 			return finfo;
+		}
 	}
 
 	return NULL;	
 }
 
+/*
+ * Attach existing registered filter into the vnode's mp chain
+ */
 int
 attach_filter(struct larefs_filter_t *filter, struct vnode *vn, int prio)
 {
@@ -124,6 +145,7 @@ attach_filter(struct larefs_filter_t *filter, struct vnode *vn, int prio)
 		malloc(sizeof(struct lrfs_filter_info),
 		M_LRFSFLTINFO, M_WAITOK);
 
+	/* Initialize new finfo */
 	new_info->filter = filter;
 	new_info->active = 1;
 	new_info->priority = prio;
@@ -131,22 +153,26 @@ attach_filter(struct larefs_filter_t *filter, struct vnode *vn, int prio)
 	new_info->avn = vn;
 	create_fltoper_vector(filter->reg_ops, new_info->reg_ops);
 
-	/* Lock ! */
-		
 	/*	
-	 * If there is a filter with the same priority, it returns pointer
-	 * to that filter.
+	 * If there is a finfo with the same priority, it returns pointer
+	 * to that finfo - new finfo can not be inserted.
 	 */
+	sx_xlock(&chain->chainlck);
 	node = RB_INSERT(lrfs_filtertree, &chain->head, new_info);
 	if (node) {
 		LRFSDEBUG("Filter with the same priority is here : %s\n",
 			node->name);
+		sx_xunlock(&chain->chainlck);
 		free(new_info, M_LRFSFLTINFO);
 		return (EINVAL);
 	}
 
-	/* Keep track of used info for the filter */
+	/* Keep track of used finfo for the filter */
+	mtx_lock(&filter->fltmtx);
 	SLIST_INSERT_HEAD(&filter->used, new_info, entry);
+	mtx_unlock(&filter->fltmtx);
+
+	sx_xunlock(&chain->chainlck);
 	
 	/* Just debugging - REMOVE ME */
 	for (int i = 0; i < LAREFS_BOTTOM; i++) {
@@ -155,14 +181,44 @@ attach_filter(struct larefs_filter_t *filter, struct vnode *vn, int prio)
 		}
 	}
 
-
 	return (0);
 }
 
+/*
+ * Find chain for vnode's mp, get shared lock on that chain
+ * find finfo in the chain and detach it.
+ */
+int
+try_detach_filter(const char *name, struct vnode *vn)
+{
+	struct lrfs_filter_info *finfo;
+	struct lrfs_filter_chain *chain;
+	int err = 0;
+
+	chain = LRFSGETCHAIN(vn);
+	
+	sx_slock(&chain->chainlck);
+	
+	finfo = get_finfo_byname(name, chain);
+	if (!finfo) {
+		sx_sunlock(&chain->chainlck);
+		return (EINVAL);
+	}
+
+	err = detach_filter(finfo, chain);
+	sx_sunlock(&chain->chainlck);
+
+	return (err);	
+}
+
+/*
+ * Remove finfo from the chain. Should be called under shared lock on chain.
+ */
 int
 detach_filter(struct lrfs_filter_info *finfo, struct lrfs_filter_chain *chain)
 {
 	struct larefs_filter_t *filter;
+	struct lrfs_filter_info *node;
 
 	if ((!finfo) || (!chain)) {
 		return (EINVAL);
@@ -170,22 +226,37 @@ detach_filter(struct lrfs_filter_info *finfo, struct lrfs_filter_chain *chain)
 
 	LRFSDEBUG("Detaching filter %s\n", finfo->name);
 
-	/* Remove info from filter used list */
-	filter = finfo->filter;
-	SLIST_REMOVE(&filter->used, finfo, lrfs_filter_info, entry);
-	
-	/* Remove info from chain */
-	if (!RB_REMOVE(lrfs_filtertree, &chain->head, finfo)) {
-		printf("Removing filter %s FAILS! This is a BUG!\n",
-			finfo->name);
-		return (EINVAL);
+	/* Acquire exclusive chain lock */
+	if (!sx_try_upgrade(&chain->chainlck)) {
+		sx_sunlock(&chain->chainlck);
+		sx_xlock(&chain->chainlck);
 	}
 
+	/* Remove info from chain */
+	node = RB_REMOVE(lrfs_filtertree, &chain->head, finfo);
+	if (!node) {
+		printf("Removing filter %s FAILS! This is a BUG!\n",
+			finfo->name);
+		sx_downgrade(&chain->chainlck);
+		return (EINVAL);
+	}
+	
+	filter = finfo->filter;
+
+	/* Remove info from filter used list */
+	mtx_lock(&filter->fltmtx);
+	SLIST_REMOVE(&filter->used, finfo, lrfs_filter_info, entry);
 	free(finfo, M_LRFSFLTINFO);
+	mtx_unlock(&filter->fltmtx);
+
+	sx_downgrade(&chain->chainlck);
 
 	return (0);
 }
 
+/*
+ * Set filter active/inactive based on its immediate state
+ */
 int
 toggle_filter_active(const char *name, struct vnode *vn) {
 	struct lrfs_filter_info *finfo;
@@ -193,16 +264,28 @@ toggle_filter_active(const char *name, struct vnode *vn) {
 
 	if ((!name) || (!vn))
 		return (EINVAL);
-
+	
 	LRFSDEBUG("Toggle activity of filter %s\n", name);
 
-	finfo = find_filter_inchain(name, vn, &chain);
+	chain = LRFSGETCHAIN(vn);
+
+	sx_slock(&chain->chainlck);
+	finfo = get_finfo_byname(name, chain);
 	if (!finfo) {
 		LRFSDEBUG("There is no such a filter: %s\n", name);
+		sx_sunlock(&chain->chainlck);
 		return (EINVAL);
 	}
+	
+	/* Acquire exclusive chain lock */
+	if (!sx_try_upgrade(&chain->chainlck)) {
+		sx_sunlock(&chain->chainlck);
+		sx_xlock(&chain->chainlck);
+	}
 
-	/* lock the node */
+	/* 
+	 * Can I do this with atomic operations ???!!!
+	 */
 	if (finfo->active) {
 		finfo->active = 0;
 		LRFSDEBUG("Filter %s is now inactive\n", finfo->name);
@@ -210,11 +293,42 @@ toggle_filter_active(const char *name, struct vnode *vn) {
 		finfo->active = 1;
 		LRFSDEBUG("Filter %s is now active\n", finfo->name);
 	}
-	/* unlock the node */
+	sx_xunlock(&chain->chainlck);
 
 	return (0);
 }
 
+/*
+ * Find finfo in the vnode's mp chain. Acquire shared lock to tha chain
+ * and call change_flt_priority to change finfo's priority.
+ */
+int
+try_change_fltpriority(struct larefs_prior_info *pinfo, struct vnode *vn)
+{
+	struct lrfs_filter_chain *chain;
+	struct lrfs_filter_info *finfo;
+	int err;
+
+	chain = LRFSGETCHAIN(vn);
+	
+	sx_slock(&chain->chainlck);
+
+	finfo = get_finfo_byname(pinfo->name, chain);
+	if (!finfo) {
+		sx_sunlock(&chain->chainlck);
+		return (EINVAL);
+	}
+
+	err = change_flt_priority(finfo, chain, pinfo->priority);
+	sx_sunlock(&chain->chainlck);
+
+	return (0);
+}
+
+/*
+ * Change filter's priority in particular chain. Should be called
+ * with shared chain lock held.
+ */
 int
 change_flt_priority(struct lrfs_filter_info *finfo, 
 	struct lrfs_filter_chain *chain, int prio)
@@ -232,17 +346,28 @@ change_flt_priority(struct lrfs_filter_info *finfo,
 	if (prio == finfo->priority)
 		return (0);
 
-	/* Locks rbtree */
+	/* Acquire exclusive chain lock */
+	if (!sx_try_upgrade(&chain->chainlck)) {
+		sx_sunlock(&chain->chainlck);
+		sx_xlock(&chain->chainlck);
+	}
 
-	if (!RB_REMOVE(lrfs_filtertree, &chain->head, finfo)) {
+	node = RB_REMOVE(lrfs_filtertree, &chain->head, finfo);
+	if (!node) {
 		printf("Removing filter %s FAILS! This is a BUG!\n",
 			finfo->name);
+		sx_downgrade(&chain->chainlck);
 		return (EINVAL);
 	}
 	
+	/* Store old priority in case when inserting fails */	
 	old_prio = finfo->priority;
 	finfo->priority = prio;
-
+	
+	/* 
+	 * Store finfo with new priority back into the chain,
+	 * when it fails, insert finfo with old priority back 
+	 */
 	node = RB_INSERT(lrfs_filtertree, &chain->head, finfo);
 	if (node) {
 		LRFSDEBUG("Filter with the same priority is here : %s\n",
@@ -250,21 +375,24 @@ change_flt_priority(struct lrfs_filter_info *finfo,
 		goto REWIND;
 	}
 
-	/* Unlock rbtree */
-
+	sx_downgrade(&chain->chainlck);
 	return (0);
 REWIND:
 	/* Set old priority and get filter back */
 	finfo->priority = old_prio;
 	node = RB_INSERT(lrfs_filtertree, &chain->head, finfo);
-	if (node) {
-		printf("Can not insert filter back! This should not happend!!\n");
+	if (node) { 
+		/* Since we have chain locked this should NOT happend */
+		printf("Can not insert filter back! This should NOT happend!!\n");
 	}
-	/* Unlock rbtree */
+
+	sx_downgrade(&chain->chainlck);
 	return (EINVAL);
 }
 
-
+/*
+ * Compare two finfos by priority. Used as rbtree cmp function
+ */
 static int
 lrfs_filter_compare(struct lrfs_filter_info *fa,
 	struct lrfs_filter_info *fb) 
@@ -277,49 +405,51 @@ lrfs_filter_compare(struct lrfs_filter_info *fa,
 	return (0);	
 }
 
+/*
+ * Walk through the chain calling apropriate filte's pre operations
+ * This should be called with shared chain lock held.
+ */
 int
-lrfs_precallbacks_chain(struct vop_generic_args *ap, int op_id)
+lrfs_precallbacks_chain(struct vop_generic_args *ap,
+	struct lrfs_filter_chain *chain, int op_id)
 {
 	struct lrfs_filter_info *node;
-	struct lrfs_mount *mntdata;
-	struct lrfs_filter_chain *chain;
-	struct vnodeop_desc *descp = ap->a_desc;
 	int (*lrfs_fop)(struct vop_generic_args *ap);
-	struct vnode **first_vp;
-	int ret = 0;
-
-	first_vp = VOPARG_OFFSETTO(struct vnode**, descp->vdesc_vp_offsets[0],ap);
-	mntdata = MOUNTTOLRFSMOUNT((*first_vp)->v_mount);
-	chain = mntdata->filter_chain;
+	int count = 0;
 
 	RB_FOREACH(node, lrfs_filtertree , &chain->head) {
-		if (!atomic_load_acq_int(&node->active))
+		count++;
+
+		if (node->active)
 			continue;
 
 		lrfs_fop = node->reg_ops[op_id].pre_cb;	
 
-		ret = lrfs_fop(ap);
+		if (lrfs_fop(ap) == LAREFS_STOP);
+			break;
 	}
 
-	return ret;
+	return count;
 }
 
+/*
+ * Walk through the chain calling apropriate filte's post operations
+ * This should be called with shared chain lock held.
+ */
 int
-lrfs_postcallbacks_chain(struct vop_generic_args *ap, int op_id)
+lrfs_postcallbacks_chain(struct vop_generic_args *ap,
+	struct lrfs_filter_chain *chain, int op_id, int skip)
 {
 	struct lrfs_filter_info *node;
-	struct lrfs_mount *mntdata;
-	struct lrfs_filter_chain *chain;
-	struct vnodeop_desc *descp = ap->a_desc;
 	int (*lrfs_fop)(struct vop_generic_args *ap);
-	struct vnode **first_vp;
-
-	first_vp = VOPARG_OFFSETTO(struct vnode**, descp->vdesc_vp_offsets[0],ap);
-	mntdata = MOUNTTOLRFSMOUNT((*first_vp)->v_mount);
-	chain = mntdata->filter_chain;
 
 	RB_FOREACH_REVERSE(node, lrfs_filtertree , &chain->head) {
-		if (!atomic_load_acq_int(&node->active))
+		if (skip != 0) {
+			skip--;
+			continue;
+		}
+
+		if (node->active)
 			continue;
 
 		lrfs_fop = node->reg_ops[op_id].post_cb;
@@ -330,5 +460,6 @@ lrfs_postcallbacks_chain(struct vop_generic_args *ap, int op_id)
 	return (0);
 }
 
+/* Generate rb tree functions for chain tree */
 RB_GENERATE(lrfs_filtertree, lrfs_filter_info, node,
     lrfs_filter_compare)

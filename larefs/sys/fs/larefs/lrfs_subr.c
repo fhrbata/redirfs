@@ -84,6 +84,7 @@ lrfs_init(vfsp)
 
 	lrfs_node_hashtbl = hashinit(NLRFSNODECACHE, M_LRFSHASH, &lrfs_node_hash);
 	mtx_init(&lrfs_hashmtx, "lrfshs", NULL, MTX_DEF);
+	mtx_init(&registered_filters->regmtx, "lrfs_regf", NULL, MTX_DEF);
 
 	return (0);
 }
@@ -93,6 +94,7 @@ lrfs_uninit(vfsp)
 	struct vfsconf *vfsp;
 {
 	mtx_destroy(&lrfs_hashmtx);
+	mtx_destroy(&registered_filters->regmtx);
 	free(lrfs_node_hashtbl, M_LRFSHASH);
 	free_filter_list(registered_filters);
 	return (0);

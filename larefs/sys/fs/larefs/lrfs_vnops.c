@@ -57,16 +57,38 @@ static int lrfs_bug_bypass = 0;   /* for debugging: enables bypass printf'ing */
 SYSCTL_INT(_debug, OID_AUTO, lrfs_bug_bypass, CTLFLAG_RW, 
 	&lrfs_bug_bypass, 0, "");
 
+static int do_lrfs_lookup(struct vop_lookup_args *);
+static int do_lrfs_inactive(struct vop_inactive_args *);
+
+/*
+ * Proceed filter pre/post operation and pass the operation
+ * to lower layer between them.
+ */
 int
 lrfs_proceed_oper(struct vop_generic_args *ap, int op_id) 
 {
-	int ret;
+	int ret, proceed;
+	struct vnode **first_vp;
+	struct lrfs_filter_chain *chain;
+	struct vnodeop_desc *descp = ap->a_desc;
 
+	first_vp = VOPARG_OFFSETTO(struct vnode**, descp->vdesc_vp_offsets[0],ap);
+	chain = LRFSGETCHAIN((*first_vp));
+	
 	printf("Pre filter operation\n");
-	lrfs_precallbacks_chain(ap, op_id);
+	/*
+	 * Lock the chain so nobody can alter it while performing
+	 * operations.
+	 */
+	sx_slock(&chain->chainlck);
+	proceed = lrfs_precallbacks_chain(ap, chain, op_id);
+	proceed = chain->count - proceed;
+
 	ret = lrfs_bypass(ap);	
-	lrfs_postcallbacks_chain(ap, op_id);
+
 	printf("Post filter operation\n");
+	lrfs_postcallbacks_chain(ap, chain, op_id, proceed);
+	sx_sunlock(&chain->chainlck);
 
 	return ret;
 }
@@ -209,13 +231,43 @@ lrfs_bypass(struct vop_generic_args *ap)
 	return (error);
 }
 
+static int
+lrfs_lookup(struct vop_lookup_args *ap)
+{
+	int ret, proceed;
+	struct vnode **first_vp;
+	struct lrfs_filter_chain *chain;
+	struct vop_generic_args *ga = &ap->a_gen;
+	struct vnodeop_desc *descp = ga->a_desc;
+
+	first_vp = VOPARG_OFFSETTO(struct vnode**, descp->vdesc_vp_offsets[0],ap);
+	chain = LRFSGETCHAIN((*first_vp));
+	
+	printf("Pre filter operation LOOKUP\n");
+	/*
+	 * Lock the chain so nobody can alter it while performing
+	 * operations.
+	 */
+	sx_slock(&chain->chainlck);
+	proceed = lrfs_precallbacks_chain(ga, chain, LAREFS_LOOKUP);
+	proceed = chain->count - proceed;
+
+	ret = do_lrfs_lookup(ap);	
+
+	printf("Post filter operation LOOKUP\n");
+	lrfs_postcallbacks_chain(ga, chain, LAREFS_LOOKUP, proceed);
+	sx_sunlock(&chain->chainlck);
+
+	return ret;
+}
+
 /*
  * We have to carry on the locking protocol on the lrfs layer vnodes
  * as we progress through the tree. We also have to enforce read-only
  * if this layer is mounted read-only.
  */
 static int
-lrfs_lookup(struct vop_lookup_args *ap)
+do_lrfs_lookup(struct vop_lookup_args *ap)
 {
 	struct componentname *cnp = ap->a_cnp;
 	struct vnode *dvp = ap->a_dvp;
@@ -520,6 +572,37 @@ lrfs_unlock(struct vop_unlock_args *ap)
 	return (error);
 }
 
+
+static int
+lrfs_inactive(struct vop_inactive_args *ap)
+{
+	int ret, proceed;
+	struct vnode **first_vp;
+	struct lrfs_filter_chain *chain;
+	struct vop_generic_args *ga = &ap->a_gen;
+	struct vnodeop_desc *descp = ga->a_desc;
+
+	first_vp = VOPARG_OFFSETTO(struct vnode**, descp->vdesc_vp_offsets[0],ap);
+	chain = LRFSGETCHAIN((*first_vp));
+	
+	printf("Pre filter operation INACTIVE\n");
+	/*
+	 * Lock the chain so nobody can alter it while performing
+	 * operations.
+	 */
+	sx_slock(&chain->chainlck);
+	proceed = lrfs_precallbacks_chain(ga, chain, LAREFS_LOOKUP);
+	proceed = chain->count - proceed;
+
+	ret = do_lrfs_inactive(ap);	
+
+	printf("Post filter operation INACTIVE\n");
+	lrfs_postcallbacks_chain(ga, chain, LAREFS_LOOKUP, proceed);
+	sx_sunlock(&chain->chainlck);
+
+	return ret;
+}
+
 /*
  * There is no way to tell that someone issued remove/rmdir operation
  * on the underlying filesystem. For now we just have to release lowervp
@@ -531,7 +614,7 @@ lrfs_unlock(struct vop_unlock_args *ap)
  * for lrfs_inactive to unlock vnode. Thus we will do all those in VOP_RECLAIM.
  */
 static int
-lrfs_inactive(struct vop_inactive_args *ap)
+do_lrfs_inactive(struct vop_inactive_args *ap)
 {
 	struct vnode *vp = ap->a_vp;
 	struct thread *td = ap->a_td;
@@ -704,19 +787,15 @@ lrfs_ioctl(struct vop_ioctl_args *ap)
 	}
 	case LRFS_DETACH: {
 		char *name;
-		struct lrfs_filter_chain *chain;
-		struct lrfs_filter_info *finfo;
 		
 		if (vp->v_type != VDIR)
 			return (ENOTDIR);
 
 		name = (char *)ap->a_data;
-
-		finfo = find_filter_inchain(name, vp, &chain);
-		if (!finfo)
+		if (!name)
 			return (EINVAL);
 
-		retval = detach_filter(finfo, chain);
+		retval = try_detach_filter(name, vp);
 		if (!retval)
 			LRFSDEBUG("Filter %s detached\n", name);
 		break;
@@ -736,8 +815,6 @@ lrfs_ioctl(struct vop_ioctl_args *ap)
 
 	case LRFS_CHPRIO: {
 		struct larefs_prior_info *pinfo;
-		struct lrfs_filter_info *finfo;
-		struct lrfs_filter_chain *chain;
 
 		if (vp->v_type != VDIR)
 			return (ENOTDIR);
@@ -746,14 +823,10 @@ lrfs_ioctl(struct vop_ioctl_args *ap)
 		if (!pinfo)
 			return (EINVAL);
 
-		finfo = find_filter_inchain(pinfo->name, vp, &chain);
-		if (!finfo)
-			return (EINVAL);
-
-		retval = change_flt_priority(finfo, chain, pinfo->priority);
+		retval = try_change_fltpriority(pinfo, vp);
 		if (!retval)
 			LRFSDEBUG("Priority of filter %s changed to %d\n",
-				finfo->name, finfo->priority);
+				pinfo->name, pinfo->priority);
 		break;
 	}
 

@@ -6,25 +6,24 @@
 #include <sys/vnode.h>
 #include <sys/ioccom.h>
 
-#define MAXFILTERNAME   255
+#define MAXFILTERNAME   	255
 #define larefs_prior_info	larefs_attach_info
+#define LAREFS_CONTINUE		0	/* Returned by the filter */
+#define LAREFS_STOP		1	/* Returned by the filter */
 
 enum filter_op_id {
 	LAREFS_ACCESS,
 	LAREFS_ACCESSX,
 	LAREFS_GETATTR,
-	LAREFS_GETWRITEMOUNT,
+	LAREFS_GETWRITEMOUNT,	/* ? */
 	LAREFS_INACTIVE,
-	LAREFS_LOCK,
+	LAREFS_LOCK,		/* ? */
 	LAREFS_LOOKUP,
 	LAREFS_OPEN,
-	LAREFS_PRINT,
-	LAREFS_RECLAIM,
+	LAREFS_RECLAIM,		/* ? */
 	LAREFS_RENAME,
 	LAREFS_SETATTR,
-	LAREFS_UNLOCK,
-	LAREFS_VPTOCNP,
-	LAREFS_VPTOFH,
+	LAREFS_UNLOCK,		/* ? */
 	LAREFS_IOCTL,
 	LAREFS_BOTTOM
 };
@@ -40,6 +39,7 @@ struct larefs_filter_t {
 	struct larefs_vop_vector *reg_ops;
 	SLIST_ENTRY(larefs_filter_t) entry;
 	SLIST_HEAD(used_filter_list, lrfs_filter_info) used;
+	struct mtx fltmtx;
 };
 
 struct larefs_attach_info {

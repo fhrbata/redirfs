@@ -47,15 +47,16 @@ int free_filter_list(struct lrfs_filters *list)
 struct larefs_filter_t *
 find_filter_inlist(const char *name) 
 {
-	struct larefs_filter_t *filter = NULL;
+	struct larefs_filter_t *filter = NULL, *filter_tmp;
 	int len;
 
 	if (!name)
 		return NULL;
 
 	len = strlen(name);
-
-	SLIST_FOREACH(filter, &registered_filters->head, entry) {
+	
+	/* shared lock */
+	SLIST_FOREACH_SAFE(filter, &registered_filters->head, entry, filter_tmp) {
 		if ((strncmp(filter->name, name, len) == 0) &&
 			filter->name[len] == '\0')
 			return filter;
@@ -69,11 +70,14 @@ larefs_register_filter(struct larefs_filter_t *filter)
 {
 	LRFSDEBUG("Registering filter %s\n", filter->name);
 
-	atomic_add_int(&registered_filters->count, 1);
 	SLIST_INIT(&filter->used); /* Initialize filter used list */
+	mtx_init(&filter->fltmtx, "fltmtx", filter->name, MTX_DEF);
 
-	/* lock ??*/	
+	/* exclusive lock on registered fiters */
+	mtx_lock(&registered_filters->regmtx);
 	SLIST_INSERT_HEAD(&registered_filters->head, filter, entry);
+	registered_filters->count += 1;
+	mtx_unlock(&registered_filters->regmtx);
 
 	return 0;
 }
@@ -85,21 +89,31 @@ larefs_unregister_filter(struct larefs_filter_t *filter)
 	struct lrfs_mount *mntdata;
 	struct lrfs_filter_chain *chain;
 
+	/* shared lock on filter */
 	SLIST_FOREACH_SAFE(finfo, &filter->used, entry, finfo_tmp) {
 		/* get the chain head, for that finfo*/
 		mntdata = MOUNTTOLRFSMOUNT(finfo->avn->v_mount);
 		chain = mntdata->filter_chain;
 
 		/* Detach filter from the mount point (and free finfo) */	
+		sx_slock(&chain->chainlck);
 		detach_filter(finfo, chain);
+		sx_sunlock(&chain->chainlck);
+
 		KASSERT(finfo, ("Filter found in the used list , but not in the chain!!\n"));
 
 	}
 
-	atomic_subtract_int(&registered_filters->count, 1);
+	/* exclusive registered_filter*/
+	mtx_lock(&registered_filters->regmtx);
 	SLIST_REMOVE(&registered_filters->head, filter, larefs_filter_t, entry);
-
 	registered_filters->count -= 1;
+	mtx_unlock(&registered_filters->regmtx);
 
+	mtx_destroy(&filter->fltmtx);
+	/* 
+	 * We do not need to free filter as it is staticaly allocated 
+	 * in filter's code
+	 */
 	return (0);
 }

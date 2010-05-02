@@ -37,6 +37,8 @@
 
 #include <sys/tree.h>
 #include <fs/larefs/larefs.h>
+#include <sys/sx.h>
+#include <sys/lock.h>
 
 #define LRFS_DEBUG
 
@@ -59,11 +61,13 @@ struct lrfs_node {
 struct lrfs_filters {
 	SLIST_HEAD(lrfs_filter_list, larefs_filter_t) head;
 	int 	count;
+	struct mtx regmtx;
 };
 
 struct lrfs_filter_chain {
 	int     count;
 	int     active;
+	struct sx chainlck;
 	RB_HEAD(lrfs_filtertree, lrfs_filter_info) head;
 };   
 
@@ -78,6 +82,7 @@ struct lrfs_filter_info {
 	struct larefs_vop_vector reg_ops[LAREFS_BOTTOM];
 };
 #define	MOUNTTOLRFSMOUNT(mp) ((struct lrfs_mount *)((mp)->mnt_data))
+#define LRFSGETCHAIN(vn) (MOUNTTOLRFSMOUNT(vn->v_mount)->filter_chain)
 #define	VTOLRFS(vp) ((struct lrfs_node *)(vp)->v_data)
 #define	LRFSTOV(xp) ((xp)->lrfs_vnode)
 
@@ -104,17 +109,19 @@ RB_PROTOTYPE(lrfs_filtertree, lrfs_filter_info, node,
 int init_filter_chain(struct lrfs_filter_chain **chain);
 int free_filter_chain(struct lrfs_filter_chain *chain);
 int attach_filter(struct larefs_filter_t *, struct vnode *, int);
+int try_detach_filter(const char *, struct vnode *);
 int detach_filter(struct lrfs_filter_info *, struct lrfs_filter_chain *);
 int toggle_filter_active(const char *, struct vnode *);
 
 struct lrfs_filter_info *
-find_filter_inchain(const char *, struct vnode *, struct lrfs_filter_chain **);
+get_finfo_byname(const char *, struct lrfs_filter_chain *);
 
-int change_flt_priority(struct lrfs_filter_info *,
-		struct lrfs_filter_chain *, int );
+int try_change_fltpriority(struct larefs_prior_info *, struct vnode *);
 
-int lrfs_precallbacks_chain(struct vop_generic_args *, int);
-int lrfs_postcallbacks_chain(struct vop_generic_args *, int);
+int lrfs_precallbacks_chain(struct vop_generic_args *,
+	struct lrfs_filter_chain *, int);
+int lrfs_postcallbacks_chain(struct vop_generic_args *,
+	struct lrfs_filter_chain *, int, int);
 
 #ifdef DIAGNOSTIC
 struct vnode *lrfs_checkvp(struct vnode *vp, char *fil, int lno);
@@ -135,7 +142,6 @@ MALLOC_DECLARE(M_LRFSNODE);
 #else
 #define LRFSDEBUG(format, args...)
 #endif /* LRFS_DEBUG */
-
 
 #endif /* _KERNEL */
 #endif /* _LRFS_H_ */
