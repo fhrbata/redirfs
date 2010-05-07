@@ -1,5 +1,6 @@
 SUBDIR=	sys/modules/larefs \
 	sys/modules/dummyflt \
+	sys/modules/larefsdev \
 	sbin/larefs
 
 # Should be built from sources tree
@@ -8,9 +9,11 @@ SUBDIR=	sys/modules/larefs \
 load:
 	kldload sys/modules/larefs/larefs.ko
 	kldload sys/modules/dummyflt/dummyflt.ko
+	kldload sys/modules/larefsdev/larefsdev.ko
 
 unload:
 	kldunload dummyflt
+	kldunload larefsdev
 	kldunload larefs
 
 mount:

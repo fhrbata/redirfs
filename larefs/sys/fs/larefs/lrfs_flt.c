@@ -47,7 +47,7 @@ int free_filter_list(struct lrfs_filters *list)
 struct larefs_filter_t *
 find_filter_inlist(const char *name) 
 {
-	struct larefs_filter_t *filter = NULL, *filter_tmp;
+	struct larefs_filter_t *filter = NULL;
 	int len;
 
 	if (!name)
@@ -56,7 +56,7 @@ find_filter_inlist(const char *name)
 	len = strlen(name);
 	
 	/* shared lock */
-	SLIST_FOREACH_SAFE(filter, &registered_filters->head, entry, filter_tmp) {
+	SLIST_FOREACH(filter, &registered_filters->head, entry) {
 		if ((strncmp(filter->name, name, len) == 0) &&
 			filter->name[len] == '\0')
 			return filter;
@@ -70,6 +70,7 @@ larefs_register_filter(struct larefs_filter_t *filter)
 {
 	LRFSDEBUG("Registering filter %s\n", filter->name);
 
+	filter->usecount = 0;
 	SLIST_INIT(&filter->used); /* Initialize filter used list */
 	mtx_init(&filter->fltmtx, "fltmtx", filter->name, MTX_DEF);
 
@@ -89,7 +90,8 @@ larefs_unregister_filter(struct larefs_filter_t *filter)
 	struct lrfs_mount *mntdata;
 	struct lrfs_filter_chain *chain;
 
-	/* shared lock on filter */
+	mtx_lock(&registered_filters->regmtx);
+
 	SLIST_FOREACH_SAFE(finfo, &filter->used, entry, finfo_tmp) {
 		/* get the chain head, for that finfo*/
 		mntdata = MOUNTTOLRFSMOUNT(finfo->avn->v_mount);
@@ -105,7 +107,6 @@ larefs_unregister_filter(struct larefs_filter_t *filter)
 	}
 
 	/* exclusive registered_filter*/
-	mtx_lock(&registered_filters->regmtx);
 	SLIST_REMOVE(&registered_filters->head, filter, larefs_filter_t, entry);
 	registered_filters->count -= 1;
 	mtx_unlock(&registered_filters->regmtx);

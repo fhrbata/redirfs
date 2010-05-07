@@ -97,7 +97,6 @@ create_fltoper_vector(struct larefs_vop_vector *old_v,
 	}
 
 	return (0);
-
 }
 
 /*
@@ -169,6 +168,7 @@ attach_filter(struct larefs_filter_t *filter, struct vnode *vn, int prio)
 
 	/* Keep track of used finfo for the filter */
 	mtx_lock(&filter->fltmtx);
+	filter->usecount++;
 	SLIST_INSERT_HEAD(&filter->used, new_info, entry);
 	mtx_unlock(&filter->fltmtx);
 
@@ -245,6 +245,7 @@ detach_filter(struct lrfs_filter_info *finfo, struct lrfs_filter_chain *chain)
 
 	/* Remove info from filter used list */
 	mtx_lock(&filter->fltmtx);
+	filter->usecount--;
 	SLIST_REMOVE(&filter->used, finfo, lrfs_filter_info, entry);
 	free(finfo, M_LRFSFLTINFO);
 	mtx_unlock(&filter->fltmtx);

@@ -37,6 +37,7 @@ struct larefs_vop_vector {
 struct larefs_filter_t {
 	char 	*name;
 	struct larefs_vop_vector *reg_ops;
+	int usecount;
 	SLIST_ENTRY(larefs_filter_t) entry;
 	SLIST_HEAD(used_filter_list, lrfs_filter_info) used;
 	struct mtx fltmtx;
@@ -54,5 +55,6 @@ extern int larefs_unregister_filter(struct larefs_filter_t *);
 #define LRFS_DETACH	_IOW('L', 1, char[MAXFILTERNAME])	/* Detach filter */
 #define LRFS_TGLACT	_IOW('L', 2, char[MAXFILTERNAME])	/* Toggle active */
 #define LRFS_CHPRIO	_IOW('L', 3, struct larefs_prior_info)	/* Change priority */
+#define LRFS_FLTINFO	_IOR('L', 4, struct larefs_filter_t *)	/* Change priority */
 
 #endif

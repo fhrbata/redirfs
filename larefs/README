@@ -28,12 +28,12 @@ FEATURES IMPLEMENTED
  * Activate/deactivate filters
  * Change filters priority
  * LOCKING !
+ * provide information about filters to userspace
 
 
 FEATURES MISSING
 ----------------
  * Attach filter to the specified directory under mountpoint
- * Ioctl to get informations about attached/available filters
  * Compatibility with RedirFS filter interface
  * Exclude subtree from the filter
  * Library to control Larefs
@@ -108,6 +108,40 @@ USAGE
 9. Umount && unload
 	
 	> umount dir && kldunload dummyflt larefs
+
+
+RETRIEVE INFORMATION ABOUT FILTERS
+----------------------------------
+
+To provide possibility to get information about filters I have created another
+module called larefsdev. This simple module creates a virtual char device
+/dev/lrfs which can provide many possible information about the filters.
+
+Just load a module :
+	> kldload sys/dev/larefsdev/larefsdev.ko
+
+And look at the information it provides:
+	> cat /dev/lrfs
+
+	Filter: Dummyflt
+	Used: 2
+	Registered operations: Open, Lookup, 
+	Path: /usr/home/me/larefs/test1
+	Priority: 54
+	Active: 1
+	Path: /usr/home/me/larefs/test
+	Priority: 547
+	Active: 1
+
+	Filter: Testflt
+	Used: 1
+	Registered operations: Open, Lookup, 
+	Path: /usr/home/me/larefs/test1
+	Priority: 54
+	Active: 0
+
+Just make sure that you have loaded the larefs module first, because it depends
+on it.
 
 
 LICENCE
