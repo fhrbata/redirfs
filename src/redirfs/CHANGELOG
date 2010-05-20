@@ -1,3 +1,9 @@
+version 0.10 2010-05-20
+	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
+	- reflected changes in 2.6.34 kernel
+		- include of <linux/slab.h>
+		- removeved unnecessary checks in rfs_setattr_default
+
 version 0.9 2010-04-06
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- fixed RHEL 5.4 address_space_operations_ext hang by removing

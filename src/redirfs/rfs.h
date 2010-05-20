@@ -28,6 +28,7 @@
 #include <linux/wait.h>
 #include <linux/sched.h>
 #include <linux/quotaops.h>
+#include <linux/slab.h>
 #include "redirfs.h"
 
 #define RFS_ADD_OP(ops_new, op) \
