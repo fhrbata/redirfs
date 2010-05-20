@@ -32,9 +32,10 @@
 #include <linux/version.h>
 #include <linux/freezer.h>
 #include <linux/fs.h>
+#include <linux/slab.h>
 #include <redirfs.h>
 
-#define AVFLT_VERSION	"0.5"
+#define AVFLT_VERSION	"0.6"
 
 #define AVFLT_EVENT_OPEN	1
 #define AVFLT_EVENT_CLOSE	2
