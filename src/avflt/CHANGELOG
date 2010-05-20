@@ -1,4 +1,4 @@
-version 0.5 2010-05-20
+version 0.6 2010-05-20
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- reflected changes in 2.6.34 kernel
 		- include of <linux/slab.h>
