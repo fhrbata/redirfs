@@ -75,7 +75,6 @@ lrfs_proceed_oper(struct vop_generic_args *ap, int op_id)
 	first_vp = VOPARG_OFFSETTO(struct vnode**, descp->vdesc_vp_offsets[0],ap);
 	chain = LRFSGETCHAIN((*first_vp));
 	
-	printf("Pre filter operation\n");
 	/*
 	 * Lock the chain so nobody can alter it while performing
 	 * operations.
@@ -86,7 +85,6 @@ lrfs_proceed_oper(struct vop_generic_args *ap, int op_id)
 
 	ret = lrfs_bypass(ap);	
 
-	printf("Post filter operation\n");
 	lrfs_postcallbacks_chain(ap, chain, op_id, proceed);
 	sx_sunlock(&chain->chainlck);
 
@@ -243,7 +241,6 @@ lrfs_lookup(struct vop_lookup_args *ap)
 	first_vp = VOPARG_OFFSETTO(struct vnode**, descp->vdesc_vp_offsets[0],ap);
 	chain = LRFSGETCHAIN((*first_vp));
 	
-	printf("Pre filter operation LOOKUP\n");
 	/*
 	 * Lock the chain so nobody can alter it while performing
 	 * operations.
@@ -254,7 +251,6 @@ lrfs_lookup(struct vop_lookup_args *ap)
 
 	ret = do_lrfs_lookup(ap);	
 
-	printf("Post filter operation LOOKUP\n");
 	lrfs_postcallbacks_chain(ga, chain, LAREFS_LOOKUP, proceed);
 	sx_sunlock(&chain->chainlck);
 
@@ -585,7 +581,6 @@ lrfs_inactive(struct vop_inactive_args *ap)
 	first_vp = VOPARG_OFFSETTO(struct vnode**, descp->vdesc_vp_offsets[0],ap);
 	chain = LRFSGETCHAIN((*first_vp));
 	
-	printf("Pre filter operation INACTIVE\n");
 	/*
 	 * Lock the chain so nobody can alter it while performing
 	 * operations.
@@ -596,7 +591,6 @@ lrfs_inactive(struct vop_inactive_args *ap)
 
 	ret = do_lrfs_inactive(ap);	
 
-	printf("Post filter operation INACTIVE\n");
 	lrfs_postcallbacks_chain(ga, chain, LAREFS_LOOKUP, proceed);
 	sx_sunlock(&chain->chainlck);
 

@@ -288,10 +288,6 @@ lrfs_root(mp, flags, vpp)
 	vp = MOUNTTOLRFSMOUNT(mp)->lrfsm_rootvp;
 	VREF(vp);
 
-#ifdef LRFS_DEBUG
-	if (VOP_ISLOCKED(vp))
-		panic("root vnode is locked.\n");
-#endif
 	vn_lock(vp, flags | LK_RETRY);
 	*vpp = vp;
 	return 0;

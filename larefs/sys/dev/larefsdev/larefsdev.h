@@ -10,15 +10,11 @@ char *filter_op_names[LAREFS_BOTTOM] = {
 	"Access",
 	"Accessx",
 	"Getattr",
-	"Getwritemount",
 	"Inactive",
-	"Lock",
 	"Lookup",
 	"Open",
-	"Reclaim",
 	"Rename",
 	"Setattr",
-	"Unlock",
 	"Ioctl"
 };
 

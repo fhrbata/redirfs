@@ -99,7 +99,7 @@ read_flt_tobuf(struct larefs_filter_t *filter,
 			 rbuf, finfo->priority, finfo->active);
 
 		free(fbuf, M_TEMP);
-	}                                                                                               
+	}
 
 	return (0);
 }
@@ -118,7 +118,7 @@ lrfs_open(struct cdev *dev, int oflags, int devtype, struct thread *p)
 		mtx_lock(&filter->fltmtx);
 		read_flt_tobuf(filter, lrfs_msgbuf, p);
 		mtx_unlock(&filter->fltmtx);
-	}                                                                                               
+	}
 	mtx_unlock(&registered_filters->regmtx);
 
 	sbuf_finish(lrfs_msgbuf);

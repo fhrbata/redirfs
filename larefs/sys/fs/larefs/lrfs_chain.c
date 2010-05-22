@@ -166,6 +166,8 @@ attach_filter(struct larefs_filter_t *filter, struct vnode *vn, int prio)
 		return (EINVAL);
 	}
 
+	chain->count++;
+
 	/* Keep track of used finfo for the filter */
 	mtx_lock(&filter->fltmtx);
 	filter->usecount++;
@@ -241,6 +243,7 @@ detach_filter(struct lrfs_filter_info *finfo, struct lrfs_filter_chain *chain)
 		return (EINVAL);
 	}
 	
+	chain->count--;
 	filter = finfo->filter;
 
 	/* Remove info from filter used list */
@@ -415,18 +418,18 @@ lrfs_precallbacks_chain(struct vop_generic_args *ap,
 	struct lrfs_filter_chain *chain, int op_id)
 {
 	struct lrfs_filter_info *node;
-	int (*lrfs_fop)(struct vop_generic_args *ap);
+	flt_cb_t *lrfs_fop;
 	int count = 0;
-
+	
 	RB_FOREACH(node, lrfs_filtertree , &chain->head) {
 		count++;
 
-		if (node->active)
+		if (!node->active)
 			continue;
 
 		lrfs_fop = node->reg_ops[op_id].pre_cb;	
 
-		if (lrfs_fop(ap) == LAREFS_STOP);
+		if (lrfs_fop(node->data, ap) == LAREFS_STOP);
 			break;
 	}
 
@@ -442,7 +445,7 @@ lrfs_postcallbacks_chain(struct vop_generic_args *ap,
 	struct lrfs_filter_chain *chain, int op_id, int skip)
 {
 	struct lrfs_filter_info *node;
-	int (*lrfs_fop)(struct vop_generic_args *ap);
+	flt_cb_t *lrfs_fop;
 
 	RB_FOREACH_REVERSE(node, lrfs_filtertree , &chain->head) {
 		if (skip != 0) {
@@ -450,12 +453,12 @@ lrfs_postcallbacks_chain(struct vop_generic_args *ap,
 			continue;
 		}
 
-		if (node->active)
+		if (!node->active)
 			continue;
 
 		lrfs_fop = node->reg_ops[op_id].post_cb;
 
-		lrfs_fop(ap);
+		lrfs_fop(node->data, ap);
 	}
 
 	return (0);

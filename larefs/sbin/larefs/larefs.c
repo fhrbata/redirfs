@@ -124,6 +124,9 @@ get_arguments(int argc, char **argv, struct arguments *args) {
 
 	am = *args;
 
+	if (argc < 2)
+		return (1);
+
 	am.command = get_command(argv[1]);
 
 	switch (am.command) {

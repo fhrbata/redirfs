@@ -69,7 +69,7 @@ struct lrfs_filter_chain {
 	int     active;
 	struct sx chainlck;
 	RB_HEAD(lrfs_filtertree, lrfs_filter_info) head;
-};   
+};
 
 struct lrfs_filter_info {
 	RB_ENTRY(lrfs_filter_info) 	node;	
@@ -79,8 +79,10 @@ struct lrfs_filter_info {
 	int	priority;
 	char	*name;
 	struct vnode *avn;
+	void	*data;
 	struct larefs_vop_vector reg_ops[LAREFS_BOTTOM];
 };
+
 #define	MOUNTTOLRFSMOUNT(mp) ((struct lrfs_mount *)((mp)->mnt_data))
 #define LRFSGETCHAIN(vn) (MOUNTTOLRFSMOUNT(vn->v_mount)->filter_chain)
 #define	VTOLRFS(vp) ((struct lrfs_node *)(vp)->v_data)

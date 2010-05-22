@@ -6,14 +6,12 @@
 
 #include <fs/larefs/larefs.h>
 
-int pre_dummyflt_open(struct vop_generic_args *ap);
-int post_dummyflt_open(struct vop_generic_args *ap);
-int pre_dummyflt_lookup(struct vop_generic_args *ap);
-int post_dummyflt_lookup(struct vop_generic_args *ap);
+int pre_filter_operation(void *data, struct vop_generic_args *ap);
+int post_filter_operation(void *data, struct vop_generic_args *ap);
 
 struct larefs_vop_vector dummyflt_vnodeops[] = {
-	{LAREFS_OPEN, pre_dummyflt_open, post_dummyflt_open},
-	{LAREFS_LOOKUP, pre_dummyflt_lookup, post_dummyflt_open},
+	{LAREFS_OPEN, pre_filter_operation, post_filter_operation},
+	{LAREFS_LOOKUP, pre_filter_operation, post_filter_operation},
 	{LAREFS_BOTTOM, NULL, NULL}
 };
 
@@ -23,33 +21,24 @@ static struct larefs_filter_t filter_conf = {
 };
 
 int
-pre_dummyflt_open(struct vop_generic_args *ap)
+pre_filter_operation(void *data, struct vop_generic_args *ap)
 {
-	uprintf("%s : %s\n", filter_conf.name, __func__);
+	struct vnodeop_desc *descp = ap->a_desc;
+
+	uprintf("Pre operation %s : %s\n", filter_conf.name, descp->vdesc_name);
+
 	return (0);
 }
 
 int
-post_dummyflt_open(struct vop_generic_args *ap)
+post_filter_operation(void *data, struct vop_generic_args *ap)
 {
-	uprintf("%s : %s\n", filter_conf.name, __func__);
+	struct vnodeop_desc *descp = ap->a_desc;
+
+	uprintf("Post operation %s : %s\n", filter_conf.name, descp->vdesc_name);
+
 	return (0);
 }
-
-int
-pre_dummyflt_lookup(struct vop_generic_args *ap)
-{
-	uprintf("%s : %s\n", filter_conf.name, __func__);
-	return (0);
-}
-
-int
-post_dummyflt_lookup(struct vop_generic_args *ap)
-{
-	uprintf("%s : %s\n", filter_conf.name, __func__);
-	return (0);
-}
-
 
 static int event_handler(struct module *module, int event, void *arg) {
         int err = 0;
@@ -67,7 +56,7 @@ static int event_handler(struct module *module, int event, void *arg) {
                 err = EOPNOTSUPP;
                 break;
         }
-       
+
         return(err);
 }
 

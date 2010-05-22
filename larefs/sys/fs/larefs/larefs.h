@@ -15,23 +15,21 @@ enum filter_op_id {
 	LAREFS_ACCESS,
 	LAREFS_ACCESSX,
 	LAREFS_GETATTR,
-	LAREFS_GETWRITEMOUNT,	/* ? */
 	LAREFS_INACTIVE,
-	LAREFS_LOCK,		/* ? */
 	LAREFS_LOOKUP,
 	LAREFS_OPEN,
-	LAREFS_RECLAIM,		/* ? */
 	LAREFS_RENAME,
 	LAREFS_SETATTR,
-	LAREFS_UNLOCK,		/* ? */
 	LAREFS_IOCTL,
 	LAREFS_BOTTOM
 };
 
+typedef int flt_cb_t(void *data, struct vop_generic_args *ap);
+
 struct larefs_vop_vector {
 	enum filter_op_id op_id;
-	int (*pre_cb)(struct vop_generic_args *ap);
-	int (*post_cb)(struct vop_generic_args *ap);
+	flt_cb_t *pre_cb;
+	flt_cb_t *post_cb;
 };
 
 struct larefs_filter_t {

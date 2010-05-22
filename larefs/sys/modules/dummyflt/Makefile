@@ -5,6 +5,7 @@
 KMOD=	dummyflt
 SRCS=	dummyflt.c
 
+SRCS+=	vnode_if.h
 
 DEBUG_FLAGS+= -g
 #DEBUG_FLAGS+= -DPEFS_DEBUG

@@ -5,6 +5,7 @@
 KMOD=	larefsdev
 SRCS=	larefsdev.c
 
+SRCS+=	vnode_if.h
 
 DEBUG_FLAGS+= -g
 #DEBUG_FLAGS+= -DPEFS_DEBUG
