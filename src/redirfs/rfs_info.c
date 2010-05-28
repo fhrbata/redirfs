@@ -203,7 +203,7 @@ int rfs_info_set(struct dentry *dentry, struct rfs_info *rinfo,
 	rv = rfs_dcache_walk(dentry, rfs_dcache_set, rdata);
 
 	if (rflt->ops && rflt->ops->move_end)
-		rflt->ops->move_begin();
+		rflt->ops->move_end();
 
 	rfs_dcache_data_free(rdata);
 
