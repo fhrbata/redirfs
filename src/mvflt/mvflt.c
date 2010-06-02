@@ -127,7 +127,7 @@ enum redirfs_rv mvflt_rename_in(redirfs_context context,
 	}
 
 	rv = redirfs_get_filename(path_info->mnt,
-			args->args.i_rename.old_dentry, filename, PAGE_SIZE);
+			args->args.i_rename.new_dentry, filename, PAGE_SIZE);
 	if (rv) {
 		printk(KERN_ERR "mvflt: redirfs_get_filename failed(%d)\n", rv);
 		goto exit;
