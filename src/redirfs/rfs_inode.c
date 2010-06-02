@@ -886,10 +886,10 @@ int rfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	rargs.args.i_rename.new_dir = new_dir;
 	rargs.args.i_rename.new_dentry = new_dentry;
 
-	if (!rfs_precall_flts(rinfo_old->rchain, &rcont_old, &rargs))
+	if (rfs_precall_flts(rinfo_old->rchain, &rcont_old, &rargs))
 		goto skip;
 
-	if (!rfs_precall_flts_rename(rinfo_new, &rcont_new, &rargs))
+	if (rfs_precall_flts_rename(rinfo_new, &rcont_new, &rargs))
 		goto skip;
 
 	if (rinode_old->op_old && rinode_old->op_old->rename)
@@ -909,7 +909,7 @@ skip:
 				rargs.args.i_rename.new_dir,
 				rargs.args.i_rename.new_dentry);
 
-	rfs_postcall_flts_rename(rinfo_new, &rcont_old, &rargs);
+	rfs_postcall_flts_rename(rinfo_new, &rcont_new, &rargs);
 	rfs_postcall_flts(rinfo_old->rchain, &rcont_old, &rargs);
 
 	rfs_context_deinit(&rcont_old);
