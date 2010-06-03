@@ -552,16 +552,18 @@ struct redirfs_op_info {
 };
 
 struct redirfs_filter_operations {
-	 int (*activate)(void);
-	 int (*deactivate)(void);
-	 int (*add_path)(struct redirfs_path_info *);
-	 int (*rem_path)(redirfs_path);
-	 int (*unregister)(void);
-	 int (*rem_paths)(void);
-	 void (*move_begin)(void);
-	 void (*move_end)(void);
-	 int (*dentry_moved)(redirfs_root, redirfs_root, struct dentry *);
-	 int (*inode_moved)(redirfs_root, redirfs_root, struct inode *);
+	int (*activate)(void);
+	int (*deactivate)(void);
+	int (*add_path)(struct redirfs_path_info *);
+	int (*rem_path)(redirfs_path);
+	int (*unregister)(void);
+	int (*rem_paths)(void);
+	void (*move_begin)(void);
+	void (*move_end)(void);
+	int (*dentry_moved)(redirfs_root, redirfs_root, struct dentry *);
+	int (*inode_moved)(redirfs_root, redirfs_root, struct inode *);
+	enum redirfs_rv (*pre_rename)(redirfs_context, struct redirfs_args *);
+	enum redirfs_rv (*post_rename)(redirfs_context, struct redirfs_args *);
 };
 
 struct redirfs_filter_info {

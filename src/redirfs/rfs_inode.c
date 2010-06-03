@@ -794,17 +794,87 @@ static int rfs_setattr(struct dentry *dentry, struct iattr *iattr)
 	return rargs.rv.rv_int;
 }
 
+static int rfs_precall_flts_rename(struct rfs_info *rinfo,
+		struct rfs_context *rcont, struct redirfs_args *rargs)
+{
+	enum redirfs_rv (*rop)(redirfs_context, struct redirfs_args *);
+	enum redirfs_rv rv;
+
+	if (!rinfo)
+		return 0;
+
+	if (!rinfo->rchain)
+		return 0;
+
+	rargs->type.call = REDIRFS_PRECALL;
+
+	rcont->idx = rcont->idx_start;
+
+	for (; rcont->idx < rinfo->rchain->rflts_nr; rcont->idx++) {
+		if (!atomic_read(&rinfo->rchain->rflts[rcont->idx]->active))
+			continue;
+
+		rop = rinfo->rchain->rflts[rcont->idx]->ops->pre_rename;
+		if (!rop)
+			continue;
+
+		rv = rop(rcont, rargs);
+		if (rv == REDIRFS_STOP)
+			return -1;
+	}
+
+	rcont->idx--;
+
+	return 0;
+}
+
+static void rfs_postcall_flts_rename(struct rfs_info *rinfo,
+		struct rfs_context *rcont, struct redirfs_args *rargs)
+{
+	enum redirfs_rv (*rop)(redirfs_context, struct redirfs_args *);
+
+	if (!rinfo)
+		return;
+
+	if (!rinfo->rchain)
+		return;
+
+	rargs->type.call = REDIRFS_POSTCALL;
+
+	for (; rcont->idx >= rcont->idx_start; rcont->idx--) {
+		if (!atomic_read(&rinfo->rchain->rflts[rcont->idx]->active))
+			continue;
+
+		rop = rinfo->rchain->rflts[rcont->idx]->ops->post_rename;
+		if (rop) 
+			rop(rcont, rargs);
+	}
+
+	rcont->idx++;
+}
+
 int rfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		struct inode *new_dir, struct dentry *new_dentry)
 {
-	struct rfs_inode *rinode;
-	struct rfs_info *rinfo;
-	struct rfs_context rcont;
+	struct rfs_inode *rinode_old;
+	struct rfs_inode *rinode_new;
+	struct rfs_info *rinfo_old;
+	struct rfs_info *rinfo_new;
+	struct rfs_context rcont_old;
+	struct rfs_context rcont_new;
 	struct redirfs_args rargs;
 
-	rinode = rfs_inode_find(old_dir);
-	rinfo = rfs_inode_get_rinfo(rinode);
-	rfs_context_init(&rcont, 0);
+	rfs_context_init(&rcont_old, 0);
+	rinode_old = rfs_inode_find(old_dir);
+	rinfo_old = rfs_inode_get_rinfo(rinode_old);
+
+	rfs_context_init(&rcont_new, 0);
+	rinode_new = rfs_inode_find(new_dir);
+
+	if (rinode_new)
+		rinfo_new = rfs_inode_get_rinfo(rinode_new);
+	else
+		rinfo_new = NULL;
 
 	if (S_ISDIR(old_dir->i_mode))
 		rargs.type.id = REDIRFS_DIR_IOP_RENAME;
@@ -816,17 +886,22 @@ int rfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	rargs.args.i_rename.new_dir = new_dir;
 	rargs.args.i_rename.new_dentry = new_dentry;
 
-	if (!rfs_precall_flts(rinfo->rchain, &rcont, &rargs)) {
-		if (rinode->op_old && rinode->op_old->rename)
-			rargs.rv.rv_int = rinode->op_old->rename(
-					rargs.args.i_rename.old_dir,
-					rargs.args.i_rename.old_dentry,
-					rargs.args.i_rename.new_dir,
-					rargs.args.i_rename.new_dentry);
-		else
-			rargs.rv.rv_int = -ENOSYS;
-	}
+	if (rfs_precall_flts(rinfo_old->rchain, &rcont_old, &rargs))
+		goto skip;
 
+	if (rfs_precall_flts_rename(rinfo_new, &rcont_new, &rargs))
+		goto skip;
+
+	if (rinode_old->op_old && rinode_old->op_old->rename)
+		rargs.rv.rv_int = rinode_old->op_old->rename(
+				rargs.args.i_rename.old_dir,
+				rargs.args.i_rename.old_dentry,
+				rargs.args.i_rename.new_dir,
+				rargs.args.i_rename.new_dentry);
+	else
+		rargs.rv.rv_int = -ENOSYS;
+	
+skip:
 	if (!rargs.rv.rv_int)
 		rargs.rv.rv_int = rfs_fsrename(
 				rargs.args.i_rename.old_dir,
@@ -834,11 +909,15 @@ int rfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 				rargs.args.i_rename.new_dir,
 				rargs.args.i_rename.new_dentry);
 
-	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
-	rfs_context_deinit(&rcont);
+	rfs_postcall_flts_rename(rinfo_new, &rcont_new, &rargs);
+	rfs_postcall_flts(rinfo_old->rchain, &rcont_old, &rargs);
 
-	rfs_inode_put(rinode);
-	rfs_info_put(rinfo);
+	rfs_context_deinit(&rcont_old);
+	rfs_context_deinit(&rcont_new);
+	rfs_inode_put(rinode_old);
+	rfs_inode_put(rinode_new);
+	rfs_info_put(rinfo_old);
+	rfs_info_put(rinfo_new);
 	return rargs.rv.rv_int;
 }
 
