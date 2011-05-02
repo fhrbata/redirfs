@@ -32,6 +32,7 @@
 #include <linux/list_sort.h>
 
 #define UNIONFLT_VERSION "0.1"
+#define SYMLINK_BUFFER 1024
 
 #define rfs_kattr_to_rattr(__kattr) \
 	container_of(__kattr, struct redirfs_filter_attribute, attr)
@@ -792,6 +793,195 @@ struct rfs_branch_data *unionflt_get_root_data(struct vfsmount *mnt, struct dent
 	return bdata;
 }
 
+/* FIXME - revert into array or change location */
+static struct inode *inode_old;
+static struct inode *inode_new;
+
+static char symlink_buffer[SYMLINK_BUFFER];
+
+/*
+ * Private callback for follow_link inode operation
+ */
+static void *unionflt_follow_link(struct dentry *dentry, struct nameidata *nd)
+{
+	nd_set_link(nd, symlink_buffer);
+	return NULL;
+}
+
+static struct inode_operations unionflt_symlink_inode_operations = {
+	.readlink	= generic_readlink,
+	.follow_link	= unionflt_follow_link
+};
+
+/*
+ * Allocate new inode with symlink address
+ */
+static struct inode *unionflt_symlink_alloc(struct super_block *sb)
+{
+	struct inode *inode;
+
+	inode = new_inode(sb);
+	if (IS_ERR(inode))
+		goto out_alloc;
+
+	inode->i_flags |= S_PRIVATE;
+	inode->i_op = &unionflt_symlink_inode_operations;
+
+out_alloc:
+	return inode;
+}
+
+/*
+ * Detach inode from dentry
+ */
+static void unionflt_d_deinstantiate(struct dentry *dentry)
+{
+	struct inode *inode = dentry->d_inode;
+
+	spin_lock(&dentry->d_lock);
+	spin_lock(&dcache_lock);
+	if (inode) {
+		dentry->d_inode = NULL;
+		list_del_init(&dentry->d_alias);
+	}
+	spin_unlock(&dentry->d_lock);
+	spin_unlock(&dcache_lock);
+};
+
+/*
+ * Set new symlink address to inode
+ */
+void unionflt_symlink_set(char *address)
+{
+	memset(symlink_buffer, '\0', SYMLINK_BUFFER);
+	strcpy(symlink_buffer, address);
+}
+
+/*
+ * Drop symlink inode
+ */
+static void unionflt_symlink_drop(struct dentry *dentry) 
+{
+	struct inode *inode = dentry->d_inode;
+
+	iput(inode);
+	return;
+}
+
+enum redirfs_rv unionflt_lookup(redirfs_context context,
+		struct redirfs_args *args)
+{
+	char *path, *mntpath, *cut, *ch_rev, *cpath;
+	int rv;
+	struct nameidata nd;
+	struct path branch_path;
+	struct rfs_branch_data *bdata;
+	struct rfs_branch *branch;
+
+	if (!args->args.i_lookup.nd)
+		return REDIRFS_CONTINUE;
+
+	path = unionflt_alloc(sizeof(char) * PAGE_SIZE);
+	if (!path)
+		return REDIRFS_CONTINUE;
+	mntpath = unionflt_alloc(sizeof(char) * PAGE_SIZE);
+	if (!mntpath)
+		return REDIRFS_CONTINUE;
+
+        bdata = unionflt_get_root_data(args->args.i_lookup.nd->path.mnt,
+			args->args.i_lookup.nd->path.dentry);
+	if (!bdata) {
+		printk(KERN_ALERT "NO DATA!\n");
+		goto exit2;
+	}
+
+	/* WORKAROUND1 -FIXME */
+	/* backup of inode of mount point */
+	path_lookup("/mnt/union", LOOKUP_FOLLOW, &nd);
+	inode_old = nd.path.dentry->d_inode;
+	/* allocating of fake inode for redirecting */
+	inode_new = unionflt_symlink_alloc(nd.path.mnt->mnt_sb);
+	
+	/* reconstruction of lookup path */
+	ch_rev = d_path(&args->args.i_lookup.nd->path, path, PAGE_SIZE);
+	if (IS_ERR(ch_rev)) {
+		goto exit2;
+	}
+	strcpy(path,ch_rev);
+	printk(KERN_ALERT "init path %s\n", path);
+	/* WORKAROUND1 - FIXME*/
+	strcpy(mntpath, "/mnt/union/");
+	printk(KERN_ALERT "init mntpath %s\n", mntpath);
+	/* cut the root of union path from begin */
+	cpath = path;
+	cut = mntpath;
+	while (*cut && *cpath && *cut == *cpath) {
+		cut++;
+		cpath++;
+	}
+	printk(KERN_ALERT "cutted path %s\n", cpath);
+
+	list_for_each_entry(branch, &bdata->branches, list) {
+		memset(mntpath, '\0', PAGE_SIZE);
+		/* Recreate path of branch root into ch_rev*/
+		branch_path.mnt = branch->rpath->mnt;
+		branch_path.dentry = branch->rpath->dentry;
+		ch_rev = d_path(&branch_path, mntpath, PAGE_SIZE);
+		if (IS_ERR(ch_rev)) {
+			continue;
+		}
+		strcpy(mntpath, ch_rev);
+		printk(KERN_ALERT "base %s\n", mntpath);
+
+		strcat(mntpath,"/");
+		/* Here is complete path to search in subbranch */
+		strcat(mntpath,cpath);
+		strcat(mntpath,args->args.i_lookup.dentry->d_name.name);
+		printk(KERN_ALERT "full %s\n", mntpath);
+		/* Is there the dentry we searched for? */
+		rv = path_lookup(mntpath, LOOKUP_FOLLOW, &nd);
+		if (rv) {
+			/* No, continue to another branch */
+			printk(KERN_ALERT "No success in this branch..continue");
+			continue;
+		}
+		printk(KERN_ALERT "Dentry were found!");
+		/* Searched dentry exists in this branch */
+		/* => Remove former inode */
+		unionflt_d_deinstantiate(args->args.i_lookup.nd->path.dentry);
+		/* Get symlink address - root path of branch */
+		unionflt_symlink_set(ch_rev);
+		/* Attach fake inode to mount point dentry */
+		d_instantiate(args->args.i_lookup.nd->path.dentry, inode_new);
+		args->args.i_lookup.dir = inode_new;
+		/* Break and give new inode into lower FS layer */
+		break;
+	}
+
+	/* If no dentry in subpaths were found, there are no changes */
+
+exit2:
+	redirfs_put_data(&bdata->data);
+	kfree(path);
+	kfree(mntpath);
+	return REDIRFS_CONTINUE;
+}
+
+enum redirfs_rv unionflt_lookup_post(redirfs_context context,
+		struct redirfs_args *args)
+{
+	/* detach new redirect inode */
+	unionflt_d_deinstantiate(args->args.i_lookup.nd->path.dentry);
+	unionflt_symlink_drop(args->args.i_lookup.nd->path.dentry);
+
+	/* re-attach old inode */
+	d_instantiate(args->args.i_lookup.nd->path.dentry, inode_old);
+	args->args.i_lookup.dir = inode_old;
+drop_out:
+	return REDIRFS_CONTINUE;
+}
+
+/*
 enum redirfs_rv unionflt_readdir(redirfs_context context,
 		struct redirfs_args *args)
 {
@@ -828,7 +1018,7 @@ enum redirfs_rv unionflt_readdir(redirfs_context context,
 
 
 
-	/* Priority layer */
+	*//* Priority layer *//*
 	list_for_each_entry(branch, &bdata->branches, list) {
 
 		memset(path,0,PAGE_SIZE);
@@ -865,11 +1055,11 @@ enum redirfs_rv unionflt_readdir(redirfs_context context,
 			  if (rv)
 				   file->f_pos += ftmp->f_pos;
 			  else
-			       /*
+			       *//*
 				* We read until EOF of this directory, so lets
 				* advance the f_pos by the maximum offset
 				* (i_size) of this directory
-				*/
+				*//*
 				    file->f_pos += offset;
 		}
 
@@ -884,95 +1074,10 @@ out:
 	kfree(path);
 	return REDIRFS_CONTINUE;
 }
-
-enum redirfs_rv unionflt_dcache_inv(redirfs_context context,
-		struct redirfs_args *args)
-{
-	//if (args->args.i_lookup.nd->path.dentry) {
-//		d_drop(args->args.i_lookup.nd->path.dentry);
-//		printk(KERN_DEBUG "Dentry was dropped from cache\n");
-//	}
-
-	return REDIRFS_CONTINUE;
-}
-
-enum redirfs_rv unionflt_lookup(redirfs_context context,
-		struct redirfs_args *args)
-{
-	char *path, *mntpath, *cut, *ch_rev, *cpath;
-	int rv;
-	struct nameidata nd;
-	struct path branch_path;
-	struct rfs_branch_data *bdata;
-	struct rfs_branch *branch;
-
-	if (!args->args.i_lookup.nd)
-		return REDIRFS_CONTINUE;
-
-	path = unionflt_alloc(sizeof(char) * PAGE_SIZE);
-	if (!path)
-		return REDIRFS_CONTINUE;
-	mntpath = unionflt_alloc(sizeof(char) * PAGE_SIZE);
-	if (!mntpath)
-		return REDIRFS_CONTINUE;
-
-        bdata = unionflt_get_root_data(args->args.f_readdir.file->f_path.mnt,
-			args->args.f_readdir.file->f_path.dentry);
-	if (!bdata) {
-		printk(KERN_ALERT "NO DATA!\n");
-		goto exit2;
-	}
-	ch_rev = d_path(&args->args.i_lookup.nd->path, path, PAGE_SIZE);
-	if (IS_ERR(ch_rev)) {
-		printk(KERN_ALERT "d_path_wrong!\n");
-		goto exit2;
-	}
-	strcpy(path,ch_rev);
-	printk(KERN_ALERT "init path %s\n", path);
-	/* WORKAROUND - FIXME*/
-	strcpy(mntpath, "/mnt/union/");
-	printk(KERN_ALERT "init mntpath %s\n", mntpath);
-	/* cut the union mount path */
-	cpath = path;
-	cut = mntpath;
-	while (*cut && *cpath && *cut == *cpath) {
-		cut++;
-		cpath++;
-	}
-	printk(KERN_ALERT "cutted path %s\n", cpath);
-
-	list_for_each_entry(branch, &bdata->branches, list) {
-		memset(mntpath, '\0', PAGE_SIZE);
-		branch_path.mnt = branch->rpath->mnt;
-		branch_path.dentry = branch->rpath->dentry;
-		ch_rev = d_path(&branch_path, mntpath, PAGE_SIZE);
-		if (IS_ERR(ch_rev)) {
-			continue;
-		}
-		strcpy(mntpath, ch_rev);
-		printk(KERN_ALERT "base %s\n", mntpath);
-
-		strcat(mntpath,"/");
-		strcat(mntpath,cpath);
-		printk(KERN_ALERT "full %s\n", mntpath);
-		rv = path_lookup(mntpath, LOOKUP_FOLLOW, &nd);
-		if (rv) {
-			continue;
-		}
-		/* Fake inode */
-		//break;
-		//
-	}
-
-exit2:
-	redirfs_put_data(&bdata->data);
-	kfree(path);
-	kfree(mntpath);
-	return REDIRFS_CONTINUE;
-}
+*/
 
 static struct redirfs_op_info unionflt_op_info[] = {
-	{REDIRFS_DIR_IOP_LOOKUP, unionflt_lookup, unionflt_dcache_inv},
+	{REDIRFS_DIR_IOP_LOOKUP, unionflt_lookup, unionflt_lookup_post},
 	//{REDIRFS_DIR_FOP_READDIR, unionflt_readdir, NULL},
 	{REDIRFS_OP_END, NULL, NULL}
 };

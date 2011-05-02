@@ -1,0 +1,10 @@
+* finish lookup code
+* correct locking and references
+* minimize all memory leaks
+* readdir support with new lookup code
+* 	=> there can be some problems with
+	   readdir() on mount point directory
+	   due to fake inode
+* more than one mountpoint support
+* 	=> correct handling with root private data
+* support for infinite(larger than buffer) length of symlink
