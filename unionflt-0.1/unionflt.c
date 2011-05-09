@@ -30,6 +30,7 @@
 #include <linux/security.h>
 #include <linux/kobject.h>
 #include <linux/list_sort.h>
+#include <linux/mutex-debug.h>
 
 #define UNIONFLT_VERSION "0.1"
 
@@ -61,7 +62,6 @@ struct rfs_branch {
 	int priority;
 };
 
-
 struct rfs_branch *alloc_branch(int priority, struct rfs_path *rpath);
 struct rfs_flt_subpath *rfs_flt_sp_get(struct rfs_flt_subpath *rsubpath);
 void rfs_flt_sp_put(struct rfs_flt_subpath *rsubpath);
@@ -91,6 +91,7 @@ int rfs_path_get_info_sp(struct rfs_flt_subpath *spath, char *buf, int size);
 
 static redirfs_filter unionflt;
 static struct kset *rfs_flt_subpath_kset;
+static struct inode *fake_inode;
 
 struct rfs_branch *alloc_branch(int priority, struct rfs_path *rpath)
 {
@@ -802,22 +803,39 @@ struct rfs_branch_data *unionflt_get_root_data(struct vfsmount *mnt, struct dent
 	
 	return bdata;
 }
+
 /*
+ * Temporarily swaps new and old ops for rinode
+ * 	- only helper function
+ */
+struct rfs_inode *rfs_inode_swap_ops(struct rfs_inode *rinode)
+{
+	if (!rinode)
+		goto done;
+	if (rinode->inode->i_op == &rinode->op_new)
+		rinode->inode->i_op = rinode->op_old;
+	else if (rinode->inode->i_op == rinode->op_old)
+		rinode->inode->i_op = &rinode->op_new;
+done:
+	return rinode;
+}
+
+
 enum redirfs_rv unionflt_readdir(redirfs_context context,
 		struct redirfs_args *args)
 {
 	int rv;
 	struct file *ftmp;
-	struct rfs_path *rpath;
 	struct file *file = args->args.f_readdir.file;
 	struct nameidata nd;
-	struct inode *inode = args->args.f_readdir.file->f_path.dentry->d_inode;
+	struct inode *inode;
 	struct union_cache_callback cb;
 	const struct cred *cred = current_cred();
-	char *path;
+	char *path, *end, *ppath, *mnt_path;
 	loff_t offset = 0;
 	struct rfs_branch_data *bdata;
 	struct rfs_branch *branch;
+	struct rfs_inode *rinode = NULL;
 
 	if (!args->args.f_readdir.file)
 		return REDIRFS_CONTINUE;
@@ -825,6 +843,7 @@ enum redirfs_rv unionflt_readdir(redirfs_context context,
 	path = unionflt_alloc(sizeof(char) * PAGE_SIZE);
 	if (!path)
 		return REDIRFS_CONTINUE;
+	ppath = path;
 
 	cb.buf = args->args.f_readdir.dirent;
 	cb.filler = args->args.f_readdir.filldir;
@@ -837,71 +856,121 @@ enum redirfs_rv unionflt_readdir(redirfs_context context,
 	if (!bdata)
 		goto out;
 
-	*//* Priority layer *//*
+	/* Recover lookup path */
+	end = d_path(&args->args.f_readdir.file->f_path, path, PAGE_SIZE);
+	if (IS_ERR(end))
+		goto out;
+	strcpy(ppath, end);
+	/* TODO Verify if path is starting from some of /mnt/points */
+	/* If it is true, assign the right one */
+	/* XXX it can be in the middle of dirs */
+	/* Cut mount point path */
+	mnt_path = bdata->mountpoint;
+	printk(KERN_ALERT "Mountpoint = %s\n", mnt_path);
+	printk(KERN_ALERT "SearchPath = %s\n", ppath);
+	while (*mnt_path && *ppath && *mnt_path == *ppath) {
+		*ppath = '\0';
+		ppath++;
+		mnt_path++;
+	}
+	/* Eliminate '/'in the beginning of search path*/
+	if (*ppath == '/') {
+		ppath++;
+	}
+	if (!*ppath) {
+		ppath[0] = '.';
+		ppath[1] = '\0';
+	}
+
+	mutex_unlock(&args->args.f_readdir.file->f_path.dentry->d_inode->i_mutex);
+
 	list_for_each_entry(branch, &bdata->branches, list) {
 
-		memset(path,0,PAGE_SIZE);
-		rv = redirfs_get_filename(branch->rpath->mnt, branch->rpath->dentry, path, PAGE_SIZE);
+		printk(KERN_ALERT "Readdir_path = %s\n", ppath);
+		rv = vfs_path_lookup(branch->rpath->dentry,
+				branch->rpath->mnt, ppath, LOOKUP_FOLLOW, &nd);
+		/* No dir with this name exists */
 		if (rv)
 			continue;
-		rv = path_lookup(path, LOOKUP_FOLLOW, &nd);
-		if (rv)
+		
+		/* XXX debug */
+		//printk(KERN_ALERT "EXISTUJE ADRESAR %s, jedem dal\n", ppath);
+		//continue;
+
+		inode = nd.path.dentry->d_inode;
+		/* It is not a directory */
+		if (!S_ISDIR(inode->i_mode)) {
 			continue;
+		}
+		/* Locked -> It is inode, where the former lookup was called */
+		if (!mutex_trylock(&inode->i_mutex))
+			continue;
+
+		/* Swap ops to old */
+		rinode = rfs_inode_find(nd.path.dentry->d_inode);
+		/* If inode is controlled by RedirFS */
+		if (rinode) {
+			/* Switch off operations to avoid i_mutex deadlock */
+			rinode = rfs_inode_swap_ops(rinode);
+		}
+		path_get(&nd.path);
 		ftmp = dentry_open(nd.path.dentry, nd.path.mnt,
 				O_RDONLY | O_DIRECTORY | O_NOATIME, cred);
 
 		if (IS_ERR(ftmp)) {
-			continue;
+			goto next_try;
 		}
 
-		path_get(&nd.path);
-		inode = nd.path.dentry->d_inode;
-		mutex_lock(&inode->i_mutex);
 		cb.offset += offset;
 		offset = i_size_read(inode);
 		ftmp->f_pos = file->f_pos - cb.offset;
 		cb.count = ftmp->f_pos;
 		if (ftmp->f_pos < 0) {
-			mutex_unlock(&inode->i_mutex);
-			fput(ftmp);
-			path_put(&nd.path);
-			continue;
+			goto file_put;
 		}
 
 		if (ftmp->f_pos < offset) {
-			  rv = ftmp->f_op->readdir(ftmp, &cb, filldir_union);
-			  file_accessed(ftmp);
-			  if (rv)
-				   file->f_pos += ftmp->f_pos;
-			  else
-			       *//*
+			rv = ftmp->f_op->readdir(ftmp, &cb, filldir_union);
+			file_accessed(ftmp);
+			if (rv)
+				file->f_pos += ftmp->f_pos;
+			else
+			       /*
 				* We read until EOF of this directory, so lets
 				* advance the f_pos by the maximum offset
 				* (i_size) of this directory
-				*//*
-				    file->f_pos += offset;
+				*/
+				file->f_pos += offset;
 		}
 
 		file_accessed(ftmp);
-		mutex_unlock(&inode->i_mutex);
+file_put:
 		path_put(&nd.path);
 		fput(ftmp);
+next_try:
+		if (rinode) {
+			/* Recover RedirFS operations */
+			rinode = rfs_inode_swap_ops(rinode);
+			rfs_inode_put(rinode);
+		}
+		mutex_unlock(&inode->i_mutex);
 	}
 
 out:
 	redirfs_put_data(&bdata->data);
 	kfree(path);
+	rv = mutex_lock_killable(&args->args.f_readdir.file->f_path.dentry->d_inode->i_mutex);
 	return REDIRFS_CONTINUE;
 }
-*/
 
-enum redirfs_rv unionflt_dcache_inv(redirfs_context context,
+
+enum redirfs_rv unionflt_lookup_post(redirfs_context context,
 		struct redirfs_args *args)
 {
-	//if (args->args.i_lookup.nd->path.dentry) {
-//		d_drop(args->args.i_lookup.nd->path.dentry);
-//		printk(KERN_DEBUG "Dentry was dropped from cache\n");
-//	}
+	if (fake_inode && mutex_is_locked(&fake_inode->i_mutex)){
+		mutex_unlock(&fake_inode->i_mutex);
+		printk(KERN_ALERT "Unlocking of %s\n", args->args.i_lookup.nd->path.dentry->d_name.name);
+	}
 
 	return REDIRFS_CONTINUE;
 }
@@ -910,12 +979,14 @@ enum redirfs_rv unionflt_lookup(redirfs_context context,
 		struct redirfs_args *args)
 {
 	char *path, *mnt_path, *end, *ppath;
-	struct inode *fake_inode;
 	int rv;
-	struct nameidata nd, nd2;
+	struct nameidata nd;
 	struct rfs_branch_data *bdata;
 	struct rfs_branch *branch;
-	struct dentry *searched;
+	struct dentry *dentry;
+	struct rfs_inode *rinode;
+
+	fake_inode = NULL;
 
 	if (!args->args.i_lookup.nd)
 		return REDIRFS_CONTINUE;
@@ -938,10 +1009,14 @@ enum redirfs_rv unionflt_lookup(redirfs_context context,
 	if (IS_ERR(end))
 		goto exit2;
 	strcpy(ppath, end);
+	/* TODO Verify if path is starting from some of /mnt/points */
+	/* If it is true, assign the right one */
+	/* XXX it can be in the middle of dirs */
 	/* Cut mount point path */
 	mnt_path = bdata->mountpoint;
 	printk(KERN_ALERT "Mountpoint = %s\n", mnt_path);
 	printk(KERN_ALERT "SearchPath = %s\n", ppath);
+	printk(KERN_ALERT "SearchFor  = %s\n", args->args.i_lookup.nd->path.dentry->d_name.name);
 	while (*mnt_path && *ppath && *mnt_path == *ppath) {
 		*ppath = '\0';
 		ppath++;
@@ -960,23 +1035,43 @@ enum redirfs_rv unionflt_lookup(redirfs_context context,
 		printk(KERN_ALERT "Lookup_path = %s\n", ppath);
 		rv = vfs_path_lookup(branch->rpath->dentry,
 				branch->rpath->mnt, ppath, LOOKUP_FOLLOW, &nd);
-		//path_put(&nd.path);
 		if (rv)
 			continue;
 		printk(KERN_ALERT "1 Retval %d for search for %s in %s\n",rv,ppath,branch->rpath->dentry->d_name.name);
-		rv = vfs_path_lookup(nd.path.dentry,
-				nd.path.mnt, args->args.i_lookup.dentry->d_name.name, LOOKUP_FOLLOW, &nd2);
-		//path_put(&nd2.path);
-		if (rv)
-			continue;
-		printk(KERN_ALERT "2 Retval %d for search for %s in %s\n",rv,args->
-				args.i_lookup.dentry->d_name.name,nd.path.dentry->d_name.name);
 
-		//path_put(&args->args.i_lookup.nd->path);
+		if (!mutex_is_locked(&nd.path.dentry->d_inode->i_mutex))
+			mutex_lock(&nd.path.dentry->d_inode->i_mutex);
+		rinode = rfs_inode_find(nd.path.dentry->d_inode);
+		/* If inode is controlled by RedirFS */
+		if (rinode) {
+			/* Switch off operations to avoid i_mutex deadlock */
+			rinode = rfs_inode_swap_ops(rinode);
+		}
+		/* Lookup for last dentry name */
+		dentry = lookup_one_len(args->args.i_lookup.dentry->d_name.name, nd.path.dentry,
+				strlen(args->args.i_lookup.dentry->d_name.name));
+		if (rinode) {
+			/* Recover RedirFS operations */
+			rinode = rfs_inode_swap_ops(rinode);
+			rfs_inode_put(rinode);
+		}
+		mutex_unlock(&nd.path.dentry->d_inode->i_mutex);
+
+		printk(KERN_ALERT "2 Retval %lu for search for %s in %s\n",dentry,args->
+				args.i_lookup.dentry->d_name.name,nd.path.dentry->d_name.name);
+		/* No success in that branch */
+		if (IS_ERR(dentry) || !dentry->d_inode) {
+			dput(dentry);
+			continue;
+		}
+		dput(dentry);
+
 		memcpy(args->args.i_lookup.nd,&nd,sizeof(struct nameidata));
 		fake_inode = args->args.i_lookup.nd->path.dentry->d_inode;
 		args->args.i_lookup.dir = fake_inode;
-		break;
+		mutex_lock(&fake_inode->i_mutex);
+		printk(KERN_ALERT "Locking of %s\n", args->args.i_lookup.nd->path.dentry->d_name.name);
+		goto exit2;
 	}
 
 exit2:
@@ -985,9 +1080,80 @@ exit2:
 	return REDIRFS_CONTINUE;
 }
 
+int d_revalidate_null(struct dentry *dentry, struct nameidata *nd)
+{
+	printk(KERN_ALERT "Returns null revalidate");
+	return 0;
+}
+
+const struct dentry_operations d_op_fake = {
+	.d_revalidate = &d_revalidate_null
+};
+
+const struct dentry_operations *d_op_temp;
+
+enum redirfs_rv unionflt_d_revalidate_pre(redirfs_context context,
+		struct redirfs_args *args)
+{
+	struct rfs_dentry *rdentry;
+	struct rfs_flt_subpath *spath;
+	struct kobject *kobj;
+
+	/* Don't invalidate mount point */
+	/* XXX it takes only first */
+	list_for_each_entry(kobj, &rfs_flt_subpath_kset->list, entry) {
+		spath = rfs_kobj_to_rflt_sp(kobj);
+		break;
+	}
+	if (spath->rpath->dentry == args->args.d_revalidate.nd->path.dentry
+		&& spath->rpath->mnt == args->args.d_revalidate.nd->path.mnt) {
+		printk(KERN_ALERT "Mount point - leave alone\n");
+		return REDIRFS_CONTINUE;
+	}
+	printk(KERN_ALERT "Revalidation is starting now\n");
+	rdentry = rfs_dentry_find(args->args.d_revalidate.dentry);
+	if (!rdentry)
+		return REDIRFS_CONTINUE;
+	d_op_temp = rdentry->op_old;
+	rdentry->op_old = &d_op_fake;
+	rfs_dentry_put(rdentry);
+
+	return REDIRFS_CONTINUE;
+}
+
+enum redirfs_rv unionflt_d_revalidate_post(redirfs_context context,
+		struct redirfs_args *args)
+{
+	struct rfs_dentry *rdentry;
+	struct rfs_flt_subpath *spath;
+	struct kobject *kobj;
+
+	/* Don't invalidate mount point */
+	/* XXX it takes only first */
+	list_for_each_entry(kobj, &rfs_flt_subpath_kset->list, entry) {
+		spath = rfs_kobj_to_rflt_sp(kobj);
+		break;
+	}
+	if (spath->rpath->dentry == args->args.d_revalidate.nd->path.dentry
+		&& spath->rpath->mnt == args->args.d_revalidate.nd->path.mnt) {
+		printk(KERN_ALERT "Mount point - leave alone\n");
+		return REDIRFS_CONTINUE;
+	}
+
+	rdentry = rfs_dentry_find(args->args.d_revalidate.dentry);
+	if (!rdentry)
+		return REDIRFS_CONTINUE;
+	rdentry->op_old = d_op_temp;
+	d_op_temp = NULL;
+	rfs_dentry_put(rdentry);
+
+	return REDIRFS_CONTINUE;
+}
+
 static struct redirfs_op_info unionflt_op_info[] = {
-	{REDIRFS_DIR_IOP_LOOKUP, unionflt_lookup, unionflt_dcache_inv},
-	//{REDIRFS_DIR_FOP_READDIR, unionflt_readdir, NULL},
+	{REDIRFS_DIR_IOP_LOOKUP, unionflt_lookup, unionflt_lookup_post},
+	{REDIRFS_DIR_FOP_READDIR, unionflt_readdir, NULL},
+	//{REDIRFS_DIR_DOP_D_REVALIDATE, unionflt_d_revalidate_pre, unionflt_d_revalidate_post},
 	{REDIRFS_OP_END, NULL, NULL}
 };
 

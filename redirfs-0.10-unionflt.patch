@@ -1,0 +1,84 @@
+diff -ruN redirfs-0.10-origin/redirfs.h redirfs-0.10/redirfs.h
+--- redirfs-0.10-origin/redirfs.h	2010-05-20 19:22:40.000000000 +0200
++++ redirfs-0.10/redirfs.h	2011-05-07 19:07:46.000000000 +0200
+@@ -33,6 +33,7 @@
+ #include <linux/types.h>
+ #include <linux/aio.h>
+ #include <linux/version.h>
++#include <linux/mutex-debug.h>
+ 
+ #define REDIRFS_VERSION "0.10"
+ 
+diff -ruN redirfs-0.10-origin/rfs_dentry.c redirfs-0.10/rfs_dentry.c
+--- redirfs-0.10-origin/rfs_dentry.c	2010-03-30 14:52:20.000000000 +0200
++++ redirfs-0.10/rfs_dentry.c	2011-05-08 17:47:32.000000000 +0200
+@@ -60,6 +60,7 @@
+ 
+ 	return rdentry;
+ }
++EXPORT_SYMBOL(rfs_dentry_get);
+ 
+ void rfs_dentry_put(struct rfs_dentry *rdentry)
+ {
+@@ -76,6 +77,7 @@
+ 	rfs_data_remove(&rdentry->data);
+ 	kmem_cache_free(rfs_dentry_cache, rdentry);
+ }
++EXPORT_SYMBOL(rfs_dentry_put);
+ 
+ struct rfs_dentry *rfs_dentry_add(struct dentry *dentry, struct rfs_info *rinfo)
+ {
+@@ -268,6 +270,7 @@
+ 	rfs_dentry_put(rdentry);
+ 	rfs_info_put(rinfo);
+ }
++EXPORT_SYMBOL(rfs_d_iput);
+ 
+ static void rfs_d_release(struct dentry *dentry)
+ {
+diff -ruN redirfs-0.10-origin/rfs_file.c redirfs-0.10/rfs_file.c
+--- redirfs-0.10-origin/rfs_file.c	2010-03-30 14:52:20.000000000 +0200
++++ redirfs-0.10/rfs_file.c	2011-05-09 12:43:49.000000000 +0200
+@@ -132,9 +132,12 @@
+ 	struct rfs_context rcont;
+ 	struct redirfs_args rargs;
+ 
++	printk(KERN_ALERT "rfs_open ENTRY\n");
++	printk(KERN_ALERT "File ops1: %p\n", file->f_op);
+ 	rinode = rfs_inode_find(inode);
+ 	fops_put(file->f_op);
+ 	file->f_op = fops_get(rinode->fop_old);
++	printk(KERN_ALERT "File ops2: %p\n", file->f_op);
+ 
+ 	rdentry = rfs_dentry_find(file->f_dentry);
+ 	if (!rdentry) {
+diff -ruN redirfs-0.10-origin/rfs_flt.c redirfs-0.10/rfs_flt.c
+--- redirfs-0.10-origin/rfs_flt.c	2010-03-30 14:52:20.000000000 +0200
++++ redirfs-0.10/rfs_flt.c	2011-04-17 22:39:33.000000000 +0200
+@@ -156,6 +156,8 @@
+ 
+ 	spin_lock(&rflt->lock);
+ 
++
++	printk(KERN_ALERT "count is %d\n", rflt->count);
+ 	/*
+ 	 * Check if the unregistration is already in progress.
+ 	 */
+diff -ruN redirfs-0.10-origin/rfs_inode.c redirfs-0.10/rfs_inode.c
+--- redirfs-0.10-origin/rfs_inode.c	2011-03-15 00:12:22.000000000 +0100
++++ redirfs-0.10/rfs_inode.c	2011-05-07 19:10:49.000000000 +0200
+@@ -852,7 +852,6 @@
+ 	return rargs.rv.rv_int;
+ }
+ 
+-
+ static void rfs_inode_set_ops_reg(struct rfs_inode *rinode)
+ {
+ 	RFS_SET_IOP(rinode, REDIRFS_REG_IOP_PERMISSION, permission);
+@@ -940,3 +939,6 @@
+ 	spin_unlock(&rinode->lock);
+ }
+ 
++EXPORT_SYMBOL(rfs_inode_put);
++EXPORT_SYMBOL(rfs_inode_get);
++EXPORT_SYMBOL(rfs_rename);
