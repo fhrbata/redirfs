@@ -1,9 +1,9 @@
-* readdir() - not RedirFS f_ops
-* finish d_revalidate callback
-	- d_invalidate returns -EBUSY because there
-	are still refences in path
 * correct locking and references
-	- deadlocks appear with same paths in branches
-* more than one mountpoint support
- 	=> correct handling with root private data
+	- correct filter unload
+	* more than one mountpoint support
+		=> blocker 
+* not use rfs.h and dont create new exports
 * polish the source
+* fill README and INSTALL
+* concurrency on global data structures
+* readdir() - filter duplicates

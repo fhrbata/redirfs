@@ -92,6 +92,8 @@ int rfs_path_get_info_sp(struct rfs_flt_subpath *spath, char *buf, int size);
 static redirfs_filter unionflt;
 static struct kset *rfs_flt_subpath_kset;
 static struct inode *fake_inode;
+static struct nameidata nd_backup;
+static struct inode *orig_inode;
 
 struct rfs_branch *alloc_branch(int priority, struct rfs_path *rpath)
 {
@@ -726,8 +728,6 @@ int rfs_path_get_info_sp(struct rfs_flt_subpath *spath, char *buf, int size)
 	return len;
 }
 
-
-
 struct getdents_callback {
        struct linux_dirent __user *current_dir;
        struct linux_dirent __user *previous;
@@ -737,7 +737,6 @@ struct getdents_callback {
 
 struct union_cache_callback {
        struct getdents_callback *buf;  /* original getdents_callback */
-       //struct list_head list;          /* list of union cache entries */
        filldir_t filler;               /* the filldir() we should call */
        loff_t offset;                  /* base offset of our dirents */
        loff_t count;                   /* maximum number of bytes to "read" */
@@ -776,6 +775,7 @@ static void *unionflt_alloc(size_t size)
 
 struct rfs_branch_data *unionflt_get_root_data(struct vfsmount *mnt, struct dentry *dentry)
 {
+	/* XXX rfs_get_dentry_root() */
 	struct rfs_path *rpath = NULL;
 	struct rfs_root *root;
 	struct rfs_branch_data *bdata;
@@ -882,7 +882,7 @@ enum redirfs_rv unionflt_readdir(redirfs_context context,
 		ppath[1] = '\0';
 	}
 
-	mutex_unlock(&args->args.f_readdir.file->f_path.dentry->d_inode->i_mutex);
+	//mutex_unlock(&args->args.f_readdir.file->f_path.dentry->d_inode->i_mutex);
 
 	list_for_each_entry(branch, &bdata->branches, list) {
 
@@ -892,7 +892,7 @@ enum redirfs_rv unionflt_readdir(redirfs_context context,
 		/* No dir with this name exists */
 		if (rv)
 			continue;
-		
+
 		/* XXX debug */
 		//printk(KERN_ALERT "EXISTUJE ADRESAR %s, jedem dal\n", ppath);
 		//continue;
@@ -906,13 +906,6 @@ enum redirfs_rv unionflt_readdir(redirfs_context context,
 		if (!mutex_trylock(&inode->i_mutex))
 			continue;
 
-		/* Swap ops to old */
-		rinode = rfs_inode_find(nd.path.dentry->d_inode);
-		/* If inode is controlled by RedirFS */
-		if (rinode) {
-			/* Switch off operations to avoid i_mutex deadlock */
-			rinode = rfs_inode_swap_ops(rinode);
-		}
 		path_get(&nd.path);
 		ftmp = dentry_open(nd.path.dentry, nd.path.mnt,
 				O_RDONLY | O_DIRECTORY | O_NOATIME, cred);
@@ -948,18 +941,13 @@ file_put:
 		path_put(&nd.path);
 		fput(ftmp);
 next_try:
-		if (rinode) {
-			/* Recover RedirFS operations */
-			rinode = rfs_inode_swap_ops(rinode);
-			rfs_inode_put(rinode);
-		}
 		mutex_unlock(&inode->i_mutex);
 	}
 
 out:
 	redirfs_put_data(&bdata->data);
 	kfree(path);
-	rv = mutex_lock_killable(&args->args.f_readdir.file->f_path.dentry->d_inode->i_mutex);
+	//rv = mutex_lock_killable(&args->args.f_readdir.file->f_path.dentry->d_inode->i_mutex);
 	return REDIRFS_CONTINUE;
 }
 
@@ -968,9 +956,16 @@ enum redirfs_rv unionflt_lookup_post(redirfs_context context,
 		struct redirfs_args *args)
 {
 	if (fake_inode && mutex_is_locked(&fake_inode->i_mutex)){
-		mutex_unlock(&fake_inode->i_mutex);
 		printk(KERN_ALERT "Unlocking of %s\n", args->args.i_lookup.nd->path.dentry->d_name.name);
+		mutex_unlock(&fake_inode->i_mutex);
+		/* Get back original nameidata */
+		path_put(&nd_backup.path);
+		memcpy(args->args.i_lookup.nd, &nd_backup, sizeof(struct nameidata));
 	}
+
+	printk(KERN_ALERT "Original inode back-locking\n");
+	mutex_lock(&orig_inode->i_mutex);
+	printk(KERN_ALERT "Lock succeed\n");
 
 	return REDIRFS_CONTINUE;
 }
@@ -1016,7 +1011,7 @@ enum redirfs_rv unionflt_lookup(redirfs_context context,
 	mnt_path = bdata->mountpoint;
 	printk(KERN_ALERT "Mountpoint = %s\n", mnt_path);
 	printk(KERN_ALERT "SearchPath = %s\n", ppath);
-	printk(KERN_ALERT "SearchFor  = %s\n", args->args.i_lookup.nd->path.dentry->d_name.name);
+	printk(KERN_ALERT "SearchFor  = %s\n", args->args.i_lookup.dentry->d_name.name);
 	while (*mnt_path && *ppath && *mnt_path == *ppath) {
 		*ppath = '\0';
 		ppath++;
@@ -1031,6 +1026,10 @@ enum redirfs_rv unionflt_lookup(redirfs_context context,
 		ppath[1] = '\0';
 	}
 
+	orig_inode = args->args.i_lookup.dir;
+	printk(KERN_ALERT "Unlocking of %s\n", args->args.i_lookup.nd->path.dentry->d_name.name);
+	mutex_unlock(&orig_inode->i_mutex);
+
 	list_for_each_entry(branch, &bdata->branches, list) {
 		printk(KERN_ALERT "Lookup_path = %s\n", ppath);
 		rv = vfs_path_lookup(branch->rpath->dentry,
@@ -1039,8 +1038,10 @@ enum redirfs_rv unionflt_lookup(redirfs_context context,
 			continue;
 		printk(KERN_ALERT "1 Retval %d for search for %s in %s\n",rv,ppath,branch->rpath->dentry->d_name.name);
 
-		if (!mutex_is_locked(&nd.path.dentry->d_inode->i_mutex))
-			mutex_lock(&nd.path.dentry->d_inode->i_mutex);
+		printk(KERN_ALERT "Locking of %s\n", nd.path.dentry->d_name.name);
+		mutex_lock(&nd.path.dentry->d_inode->i_mutex);
+		printk(KERN_ALERT "Lock succeed\n");
+
 		rinode = rfs_inode_find(nd.path.dentry->d_inode);
 		/* If inode is controlled by RedirFS */
 		if (rinode) {
@@ -1055,22 +1056,29 @@ enum redirfs_rv unionflt_lookup(redirfs_context context,
 			rinode = rfs_inode_swap_ops(rinode);
 			rfs_inode_put(rinode);
 		}
+		printk(KERN_ALERT "Unlocking of %s\n", nd.path.dentry->d_name.name);
 		mutex_unlock(&nd.path.dentry->d_inode->i_mutex);
 
-		printk(KERN_ALERT "2 Retval %lu for search for %s in %s\n",dentry,args->
-				args.i_lookup.dentry->d_name.name,nd.path.dentry->d_name.name);
+		printk(KERN_ALERT "2 Retval %lu and inode %lu for search for %s in %s\n",dentry,
+				dentry->d_inode,args->args.i_lookup.dentry->d_name.name,nd.path.dentry->d_name.name);
 		/* No success in that branch */
 		if (IS_ERR(dentry) || !dentry->d_inode) {
+			printk(KERN_ALERT "Error, continue\n");
 			dput(dentry);
 			continue;
 		}
 		dput(dentry);
 
+		/* Backup original nd */
+		memcpy(&nd_backup, args->args.i_lookup.nd, sizeof(struct nameidata)); 
+		path_get(&nd_backup.path);
+		/* Rewrite lookup nd */
 		memcpy(args->args.i_lookup.nd,&nd,sizeof(struct nameidata));
 		fake_inode = args->args.i_lookup.nd->path.dentry->d_inode;
 		args->args.i_lookup.dir = fake_inode;
-		mutex_lock(&fake_inode->i_mutex);
 		printk(KERN_ALERT "Locking of %s\n", args->args.i_lookup.nd->path.dentry->d_name.name);
+		mutex_lock(&fake_inode->i_mutex);
+		printk(KERN_ALERT "Lock succeed\n");
 		goto exit2;
 	}
 
@@ -1083,6 +1091,7 @@ exit2:
 int d_revalidate_null(struct dentry *dentry, struct nameidata *nd)
 {
 	printk(KERN_ALERT "Returns null revalidate");
+	d_delete(dentry);
 	return 0;
 }
 
@@ -1153,7 +1162,7 @@ enum redirfs_rv unionflt_d_revalidate_post(redirfs_context context,
 static struct redirfs_op_info unionflt_op_info[] = {
 	{REDIRFS_DIR_IOP_LOOKUP, unionflt_lookup, unionflt_lookup_post},
 	{REDIRFS_DIR_FOP_READDIR, unionflt_readdir, NULL},
-	//{REDIRFS_DIR_DOP_D_REVALIDATE, unionflt_d_revalidate_pre, unionflt_d_revalidate_post},
+	{REDIRFS_DIR_DOP_D_REVALIDATE, unionflt_d_revalidate_pre, unionflt_d_revalidate_post},
 	{REDIRFS_OP_END, NULL, NULL}
 };
 
