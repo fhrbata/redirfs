@@ -11,7 +11,7 @@ diff -ruN redirfs-0.10-origin/redirfs.h redirfs-0.10/redirfs.h
  
 diff -ruN redirfs-0.10-origin/rfs_dentry.c redirfs-0.10/rfs_dentry.c
 --- redirfs-0.10-origin/rfs_dentry.c	2010-03-30 14:52:20.000000000 +0200
-+++ redirfs-0.10/rfs_dentry.c	2011-05-08 17:47:32.000000000 +0200
++++ redirfs-0.10/rfs_dentry.c	2011-05-17 12:54:35.000000000 +0200
 @@ -60,6 +60,7 @@
  
  	return rdentry;
@@ -36,37 +36,20 @@ diff -ruN redirfs-0.10-origin/rfs_dentry.c redirfs-0.10/rfs_dentry.c
  
  static void rfs_d_release(struct dentry *dentry)
  {
-diff -ruN redirfs-0.10-origin/rfs_file.c redirfs-0.10/rfs_file.c
---- redirfs-0.10-origin/rfs_file.c	2010-03-30 14:52:20.000000000 +0200
-+++ redirfs-0.10/rfs_file.c	2011-05-09 12:43:49.000000000 +0200
-@@ -132,9 +132,12 @@
- 	struct rfs_context rcont;
- 	struct redirfs_args rargs;
- 
-+	printk(KERN_ALERT "rfs_open ENTRY\n");
-+	printk(KERN_ALERT "File ops1: %p\n", file->f_op);
- 	rinode = rfs_inode_find(inode);
- 	fops_put(file->f_op);
- 	file->f_op = fops_get(rinode->fop_old);
-+	printk(KERN_ALERT "File ops2: %p\n", file->f_op);
- 
- 	rdentry = rfs_dentry_find(file->f_dentry);
- 	if (!rdentry) {
 diff -ruN redirfs-0.10-origin/rfs_flt.c redirfs-0.10/rfs_flt.c
 --- redirfs-0.10-origin/rfs_flt.c	2010-03-30 14:52:20.000000000 +0200
-+++ redirfs-0.10/rfs_flt.c	2011-04-17 22:39:33.000000000 +0200
-@@ -156,6 +156,8 @@
++++ redirfs-0.10/rfs_flt.c	2011-05-17 12:54:24.000000000 +0200
+@@ -156,6 +156,7 @@
  
  	spin_lock(&rflt->lock);
  
 +
-+	printk(KERN_ALERT "count is %d\n", rflt->count);
  	/*
  	 * Check if the unregistration is already in progress.
  	 */
 diff -ruN redirfs-0.10-origin/rfs_inode.c redirfs-0.10/rfs_inode.c
 --- redirfs-0.10-origin/rfs_inode.c	2011-03-15 00:12:22.000000000 +0100
-+++ redirfs-0.10/rfs_inode.c	2011-05-07 19:10:49.000000000 +0200
++++ redirfs-0.10/rfs_inode.c	2011-05-17 12:51:01.000000000 +0200
 @@ -852,7 +852,6 @@
  	return rargs.rv.rv_int;
  }

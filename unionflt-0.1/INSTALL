@@ -1,0 +1,57 @@
+			======================================
+				 Installing UnionFlt
+				   A Quick Guide
+			======================================
+
+1. Requirements
+	
+	* Running Linux kernel version between 2.6.12 and 2.6.37
+	* Source code and configuration for running Linux kernel
+	  - at least make scripts and make prepare
+	* Linux kernel compiled with modules support
+	* Compiled RedirFS Framework, please see the RedirFS's INSTALL file
+	* Patches for RedirFS Framework, included in source tarball
+
+2. Download
+	
+	* Available only by SVN at this time
+	  svn co svn+ssh://svn@redirfs.fit.vutbr.cz/redirfs/branches/xholas02/
+
+3. Compilation
+
+	* Apply patches to RedirFS sources and re-compile them
+		1) redirfs-0.10-inode_setattr.patch
+		2) redirfs-0.10-unionflt.patch
+	
+	* Change to the unionflt-x.y directory
+		$ cd unionflt-x.y
+
+	* Copy the RedirFS's Module.symvers file to the UnionFlt source tree.
+	  For more info please see Documentation/kbuild/modules.txt
+	  section "7.3 Symbols from another external module".
+		$ cp <path to the RedirFS's source tree>/Module.symvers .
+
+	* Run make command
+		$ make -C /lib/modules/`uname -r`/build M=`pwd` \
+			EXTRA_CFLAGS=-I<full path to the redirfs dir> modules
+
+4. Inserting module
+
+	* Change user to root
+		$ su
+
+	* Install modules 
+		$ make -C /lib/modules/`uname -r`/build M=`pwd` \
+			EXTRA_CFLAGS=-I<full path to the redirfs dir> \
+			modules_install
+
+	* Load dummyflt.ko module
+		# modprobe unionflt
+
+5. Problems & Bugs
+
+	* RedirFS's bugzilla
+	  http://www.redirfs.org/cgi-bin/bugzilla/index.cgi
+	
+	* RedirFS's mailing lists
+	  http://www.redirfs.org/tiki-index.php?page=redirfs_maillists

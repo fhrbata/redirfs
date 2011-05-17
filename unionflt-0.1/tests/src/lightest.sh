@@ -1,7 +1,7 @@
 #!/bin/bash
-low="low"
-high="high"
-deep=1000
+low="../low"
+high="../high"
+deep=100
 
 rm -rf $high
 rm -rf $low
@@ -26,15 +26,8 @@ do
 	mkdir $string
 done
 
-touch $string/nonsearched 
 
-########################
-# Test
 
-# time find $union > /dev/null = provereni lookupu
-# time cat $soubor_v_hloubce > /dev/null = lookup
 
-#rm -rf $low
-#rm -rf $high
 
 

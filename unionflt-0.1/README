@@ -1,3 +1,72 @@
-Unionflt Filter for RedirFS framework
-=====================================
+		=======================
+		UnionFlt - Union Filter
+			README
+		=======================
 
+1. Introduction
+
+	UnionFlt or is a filter for the RedirFS Framework. It
+	can be use for merging of directory content in union mounts
+	way by the RedirFS Framework.
+
+	For an overview of the RedirFS project, visit 
+
+		http://www.redirfs.org
+
+2. Installation
+
+	See the INSTALL file.
+
+3. Documentation
+
+	http://www.redirfs.org/tiki-index.php?page=redirfs_doc
+
+4. How to use
+
+	add a new mount point:
+
+	echo -n "a:i:<new mount point>" > /sys/fs/redirfs/filters/unionflt/paths
+
+	remove mount point:
+
+	echo -n "r:<mount point id>" > /sys/fs/redirfs/filters/unionflt/paths
+
+	remove all mount points:
+
+	echo -n "c" > /sys/fs/redirfs/filters/unionflt/paths
+
+	list all mount points:
+
+	cat /sys/fs/redirfs/filters/unionflt/paths
+
+	Output is {<type>:<id>:<path>}*
+
+	Second part of the interface is private for every established mount point in sysfs directory
+	/sys/fs/redirfs/filters/unionflt/<mount_name>, where mount_name is the last compo-
+	nent (dentry name) of mount point path. There is 'branches' file in this directory. 
+	Branches are sorted by given priority when smaller number means higher priority. 
+
+	add a new branch:
+
+	echo -n "a:<priority>:<root of branch namespace>" \
+	> /sys/fs/redirfs/filters/unionflt/<mount_name>/branches
+
+	remove branch:
+
+	echo -n "r:<branch id>" \
+	> /sys/fs/redirfs/filters/unionflt/<mount_name>/branches
+
+	remove all branches of union:
+
+	echo -n "c" \
+	> /sys/fs/redirfs/filters/unionflt/<mount_name>/branches
+
+	list of all branches:
+
+	cat /sys/fs/redirfs/filters/unionflt/<mount_name>/branches
+
+	Output is {<priority>:<id>:<root of namespace>}
+	
+5. Problems & Bugs
+	
+	http://www.redirfs.org/cgi-bin/bugzilla/index.cgi

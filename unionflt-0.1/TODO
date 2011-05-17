@@ -1,9 +1,4 @@
 * correct locking and references
-	- correct filter unload
-	* more than one mountpoint support
-		=> blocker 
 * not use rfs.h and dont create new exports
-* polish the source
-* fill README and INSTALL
 * concurrency on global data structures
 * readdir() - filter duplicates

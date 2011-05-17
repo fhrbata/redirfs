@@ -1,0 +1,28 @@
+Index: rfs_inode.c
+===================================================================
+--- rfs_inode.c	(revision 671)
++++ rfs_inode.c	(working copy)
+@@ -730,6 +730,7 @@
+ 
+ #endif
+ 
++#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
+ static int rfs_setattr_default(struct dentry *dentry, struct iattr *iattr)
+ {
+ 	struct inode *inode = dentry->d_inode;
+@@ -748,6 +749,15 @@
+ 	return inode_setattr(inode, iattr);
+ }
+ 
++#else
++
++static int rfs_setattr_default(struct dentry *dentry, struct iattr *iattr)
++{
++	return simple_setattr(dentry, iattr);
++}
++
++#endif
++
+ static int rfs_setattr(struct dentry *dentry, struct iattr *iattr)
+ {
+ 	struct rfs_inode *rinode;
