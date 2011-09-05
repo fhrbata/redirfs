@@ -167,7 +167,7 @@ static int rfs_flt_paths_add(redirfs_filter filter, const char *buf,
 		return -EINVAL;
 	}
 
-	rv = path_lookup(path, LOOKUP_FOLLOW, &nd);
+	rv = rfs_path_lookup(path, &nd);
 	if (rv) {
 		kfree(path);
 		return rv;

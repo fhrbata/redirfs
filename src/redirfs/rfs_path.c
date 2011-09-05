@@ -642,65 +642,46 @@ int rfs_path_get_info(struct rfs_flt *rflt, char *buf, int size)
 	return len;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
+
 int redirfs_get_filename(struct vfsmount *mnt, struct dentry *dentry, char *buf,
 		int size)
 {
-	struct dentry *dtmp = NULL;
-	struct dentry *dmnt = NULL;
-	struct vfsmount *mtmp = NULL;
-	struct vfsmount *mmnt = NULL;
-	char *end;
-	int len;
+	char *fn;
+	size_t len;
 
-	end = buf + size;
-	len = size;
+	fn = d_path(dentry, mnt, buf, size);
+	if (IS_ERR(fn))
+		return PTR_ERR(fn);
 
-	if (size < 2)
-		return -ENAMETOOLONG;
-
-	*--end = '\0';
-	size--;
-again:
-	spin_lock(&dcache_lock);
-
-	while (dentry != mnt->mnt_root) {
-		size -= dentry->d_name.len + 1; /* dentry name + slash */
-		if (size < 0) {
-			spin_unlock(&dcache_lock);
-			return -ENAMETOOLONG;
-		}
-
-		end -= dentry->d_name.len;
-		memcpy(end, dentry->d_name.name, dentry->d_name.len);
-		*--end = '/';
-		dentry = dentry->d_parent;
-	}
-
-	dtmp = dmnt;
-	mtmp = mmnt;
-	dmnt = dget(dentry);
-	mmnt = mntget(mnt);
-	spin_unlock(&dcache_lock);
-	dput(dtmp);
-	mntput(mtmp);
-
-	if (rfs_follow_up(&mmnt, &dmnt)) {
-		dentry = dmnt;
-		mnt = mmnt;
-		goto again;
-	}
-
-	dput(dmnt);
-	mntput(mmnt);
-	
-	if (*end != '/') {
-		*--end = '/';
-		size--;
-	}
-
-	memmove(buf, end, len - size);
+	len = strlen(fn);
+	memmove(buf, fn, len);
+	buf[len + 1] = 0;
 	return 0;
 }
+
+#else
+
+int redirfs_get_filename(struct vfsmount *mnt, struct dentry *dentry, char *buf,
+		int size)
+{
+	struct path path;
+	char *fn;	
+	size_t len;
+
+	path.mnt = mnt;
+	path.dentry = dentry;
+	fn = d_path(&path, buf, size);
+	if (IS_ERR(fn))
+		return PTR_ERR(fn);
+
+	len = strlen(fn);
+	memmove(buf, fn, len);
+	buf[len + 1] = 0;
+	return 0;
+}
+
+#endif
 
 static int rfs_fsrename_rem_rroot(struct rfs_root *rroot,
 		struct rfs_chain *rchain)

@@ -34,7 +34,7 @@
 #include <linux/aio.h>
 #include <linux/version.h>
 
-#define REDIRFS_VERSION "0.10"
+#define REDIRFS_VERSION "0.11 EXPERIMENTAL"
 
 #define REDIRFS_PATH_INCLUDE		1
 #define REDIRFS_PATH_EXCLUDE		2
@@ -246,11 +246,23 @@ union redirfs_op_args {
 	} d_hash;
 	*/
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
 	struct {
 		struct dentry *dentry;
 		struct qstr *name1;
 		struct qstr *name2;
 	} d_compare;
+#else
+	struct {
+		const struct dentry *parent;
+		const struct inode *inode;
+		const struct dentry *dentry;
+		const struct inode *d_inode;
+		unsigned int tlen;
+		const char *tname;
+		const struct qstr *name;
+	} d_compare;
+#endif
 
 	/*
 	struct {
@@ -327,6 +339,17 @@ union redirfs_op_args {
 		struct inode *inode;
 		int mask;
 		struct nameidata *nd;
+	} i_permission;
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38)
+	struct {
+		struct inode *inode;
+		int mask;
+	} i_permission;
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(3,1,0)
+	struct {
+		struct inode *inode;
+		int mask;
+		unsigned int flags;
 	} i_permission;
 #else
 	struct {

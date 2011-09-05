@@ -1,7 +1,11 @@
+version 0.11 experimental 2011-09-05
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>
 	- added pre_rename and post_rename callback to redirfs_filter_operations
 		- this can be used by filter to be notified about files moved
 		  inside a filter's path within one file system
+	- support for 2.6.38+ kernels
+	- redirfs_get_filename is now just a simple wrapper around d_path and it
+	  returns a filename just for the first mount point.
 
 version 0.10 2010-05-20
 	* Frantisek Hrbata <frantisek.hrbata@redirfs.org>

@@ -533,5 +533,84 @@ static inline int rfs_follow_up(struct vfsmount **mnt, struct dentry **dentry)
 
 #endif
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
+
+static inline void rfs_dcache_lock(struct dentry *d)
+{
+	spin_lock(&dcache_lock);
+}
+
+static inline void rfs_dcache_unlock(struct dentry *d)
+{
+	spin_unlock(&dcache_lock);
+}
+
+static inline struct dentry *rfs_dget_locked(struct dentry *d)
+{
+	return dget_locked(d);
+}
+
+#else
+
+static inline void rfs_dcache_lock(struct dentry *d)
+{
+	spin_lock(&d->d_lock);
+}
+
+static inline void rfs_dcache_unlock(struct dentry *d)
+{
+	spin_unlock(&d->d_lock);
+}
+
+static inline struct dentry *rfs_dget_locked(struct dentry *d)
+{
+	return dget_dlock(d);
+}
+
+#endif
+
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39))
+
+static inline int rfs_path_lookup(const char *name, struct nameidata *nd)
+{
+	return path_lookup(name, LOOKUP_FOLLOW, nd);
+}
+
+#else
+
+static inline int rfs_path_lookup(const char *name, struct nameidata *nd)
+{
+	struct path path;
+	int rv;
+
+	rv = kern_path(name, LOOKUP_FOLLOW, &path);
+	if (rv)
+		return rv;
+
+	nd->path = path;
+	return 0;
+}
+
+#endif
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36))
+
+static inline int rfs_inode_setattr(struct inode *inode, const struct iattr *attr)
+{
+	return inode_setattr(inode, iattr);
+}
+
+#else
+
+static inline int rfs_inode_setattr(struct inode *inode, const struct iattr *attr)
+{
+	setattr_copy(inode, attr);
+	mark_inode_dirty(inode);
+	return 0;
+}
+
+#endif
+
 #endif
 

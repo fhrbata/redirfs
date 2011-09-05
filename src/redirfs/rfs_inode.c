@@ -677,7 +677,7 @@ static int rfs_permission(struct inode *inode, int mask, struct nameidata *nd)
 	return rargs.rv.rv_int;
 }
 
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38)
 
 static int rfs_permission(struct inode *inode, int mask)
 {
@@ -728,6 +728,109 @@ static int rfs_permission(struct inode *inode, int mask)
 	return rargs.rv.rv_int;
 }
 
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(3,1,0)
+
+static int rfs_permission(struct inode *inode, int mask, unsigned int flags)
+{
+	struct rfs_inode *rinode;
+	struct rfs_info *rinfo;
+	struct rfs_context rcont;
+	struct redirfs_args rargs;
+	int submask;
+
+	submask = mask & ~MAY_APPEND;
+	rinode = rfs_inode_find(inode);
+	rinfo = rfs_inode_get_rinfo(rinode);
+	rfs_context_init(&rcont, 0);
+
+	if (S_ISREG(inode->i_mode))
+		rargs.type.id = REDIRFS_REG_IOP_PERMISSION;
+	else if (S_ISDIR(inode->i_mode))
+		rargs.type.id = REDIRFS_DIR_IOP_PERMISSION;
+	else if (S_ISLNK(inode->i_mode))
+		rargs.type.id = REDIRFS_LNK_IOP_PERMISSION;
+	else if (S_ISCHR(inode->i_mode))
+		rargs.type.id = REDIRFS_CHR_IOP_PERMISSION;
+	else if (S_ISBLK(inode->i_mode))
+		rargs.type.id = REDIRFS_BLK_IOP_PERMISSION;
+	else if (S_ISFIFO(inode->i_mode))
+		rargs.type.id = REDIRFS_FIFO_IOP_PERMISSION;
+	else 
+		rargs.type.id = REDIRFS_SOCK_IOP_PERMISSION;
+
+	rargs.args.i_permission.inode = inode;
+	rargs.args.i_permission.mask = mask;
+	rargs.args.i_permission.flags = flags;
+
+	if (!rfs_precall_flts(rinfo->rchain, &rcont, &rargs)) {
+		if (rinode->op_old && rinode->op_old->permission)
+			rargs.rv.rv_int = rinode->op_old->permission(
+					rargs.args.i_permission.inode,
+					rargs.args.i_permission.mask,
+					rargs.args.i_permission.flags);
+		else
+			rargs.rv.rv_int = generic_permission(inode, submask,
+					flags, NULL);
+	}
+
+	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
+	rfs_context_deinit(&rcont);
+
+	rfs_inode_put(rinode);
+	rfs_info_put(rinfo);
+	return rargs.rv.rv_int;
+}
+
+#else
+
+static int rfs_permission(struct inode *inode, int mask)
+{
+	struct rfs_inode *rinode;
+	struct rfs_info *rinfo;
+	struct rfs_context rcont;
+	struct redirfs_args rargs;
+	int submask;
+
+	submask = mask & ~MAY_APPEND;
+	rinode = rfs_inode_find(inode);
+	rinfo = rfs_inode_get_rinfo(rinode);
+	rfs_context_init(&rcont, 0);
+
+	if (S_ISREG(inode->i_mode))
+		rargs.type.id = REDIRFS_REG_IOP_PERMISSION;
+	else if (S_ISDIR(inode->i_mode))
+		rargs.type.id = REDIRFS_DIR_IOP_PERMISSION;
+	else if (S_ISLNK(inode->i_mode))
+		rargs.type.id = REDIRFS_LNK_IOP_PERMISSION;
+	else if (S_ISCHR(inode->i_mode))
+		rargs.type.id = REDIRFS_CHR_IOP_PERMISSION;
+	else if (S_ISBLK(inode->i_mode))
+		rargs.type.id = REDIRFS_BLK_IOP_PERMISSION;
+	else if (S_ISFIFO(inode->i_mode))
+		rargs.type.id = REDIRFS_FIFO_IOP_PERMISSION;
+	else 
+		rargs.type.id = REDIRFS_SOCK_IOP_PERMISSION;
+
+	rargs.args.i_permission.inode = inode;
+	rargs.args.i_permission.mask = mask;
+
+	if (!rfs_precall_flts(rinfo->rchain, &rcont, &rargs)) {
+		if (rinode->op_old && rinode->op_old->permission)
+			rargs.rv.rv_int = rinode->op_old->permission(
+					rargs.args.i_permission.inode,
+					rargs.args.i_permission.mask);
+		else
+			rargs.rv.rv_int = generic_permission(inode, submask);
+	}
+
+	rfs_postcall_flts(rinfo->rchain, &rcont, &rargs);
+	rfs_context_deinit(&rcont);
+
+	rfs_inode_put(rinode);
+	rfs_info_put(rinfo);
+	return rargs.rv.rv_int;
+}
+
 #endif
 
 static int rfs_setattr_default(struct dentry *dentry, struct iattr *iattr)
@@ -745,7 +848,7 @@ static int rfs_setattr_default(struct dentry *dentry, struct iattr *iattr)
 		return rfs_dq_transfer(inode, iattr) ? -EDQUOT : 0;
 #endif
 
-	return inode_setattr(inode, iattr);
+	return rfs_inode_setattr(inode, iattr);
 }
 
 static int rfs_setattr(struct dentry *dentry, struct iattr *iattr)
