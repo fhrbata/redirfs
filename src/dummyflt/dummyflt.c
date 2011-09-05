@@ -22,8 +22,9 @@
  */
 
 #include <redirfs.h>
+#include <linux/slab.h> 
 
-#define DUMMYFLT_VERSION "0.4"
+#define DUMMYFLT_VERSION "0.5"
 
 static redirfs_filter dummyflt;
 
