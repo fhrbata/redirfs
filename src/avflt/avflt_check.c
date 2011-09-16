@@ -24,7 +24,7 @@
 #include "avflt.h"
 
 DECLARE_WAIT_QUEUE_HEAD(avflt_request_available);
-static spinlock_t avflt_request_lock = SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK(avflt_request_lock);
 static LIST_HEAD(avflt_request_list);
 static int avflt_request_accept = 0;
 static struct kmem_cache *avflt_event_cache = NULL;

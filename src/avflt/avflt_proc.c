@@ -24,10 +24,10 @@
 #include "avflt.h"
 
 static LIST_HEAD(avflt_proc_list);
-static spinlock_t avflt_proc_lock = SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK(avflt_proc_lock);
 
 static LIST_HEAD(avflt_trusted_list);
-static spinlock_t avflt_trusted_lock = SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK(avflt_trusted_lock);
 
 static struct avflt_trusted *avflt_trusted_alloc(pid_t tgid)
 {
