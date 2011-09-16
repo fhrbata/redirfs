@@ -143,11 +143,12 @@ static int rfs_path_get_id(void)
 	struct rfs_path *rpath = NULL;
 	int i = 0;
 
+mainloop:
 	while (i < INT_MAX) {
 		list_for_each_entry(rpath, &rfs_path_list, list) {
 			if (rpath->id == i) {
 				i++;
-				continue;
+				goto mainloop;
 			}
 		}
 		return i;
