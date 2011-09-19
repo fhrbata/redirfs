@@ -657,7 +657,7 @@ int redirfs_get_filename(struct vfsmount *mnt, struct dentry *dentry, char *buf,
 
 	len = strlen(fn);
 	memmove(buf, fn, len);
-	buf[len + 1] = 0;
+	buf[len] = 0;
 	return 0;
 }
 
@@ -678,7 +678,7 @@ int redirfs_get_filename(struct vfsmount *mnt, struct dentry *dentry, char *buf,
 
 	len = strlen(fn);
 	memmove(buf, fn, len);
-	buf[len + 1] = 0;
+	buf[len] = 0;
 	return 0;
 }
 
