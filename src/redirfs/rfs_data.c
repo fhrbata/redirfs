@@ -74,8 +74,8 @@ void redirfs_put_data(struct redirfs_data *data)
 	if (!atomic_dec_and_test(&data->cnt))
 		return;
 
-	data->free(data);
 	rfs_flt_put(data->filter);
+	data->free(data);
 }
 
 static struct redirfs_data *rfs_find_data(struct list_head *head,
