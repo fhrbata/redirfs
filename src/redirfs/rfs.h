@@ -598,7 +598,7 @@ static inline int rfs_path_lookup(const char *name, struct nameidata *nd)
 
 static inline int rfs_inode_setattr(struct inode *inode, const struct iattr *attr)
 {
-	return inode_setattr(inode, iattr);
+	return inode_setattr(inode, attr);
 }
 
 #else
