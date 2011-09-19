@@ -900,6 +900,7 @@ static int rfs_setattr(struct dentry *dentry, struct iattr *iattr)
 static int rfs_precall_flts_rename(struct rfs_info *rinfo,
 		struct rfs_context *rcont, struct redirfs_args *rargs)
 {
+	struct redirfs_filter_operations *ops;
 	enum redirfs_rv (*rop)(redirfs_context, struct redirfs_args *);
 	enum redirfs_rv rv;
 
@@ -917,7 +918,10 @@ static int rfs_precall_flts_rename(struct rfs_info *rinfo,
 		if (!atomic_read(&rinfo->rchain->rflts[rcont->idx]->active))
 			continue;
 
-		rop = rinfo->rchain->rflts[rcont->idx]->ops->pre_rename;
+		ops = rinfo->rchain->rflts[rcont->idx]->ops;
+		if (!ops)
+			continue;
+		rop = ops->pre_rename;
 		if (!rop)
 			continue;
 
@@ -934,6 +938,7 @@ static int rfs_precall_flts_rename(struct rfs_info *rinfo,
 static void rfs_postcall_flts_rename(struct rfs_info *rinfo,
 		struct rfs_context *rcont, struct redirfs_args *rargs)
 {
+	struct redirfs_filter_operations *ops;
 	enum redirfs_rv (*rop)(redirfs_context, struct redirfs_args *);
 
 	if (!rinfo)
@@ -948,7 +953,10 @@ static void rfs_postcall_flts_rename(struct rfs_info *rinfo,
 		if (!atomic_read(&rinfo->rchain->rflts[rcont->idx]->active))
 			continue;
 
-		rop = rinfo->rchain->rflts[rcont->idx]->ops->post_rename;
+		ops = rinfo->rchain->rflts[rcont->idx]->ops;
+		if (!ops)
+			continue;
+		rop = ops->post_rename;
 		if (rop) 
 			rop(rcont, rargs);
 	}
