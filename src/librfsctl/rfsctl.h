@@ -30,6 +30,7 @@ struct rfsctl_filter **rfsctl_get_filters(void);
 void rfsctl_put_filters(struct rfsctl_filter **filters);
 int rfsctl_add_path(const char *name, const char *path, int type);
 int rfsctl_rem_path(const char *name, int id);
+int rfsctl_rem_path_name(const char *name, const char *path);
 int rfsctl_del_paths(const char *name);
 int rfsctl_unregister(const char *name);
 int rfsctl_activate(const char *name);

@@ -464,6 +464,38 @@ int rfsctl_rem_path(const char *name, int id)
 	return 0;
 }
 
+int rfsctl_rem_path_name(const char *name, const char *path)
+{
+	char *buf;
+	int size;
+	long page_size;
+
+	if (!name) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	page_size = sysconf(_SC_PAGESIZE);
+	buf = malloc(sizeof(char) * page_size);
+	if (!buf)
+		return -1;
+
+	size = snprintf(buf, page_size, "R:%s", path);
+	if (size < 0) {
+		free(buf);
+		errno = EINVAL;
+		return -1;
+	}
+
+	if (rfsctl_write_data(name, "paths", buf, size + 1) == -1) {
+		free(buf);
+		return -1;
+	}
+
+	free(buf);
+	return 0;
+}
+
 int rfsctl_del_paths(const char *name)
 {
 	if (!name) {
