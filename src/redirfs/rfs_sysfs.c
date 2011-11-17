@@ -220,6 +220,58 @@ static int rfs_flt_paths_rem(redirfs_filter filter, const char *buf,
 	return rv;
 }
 
+static int rfs_flt_paths_rem_name(redirfs_filter filter, const char *buf,
+		size_t count)
+{
+	struct rfs_flt *rflt = filter;
+	char *path;
+	struct nameidata nd;
+	struct dentry *dentry;
+	struct vfsmount *mnt;
+	struct rfs_path *rpath;
+	int rv;
+
+	path = kzalloc(sizeof(char) * PAGE_SIZE, GFP_KERNEL);
+	if (!path)
+		return -ENOMEM;
+
+	if (sscanf(buf, "R:%s", path) != 1) {
+		kfree(path);
+		return -EINVAL;
+	}
+
+	rv = rfs_path_lookup(path, &nd);
+	if (rv) {
+		kfree(path);
+		return rv;
+	}
+
+	dentry = rfs_nameidata_dentry(&nd);
+	mnt = rfs_nameidata_mnt(&nd);
+
+	rfs_mutex_lock(&rfs_path_mutex);
+	rpath = rfs_path_find(mnt, dentry);
+	if (!rpath) {
+		rfs_mutex_unlock(&rfs_path_mutex);
+		rfs_nameidata_put(&nd);
+		kfree(path);
+		return -EINVAL;
+	}
+	rfs_mutex_unlock(&rfs_path_mutex);
+
+	if (rflt->ops && rflt->ops->rem_path)
+		rv = rflt->ops->rem_path(rpath);
+	else
+		rv = redirfs_rem_path(filter, rpath);
+
+	rfs_path_put(rpath);
+
+	rfs_nameidata_put(&nd);
+	kfree(path);
+
+	return rv;
+}
+
 static int rfs_flt_paths_clean(redirfs_filter filter, const char *buf,
 		size_t count)
 {
@@ -255,6 +307,9 @@ static ssize_t rfs_flt_paths_store(redirfs_filter filter,
 
 	else if (*buf == 'r')
 		rv = rfs_flt_paths_rem(filter, buf, count);
+
+	else if (*buf == 'R')
+		rv = rfs_flt_paths_rem_name(filter, buf, count);
 
 	else if (*buf == 'c')
 		rv = rfs_flt_paths_clean(filter, buf, count);

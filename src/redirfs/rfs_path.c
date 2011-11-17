@@ -69,7 +69,7 @@ void rfs_path_put(struct rfs_path *rpath)
 	kfree(rpath);
 }
 
-static struct rfs_path *rfs_path_find(struct vfsmount *mnt,
+struct rfs_path *rfs_path_find(struct vfsmount *mnt,
 		struct dentry *dentry)
 {
 	struct rfs_path *rpath = NULL;
