@@ -16,36 +16,40 @@
 #define CMD_INCLUDE	0x004
 #define CMD_EXCLUDE	0x008
 #define CMD_REMOVE	0x010
-#define CMD_CLEAN	0x020
-#define CMD_ACTIVATE	0x040
-#define CMD_DEACTIVATE	0x080
-#define CMD_UNREGISTER	0x100
-#define CMD_HELP	0x200
-#define CMD_VERSION	0x400
+#define CMD_REMOVE_NAME	0x020
+#define CMD_CLEAN	0x040
+#define CMD_ACTIVATE	0x080
+#define CMD_DEACTIVATE	0x100
+#define CMD_UNREGISTER	0x200
+#define CMD_HELP	0x400
+#define CMD_VERSION	0x800
 
 static const char *version = "0.1";
 
-static const char *help =
-"-l, --list		list all registered filters\n"
-"-s, --show		show all available filter information\n"
-"-f, --filter <name>	specify filter by <name>\n"
-"-i, --include <path>	add new included path for filter\n"
-"-e, --exclude <path>	add new excluded path for filter\n"
-"-r, --remove <id>	remove filter path specified by <id>\n"
-"-c, --clean		remove all filter paths\n"
-"-a, --activate		activate filter\n"
-"-d, --deactivate	deactivate filter\n"
-"-u, --unregister	unregister filter\n"
-"-h, --help		print help\n"
-"-v, --version		print version";
+static const char *help1 =
+"-l, --list			list all registered filters\n"
+"-s, --show			show all available filter information\n"
+"-f, --filter <name>		specify filter by <name>\n"
+"-i, --include <path>		add new included path for filter\n"
+"-e, --exclude <path>		add new excluded path for filter\n"
+"-r, --remove <id>		remove filter path specified by <id>\n"
+"-R, --remove-path <path>	remove filter path specified by <path>\n"
+"-c, --clean			remove all filter paths\n"
+"-a, --activate			activate filter\n";
+static const char *help2 =
+"-d, --deactivate		deactivate filter\n"
+"-u, --unregister		unregister filter\n"
+"-h, --help			print help\n"
+"-v, --version			print version";
 
 static const char *usage =
 "rfsctl -f <name> [-a | -d | -c | -u | -s]\n"
 "       -f <name> [-i | -e] <path>\n"
 "       -f <name> -r <id>\n"
+"       -f <name> -R <path>\n"
 "       [-l | -h | -v]";
 
-static const char *sopts = "lsf:i:e:r:caduhv";
+static const char *sopts = "lsf:i:e:r:R:caduhv";
 
 static struct option lopts[] = {
 	{"list", 0, 0, 'l'},
@@ -54,6 +58,7 @@ static struct option lopts[] = {
 	{"include", 1, 0, 'i'},
 	{"exclude", 1, 0, 'e'},
 	{"remove", 1, 0, 'r'},
+	{"remove-path", 1, 0, 'R'},
 	{"clean", 0, 0, 'c'},
 	{"activate", 0, 0, 'a'},
 	{"deactivate", 0, 0, 'd'},
@@ -100,7 +105,12 @@ static void parse_cmdl(int argc, char *argv[])
 				cmd = CMD_REMOVE;
 				id = atoi(optarg);
 				break;
-				
+
+			case 'R':
+				cmd = CMD_REMOVE_NAME;
+				path = optarg;
+				break;
+
 			case 'c':
 				cmd = CMD_CLEAN;
 				break;
@@ -153,6 +163,7 @@ static int check_cmdl(void)
 		case CMD_INCLUDE:
 		case CMD_EXCLUDE:
 		case CMD_REMOVE:
+		case CMD_REMOVE_NAME:
 			if (!fltname)
 				rv = -1;
 			break;
@@ -222,7 +233,7 @@ static void print_usage(void)
 static void cmd_help(void)
 {
 	print_usage();
-	printf("\n%s\n", help);
+	printf("\n%s%s\n", help1, help2);
 }
 
 static void cmd_version(void)
@@ -264,7 +275,12 @@ static int cmd_remove(void)
 {
 	return rfsctl_rem_path(fltname, id);
 }
-	
+
+static int cmd_remove_name(void)
+{
+	return rfsctl_rem_path_name(fltname, path);
+}
+
 static int process_cmdl(void)
 {
 	int rv = 0;
@@ -312,6 +328,10 @@ static int process_cmdl(void)
 
 		case CMD_REMOVE:
 			rv = cmd_remove();
+			break;
+
+		case CMD_REMOVE_NAME:
+			rv = cmd_remove_name();
 			break;
 
 		default:
