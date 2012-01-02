@@ -134,6 +134,7 @@ redirfs_filter redirfs_register_filter(struct redirfs_filter_info *info)
 	rv = rfs_flt_sysfs_init(rflt);
 	if (rv) {
 		rfs_flt_put(rflt);
+		rfs_mutex_unlock(&rfs_flt_list_mutex);
 		return ERR_PTR(rv);
 	}
 
