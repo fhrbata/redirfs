@@ -845,7 +845,9 @@ static int rfs_setattr_default(struct dentry *dentry, struct iattr *iattr)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
 	if ((iattr->ia_valid & ATTR_UID && iattr->ia_uid != inode->i_uid) ||
 	    (iattr->ia_valid & ATTR_GID && iattr->ia_gid != inode->i_gid))
-		return rfs_dq_transfer(inode, iattr) ? -EDQUOT : 0;
+		rv = rfs_dq_transfer(inode, iattr);
+	if (rv)
+		return -EDQUOT;
 #endif
 
 	return rfs_inode_setattr(inode, iattr);
