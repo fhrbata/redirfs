@@ -3,3 +3,4 @@ cscope.*
 ncscope.*
 *.symvers
 *.order
+build
