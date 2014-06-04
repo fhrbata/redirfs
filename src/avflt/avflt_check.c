@@ -485,9 +485,15 @@ void avflt_invalidate_cache(void)
 
 int avflt_check_init(void)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+	avflt_event_cache = kmem_cache_create("avflt_event_cache",
+			sizeof(struct avflt_event),
+			0, SLAB_RECLAIM_ACCOUNT, NULL, NULL);
+#else
 	avflt_event_cache = kmem_cache_create("avflt_event_cache",
 			sizeof(struct avflt_event),
 			0, SLAB_RECLAIM_ACCOUNT, NULL);
+#endif
 
 	if (!avflt_event_cache)
 		return -ENOMEM;

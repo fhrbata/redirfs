@@ -220,9 +220,15 @@ exit:
 
 int avflt_data_init(void)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+	avflt_inode_data_cache = kmem_cache_create("avflt_inode_data_cache",
+			sizeof(struct avflt_inode_data),
+			0, SLAB_RECLAIM_ACCOUNT, NULL, NULL);
+#else
 	avflt_inode_data_cache = kmem_cache_create("avflt_inode_data_cache",
 			sizeof(struct avflt_inode_data),
 			0, SLAB_RECLAIM_ACCOUNT, NULL);
+#endif
 
 	if (!avflt_inode_data_cache)
 		return -ENOMEM;

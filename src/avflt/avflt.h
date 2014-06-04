@@ -30,7 +30,9 @@
 #include <linux/file.h>
 #include <linux/mount.h>
 #include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
 #include <linux/freezer.h>
+#endif
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <redirfs.h>
